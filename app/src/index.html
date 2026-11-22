@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="styles/media.css">
   <link rel="stylesheet" href="styles/refinements.css">
   <link rel="stylesheet" href="styles/displays.css">
+  <link rel="stylesheet" href="styles/worldclock.css">
 </head>
 <body>
   <div id="notch" class="notch" aria-label="WFS Notch">
@@ -36,6 +37,7 @@
         <button data-tab="day" class="tab">Day Progress</button>
         <button data-tab="countdown" class="tab">Countdown</button>
         <button data-tab="weather" class="tab">Weather</button>
+        <button data-tab="worldclock" class="tab">World clock</button>
         <button data-tab="flashcards" class="tab">Flashcards</button>
         <button data-tab="habits" class="tab">Habits</button>
         <button data-tab="dock" class="tab">Dock</button>
@@ -314,6 +316,18 @@
           </div>
           <p class="event-hint">Track title, artist, album, session and position are read from Windows GSMTC only while this panel is open. Album art is shown when the Windows player exposes a supported PNG/JPEG/GIF thumbnail; synchronized lyrics and playlists are not implemented. The selected-player controls target the chosen Windows media app; the separate large buttons send global media keys.</p>
         </section>
+        <section class="panel" id="panel-worldclock">
+          <div class="section-heading"><div><h2>World clock</h2><p>Compare times across cities.</p></div><span class="section-pill">LOCAL</span></div>
+          <form id="worldclock-add" class="worldclock-add">
+            <label>City name <input id="worldclock-name" maxlength="30" placeholder="Jakarta" required></label>
+            <label>Time zone <input id="worldclock-zone" list="worldclock-zones" placeholder="Asia/Jakarta" autocomplete="off" required></label>
+            <datalist id="worldclock-zones"></datalist>
+            <button class="primary" type="submit">Add city</button>
+          </form>
+          <p id="worldclock-message" class="event-hint" role="status" aria-live="polite"></p>
+          <div class="worldclock-plan"><label for="worldclock-time">Meeting time here</label><input id="worldclock-time" type="datetime-local"><button id="worldclock-now" class="secondary" type="button">Now</button></div>
+          <div id="worldclock-list" class="worldclock-list"></div>
+        </section>
         <section class="panel" id="panel-tools">
           <div class="section-heading"><div><h2>Quick tools</h2><p>Small utilities built into the notch.</p></div><span class="section-pill">OFFLINE</span></div>
           <div class="tools-grid">
@@ -399,5 +413,6 @@
   <script src="features/media.js" defer></script>
   <script src="features/accessibility.js" defer></script>
   <script src="features/displays.js" defer></script>
+  <script src="features/worldclock.js" defer></script>
 </body>
 </html>

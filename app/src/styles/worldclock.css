@@ -1,0 +1,10 @@
+.worldclock-add, .worldclock-plan { display:flex; flex-wrap:wrap; align-items:end; gap:8px; margin:12px 0; }
+.worldclock-add label, .worldclock-plan label { display:grid; gap:4px; color:var(--muted); font-size:11px; }
+.worldclock-add input, .worldclock-plan input { min-width:0; width:155px; padding:8px; border:1px solid var(--line); border-radius:8px; background:#1a1c23; color:var(--text); }
+.worldclock-list { display:grid; gap:8px; }
+.worldclock-row { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; padding:10px; border:1px solid var(--line); border-radius:10px; background:var(--panel); }
+.worldclock-row strong, .worldclock-row small { display:block; }
+.worldclock-row small { color:var(--muted); margin-top:3px; }
+.worldclock-row time { font-variant-numeric:tabular-nums; }
+.worldclock-actions { display:flex; gap:4px; }
+.worldclock-actions button { padding:5px 7px; }

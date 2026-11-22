@@ -21,12 +21,12 @@ html = html.replace('src="assets/wfs-notch-mark.svg"',
                     'src="data:image/svg+xml;base64,' + logo + '"')
 css_files = [
     "styles/base.css", "styles/calendar.css", "styles/system.css",
-    "styles/media.css", "styles/refinements.css", "styles/displays.css"
+    "styles/media.css", "styles/refinements.css", "styles/displays.css", "styles/worldclock.css"
 ]
 js_files = [
     "app.js", "features/modules.js", "features/wellness.js",
     "features/calendar.js", "features/system.js", "features/media.js",
-    "features/accessibility.js", "features/displays.js"
+    "features/accessibility.js", "features/displays.js", "features/worldclock.js"
 ]
 
 with sync_playwright() as pw:
@@ -70,7 +70,7 @@ with sync_playwright() as pw:
             page.add_script_tag(content=(UI / name).read_text(encoding="utf-8"))
         page.locator("#expanded").wait_for(state="visible")
         tabs = page.locator(".tabs .tab")
-        assert tabs.count() == 16, "The original 16 UI modules must remain available"
+        assert tabs.count() == 17, "All UI modules must remain available"
         for index in range(tabs.count()):
             tab = tabs.nth(index)
             module = tab.get_attribute("data-tab")
@@ -87,4 +87,4 @@ with sync_playwright() as pw:
         assert not errors, "JavaScript errors: " + "; ".join(errors)
         context.close()
     browser.close()
-print("PASS: 16 module screenshots at 100%, 125%, 150% and narrow viewport (64 total)")
+print("PASS: 17 module screenshots at 100%, 125%, 150% and narrow viewport (68 total)")

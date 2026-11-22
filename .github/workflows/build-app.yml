@@ -1,0 +1,57 @@
+name: Poni parity build and tests
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [development/feature-parity]
+
+permissions:
+  contents: read
+
+jobs:
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: python -m pip install 'playwright==1.56.0'
+      - run: python -m playwright install --with-deps chromium
+      - run: node --check src/features/worldclock.js
+      - run: python tests/product_layout.py
+      - run: python tests/browser_worldclock.py
+      - run: python tests/browser_module_finder.py
+      - run: python tests/browser_screenshot_matrix.py
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: app/src-tauri
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri
+      - name: Run Rust tests
+        run: cargo test --all-targets
+      - name: Build Windows executable
+        run: cargo build --release
+      - name: Upload executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: wfs-poni-windows-unsigned
+          path: app/src-tauri/target/release/wfs-notch.exe
+          retention-days: 7
+          if-no-files-found: error

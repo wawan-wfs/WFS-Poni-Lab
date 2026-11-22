@@ -1,12 +1,17 @@
 """Exercise the deployed HTML/CSS/JS, not the native Windows compositor."""
 from pathlib import Path
 from shutil import which
+from functools import partial
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from threading import Thread
 
 from playwright.sync_api import expect, sync_playwright
 
 ROOT = Path(__file__).resolve().parents[1]
 EVIDENCE = ROOT / "test-results"
 EVIDENCE.mkdir(exist_ok=True)
+server = ThreadingHTTPServer(('127.0.0.1', 0), partial(SimpleHTTPRequestHandler, directory=str(ROOT / 'src')))
+Thread(target=server.serve_forever, daemon=True).start()
 
 
 with sync_playwright() as pw:
@@ -19,7 +24,7 @@ with sync_playwright() as pw:
     for width, height in [(760, 470), (560, 420), (360, 320)]:
         page = browser.new_page(viewport={"width": width, "height": height}, reduced_motion="reduce")
         page.on("pageerror", lambda error: errors.append(str(error)))
-        page.goto((ROOT / "src" / "index.html").as_uri())
+        page.goto(f'http://127.0.0.1:{server.server_port}/index.html')
         expanded = page.locator("#expanded")
         dialog = page.get_by_role("dialog", name="Find a module")
         finder = page.get_by_role("button", name="Find module", exact=True)
@@ -29,8 +34,8 @@ with sync_playwright() as pw:
 
         finder.click()
         expect(search).to_be_focused()
-        expect(options).to_have_count(16)
-        expect(status).to_have_text("16 modules available")
+        expect(options).to_have_count(17)
+        expect(status).to_have_text("17 modules available")
         assert page.locator("main").evaluate("node => node.inert")
         assert page.locator(".tabs").evaluate("node => node.inert")
         bounds = dialog.locator(".palette-dialog").bounding_box()
@@ -116,4 +121,5 @@ with sync_playwright() as pw:
         page.close()
     assert not errors, errors
     browser.close()
-print("PASS: 16 module routes, three viewport sizes, modal focus, keyboard and pending Notes guards")
+server.shutdown()
+print("PASS: 17 module routes, three viewport sizes, modal focus, keyboard and pending Notes guards")

@@ -131,6 +131,7 @@ const moduleKeywords = {
   calendar: 'events appointments ics', timer: 'pomodoro focus session',
   system: 'cpu ram disk network telemetry', health: 'water wellness break',
   day: 'schedule today', countdown: 'timer alarm', weather: 'temperature forecast',
+  worldclock: 'world clock cities timezone time zone meeting',
   flashcards: 'study cards', habits: 'streak checklist', dock: 'bookmarks launcher links',
   media: 'music audio player volume', tools: 'stopwatch calculator password',
   settings: 'preferences appearance contrast density display backups',
