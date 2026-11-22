@@ -30,9 +30,11 @@ main { height: 135px; overflow: auto; }
 .media-controls button:hover { color: white; }
 .calendar { border-left: 1px solid #202024; padding-left: 16px; }
 .week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; margin-top: 10px; }
-.week span { text-align: center; font-size: 11px; }
+.week button { text-align: center; font-size: 11px; border: 0; background: transparent; padding: 3px 0; border-radius: 8px; }
 .week small { display: block; color: #898991; margin-bottom: 5px; }
-.week .today { background: #fa3350; color: white; border-radius: 8px; padding: 4px 0; }
+.week button.selected { background: #fa3350; color: white; }
+.week button.today:not(.selected) { background: #303034; }
+.calendar-empty { color: #898991; font-size: 11px; text-align: center; margin: 10px 0 0; }
 .entry, .note-form { display: flex; gap: 8px; margin: 8px 0; }
 input, textarea { background: #1f2023; color: #fff; border: 1px solid #353539; border-radius: 8px; padding: 8px; width: 100%; }
 textarea { resize: vertical; min-height: 55px; }

@@ -17,6 +17,8 @@ let weatherRequest = 0;
 let searchRequest = 0;
 let worldMinute = null;
 let systemPending = false;
+let calendarDay = null;
+let calendarToday = null;
 const panelSession = crypto.randomUUID();
 const panelReady = invoke('initialize_panel', { session: panelSession });
 panelReady.catch(error => { status.textContent = String(error); });
@@ -109,17 +111,28 @@ setInterval(refreshSystem, 3000);
 function updateClock() {
   const now = new Date();
   document.querySelectorAll('.clock').forEach(clock => { clock.textContent = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(now); });
-  document.querySelector('#month').textContent = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(now);
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  if (today !== calendarToday) { calendarToday = today; if (calendarDay == null || calendarDay < today) calendarDay = today; renderCalendar(); }
+}
+function renderCalendar() {
+  const today = new Date(calendarToday);
+  const selected = new Date(calendarDay);
+  document.querySelector('#month').textContent = new Intl.DateTimeFormat(undefined, { month: 'long', year: 'numeric' }).format(selected);
   const week = document.querySelector('#week');
   week.replaceChildren();
-  for (let offset = -now.getDay(); offset < 7 - now.getDay(); offset++) {
-    const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() + offset);
-    const cell = document.createElement('span');
+  for (let offset = 0; offset < 7; offset++) {
+    const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() + offset);
+    const cell = document.createElement('button');
+    cell.type = 'button';
+    cell.classList.toggle('today', offset === 0);
+    cell.classList.toggle('selected', date.getTime() === calendarDay);
+    cell.setAttribute('aria-label', new Intl.DateTimeFormat(undefined, { dateStyle: 'full' }).format(date));
+    cell.setAttribute('aria-pressed', String(date.getTime() === calendarDay));
+    cell.addEventListener('click', () => { calendarDay = date.getTime(); renderCalendar(); });
     const day = document.createElement('small');
     day.textContent = new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(date).slice(0, 2).toUpperCase();
     const number = document.createElement('span');
     number.textContent = date.getDate();
-    if (offset === 0) number.className = 'today';
     cell.append(day, number);
     week.append(cell);
   }
