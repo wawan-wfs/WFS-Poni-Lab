@@ -27,6 +27,10 @@ try {
     Start-Sleep -Seconds 5
     [CursorPosition]::SetCursorPos([int]($bounds.X + 10), [int]($bounds.Y + $bounds.Height - 10)) | Out-Null
     Start-Sleep -Seconds 2
+    $process.Refresh()
+    $before = [CursorPosition+Rect]::new()
+    if (![CursorPosition]::GetWindowRect($process.MainWindowHandle, [ref]$before)) { throw 'Could not inspect the initial Poni window.' }
+    $beforeWidth = $before.Right - $before.Left
     # Alt+N should open the compact window even when the pointer is elsewhere.
     [CursorPosition]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero)
     [CursorPosition]::keybd_event(0x4E, 0, 0, [UIntPtr]::Zero)
@@ -37,7 +41,15 @@ try {
     $rect = [CursorPosition+Rect]::new()
     if (![CursorPosition]::GetWindowRect($process.MainWindowHandle, [ref]$rect)) { throw 'Could not inspect the Poni window.' }
     $windowWidth = $rect.Right - $rect.Left
-    if ($windowWidth -lt 500) { throw "Alt+N did not open the panel; width is $windowWidth pixels." }
+    if ($windowWidth -lt 500) {
+        $failedImage = [System.Drawing.Bitmap]::new($bounds.Width, $bounds.Height)
+        $failedGraphics = [System.Drawing.Graphics]::FromImage($failedImage)
+        try {
+            $failedGraphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+            $failedImage.Save((Join-Path $outputDir 'shortcut-failure.png'), [System.Drawing.Imaging.ImageFormat]::Png)
+        } finally { $failedGraphics.Dispose(); $failedImage.Dispose() }
+        throw "Alt+N did not open the panel; widths before/after were $beforeWidth/$windowWidth pixels."
+    }
     function Save-Screen([string]$name) {
         $bitmap = [System.Drawing.Bitmap]::new($bounds.Width, $bounds.Height)
         $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
