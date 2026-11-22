@@ -35,8 +35,14 @@
           <div class="items" id="notes"></div>
         </section>
         <section id="page-timer" class="page" hidden>
-          <div class="timer-display" id="timer-display">25:00</div>
-          <form id="timer-form" class="entry"><label for="timer-minutes">Minutes</label><input id="timer-minutes" type="number" min="1" max="1439" value="25" required><button id="timer-start" type="submit">Start</button><button type="button" id="timer-reset">Reset</button></form>
+          <div class="timer-modes"><button type="button" class="timer-mode active" data-timer-mode="countdown">Timer</button><button type="button" class="timer-mode" data-timer-mode="stopwatch">Stopwatch</button></div>
+          <div id="timer-countdown"><div class="timer-display" id="timer-display">25:00</div>
+            <form id="timer-form" class="entry"><label for="timer-minutes">Minutes</label><input id="timer-minutes" type="number" min="1" max="1439" value="25" required><button id="timer-start" type="submit">Start</button><button type="button" id="timer-reset">Reset</button></form>
+          </div>
+          <div id="timer-stopwatch" hidden><div class="timer-display" id="stopwatch-display">00:00.0</div>
+            <div class="stopwatch-controls"><button type="button" id="stopwatch-start">Start</button><button type="button" id="stopwatch-lap">Lap</button><button type="button" id="stopwatch-reset">Reset</button></div>
+            <div id="stopwatch-laps"></div>
+          </div>
         </section>
       </main>
       <p id="status" role="status" aria-live="polite"></p>

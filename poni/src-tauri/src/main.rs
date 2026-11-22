@@ -36,6 +36,23 @@ struct Timer {
     ends_at_ms: Option<u64>,
 }
 
+#[derive(Clone, Default, Serialize, Deserialize)]
+#[serde(default)]
+struct Stopwatch {
+    elapsed_ms: u64,
+    started_at_ms: Option<u64>,
+    laps: Vec<u64>,
+}
+
+impl Stopwatch {
+    fn elapsed_at(&self, now: u64) -> u64 {
+        self.elapsed_ms.saturating_add(
+            self.started_at_ms
+                .map_or(0, |start| now.saturating_sub(start)),
+        )
+    }
+}
+
 impl Default for Timer {
     fn default() -> Self {
         Self {
@@ -59,6 +76,7 @@ struct AppData {
     tasks: Vec<Task>,
     notes: Vec<Note>,
     timer: Timer,
+    stopwatch: Stopwatch,
 }
 
 struct Store {
@@ -348,6 +366,42 @@ async fn current_media() -> Result<Option<MediaSnapshot>, String> {
 }
 
 #[tauri::command]
+fn stopwatch_action(store: State<'_, Mutex<Store>>, action: String) -> Result<AppData, String> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_millis() as u64;
+    store
+        .lock()
+        .map_err(|_| "Storage unavailable")?
+        .update(|data| {
+            let stopwatch = &mut data.stopwatch;
+            match action.as_str() {
+                "start" => {
+                    if stopwatch.started_at_ms.is_none() {
+                        stopwatch.started_at_ms = Some(now);
+                    }
+                }
+                "pause" => {
+                    stopwatch.elapsed_ms = stopwatch.elapsed_at(now);
+                    stopwatch.started_at_ms = None;
+                }
+                "lap" => {
+                    if stopwatch.started_at_ms.is_some() {
+                        if stopwatch.laps.len() >= 99 {
+                            stopwatch.laps.remove(0);
+                        }
+                        stopwatch.laps.push(stopwatch.elapsed_at(now));
+                    }
+                }
+                "reset" => *stopwatch = Stopwatch::default(),
+                _ => return Err("Unknown stopwatch action".into()),
+            }
+            Ok(())
+        })
+}
+
+#[tauri::command]
 fn set_panel_open(
     window: tauri::WebviewWindow,
     sequence: State<'_, Mutex<WindowSequence>>,
@@ -402,6 +456,7 @@ fn main() {
             timer_action,
             media_control,
             current_media,
+            stopwatch_action,
             set_panel_open
         ])
         .run(tauri::generate_context!())
@@ -463,6 +518,17 @@ mod tests {
         };
         assert_eq!(timer.remaining_at(3000), 2000);
         assert_eq!(timer.remaining_at(6000), 0);
+    }
+
+    #[test]
+    fn stopwatch_uses_elapsed_time_and_handles_clock_rollback() {
+        let sw = Stopwatch {
+            elapsed_ms: 500,
+            started_at_ms: Some(3000),
+            laps: Vec::new(),
+        };
+        assert_eq!(sw.elapsed_at(5000), 2500);
+        assert_eq!(sw.elapsed_at(1000), 500);
     }
 
     #[test]

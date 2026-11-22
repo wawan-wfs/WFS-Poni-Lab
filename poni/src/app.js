@@ -5,7 +5,7 @@ const surface = document.querySelector('#surface');
 const closed = document.querySelector('#closed');
 const open = document.querySelector('#open');
 const status = document.querySelector('#status');
-let data = { tasks: [], notes: [], timer: { total_ms: 1500000, remaining_ms: 1500000, ends_at_ms: null } };
+let data = { tasks: [], notes: [], timer: { total_ms: 1500000, remaining_ms: 1500000, ends_at_ms: null }, stopwatch: { elapsed_ms: 0, started_at_ms: null, laps: [] } };
 let editingNote = null;
 let queue = Promise.resolve();
 let panelSequence = 0;
@@ -117,6 +117,7 @@ function render() {
     notes.append(row);
   });
   renderTimer();
+  renderStopwatch();
 }
 
 function renderTimer() {
@@ -131,6 +132,27 @@ function renderTimer() {
 }
 
 setInterval(renderTimer, 1000);
+function stopwatchValue(ms) {
+  const hours = Math.floor(ms / 3600000);
+  const minutes = Math.floor(ms % 3600000 / 60000);
+  const seconds = Math.floor(ms % 60000 / 1000);
+  const format = value => String(value).padStart(2, '0');
+  return `${hours ? `${hours}:` : ''}${format(minutes)}:${format(seconds)}.${Math.floor(ms % 1000 / 100)}`;
+}
+function renderStopwatch() {
+  const sw = data.stopwatch;
+  const elapsed = sw.elapsed_ms + (sw.started_at_ms == null ? 0 : Math.max(0, Date.now() - sw.started_at_ms));
+  document.querySelector('#stopwatch-display').textContent = stopwatchValue(elapsed);
+  document.querySelector('#stopwatch-start').textContent = sw.started_at_ms == null ? 'Start' : 'Pause';
+  const laps = document.querySelector('#stopwatch-laps');
+  laps.replaceChildren();
+  sw.laps.slice(-3).reverse().forEach((time, index) => {
+    const row = document.createElement('div');
+    row.textContent = `Lap ${sw.laps.length - index} · ${stopwatchValue(time)}`;
+    laps.append(row);
+  });
+}
+setInterval(() => { if (data.stopwatch.started_at_ms != null) renderStopwatch(); }, 100);
 
 document.querySelector('#task-form').addEventListener('submit', async event => {
   event.preventDefault();
@@ -152,4 +174,12 @@ document.querySelector('#timer-form').addEventListener('submit', event => {
   mutate('timer_action', { action: running ? 'pause' : 'start', minutes: running || (!changed && timer.remaining_ms < timer.total_ms) ? null : minutes });
 });
 document.querySelector('#timer-reset').addEventListener('click', () => mutate('timer_action', { action: 'reset', minutes: null }));
+document.querySelectorAll('[data-timer-mode]').forEach(button => button.addEventListener('click', () => {
+  document.querySelectorAll('[data-timer-mode]').forEach(item => item.classList.toggle('active', item === button));
+  document.querySelector('#timer-countdown').hidden = button.dataset.timerMode !== 'countdown';
+  document.querySelector('#timer-stopwatch').hidden = button.dataset.timerMode !== 'stopwatch';
+}));
+document.querySelector('#stopwatch-start').addEventListener('click', () => mutate('stopwatch_action', { action: data.stopwatch.started_at_ms == null ? 'start' : 'pause' }));
+document.querySelector('#stopwatch-lap').addEventListener('click', () => mutate('stopwatch_action', { action: 'lap' }));
+document.querySelector('#stopwatch-reset').addEventListener('click', () => mutate('stopwatch_action', { action: 'reset' }));
 queue = invoke('get_data').then(saved => { data = saved; render(); }).catch(error => { status.textContent = String(error); });

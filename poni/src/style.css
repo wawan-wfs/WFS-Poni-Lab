@@ -42,6 +42,10 @@ textarea { resize: vertical; min-height: 55px; }
 .item p { white-space: pre-wrap; overflow-wrap: anywhere; flex: 1; margin: 0; font-size: 13px; }
 .item input { width: auto; }
 .timer-display { font-size: 30px; font-variant-numeric: tabular-nums; text-align: center; margin: 8px; }
+.timer-modes, .stopwatch-controls { display:flex; justify-content:center; gap:8px; }
+.timer-mode, .stopwatch-controls button { border:0; border-radius:8px; background:#2b2b30; padding:6px 10px; }
+.timer-mode.active { background:#525258; }
+#stopwatch-laps { text-align:center; font-size:12px; color:#999; }
 #timer-form { align-items: center; justify-content: center; }
 #timer-minutes { width: 75px; }
 .done { text-decoration: line-through; color: #999; }

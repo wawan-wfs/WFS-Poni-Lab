@@ -16,3 +16,4 @@ uuid = { version = "1", features = ["v4", "serde"] }
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_UI_Input_KeyboardAndMouse"] }
 windows = { version = "0.61", features = ["Foundation", "Media_Control"] }
+windows-future = { version = "0.2.1", features = ["std"] }

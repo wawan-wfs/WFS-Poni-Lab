@@ -14,7 +14,7 @@ with sync_playwright() as pw:
     page = browser.new_page(viewport={'width': 680, 'height': 200})
     page.add_init_script('''
       window.__TAURI__ = { core: { invoke: async (command, args = {}) => {
-        const data = JSON.parse(localStorage.getItem('test-data') || '{"tasks":[],"notes":[],"timer":{"total_ms":1500000,"remaining_ms":1500000,"ends_at_ms":null}}');
+        const data = JSON.parse(localStorage.getItem('test-data') || '{"tasks":[],"notes":[],"timer":{"total_ms":1500000,"remaining_ms":1500000,"ends_at_ms":null},"stopwatch":{"elapsed_ms":0,"started_at_ms":null,"laps":[]}}');
         if (command === 'current_media') return {title: 'Test track', artist: 'Test artist', playing: true, position_ms: 30000, duration_ms: 60000};
         if (command === 'media_control') localStorage.setItem('last-media-action', args.action);
         if (command === 'add_task') data.tasks.push({id: crypto.randomUUID(), text: args.text, done: false});
@@ -26,6 +26,13 @@ with sync_playwright() as pw:
           if (args.action === 'start') { if (args.minutes) data.timer.total_ms = data.timer.remaining_ms = args.minutes * 60000; data.timer.ends_at_ms = Date.now() + data.timer.remaining_ms; }
           if (args.action === 'pause') { data.timer.remaining_ms = Math.max(0, data.timer.ends_at_ms - Date.now()); data.timer.ends_at_ms = null; }
           if (args.action === 'reset') { data.timer.remaining_ms = data.timer.total_ms; data.timer.ends_at_ms = null; }
+        }
+        if (command === 'stopwatch_action') {
+          const sw = data.stopwatch;
+          if (args.action === 'start') sw.started_at_ms = Date.now();
+          if (args.action === 'pause') { sw.elapsed_ms += Date.now() - sw.started_at_ms; sw.started_at_ms = null; }
+          if (args.action === 'lap' && sw.started_at_ms !== null) sw.laps.push(sw.elapsed_ms + Date.now() - sw.started_at_ms);
+          if (args.action === 'reset') data.stopwatch = {elapsed_ms: 0, started_at_ms: null, laps: []};
         }
         localStorage.setItem('test-data', JSON.stringify(data)); return data;
       } } };
@@ -65,6 +72,14 @@ with sync_playwright() as pw:
     expect(page.locator('#timer-start')).to_have_text('Start')
     page.locator('#timer-reset').click()
     expect(page.locator('#timer-display')).to_have_text('05:00')
+    page.get_by_role('button', name='Stopwatch').click()
+    page.locator('#stopwatch-start').click()
+    expect(page.locator('#stopwatch-start')).to_have_text('Pause')
+    page.locator('#stopwatch-lap').click()
+    expect(page.locator('#stopwatch-laps')).to_contain_text('Lap 1')
+    page.locator('#stopwatch-start').click()
+    page.locator('#stopwatch-reset').click()
+    expect(page.locator('#stopwatch-display')).to_have_text('00:00.0')
     assert not errors, errors
     browser.close()
 server.shutdown()
