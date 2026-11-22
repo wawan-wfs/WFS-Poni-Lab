@@ -607,11 +607,12 @@ fn save_calendar_event(
         .map_err(|_| "Storage unavailable")?
         .update(|data| {
             if id.is_some() {
-                *data
+                let target = data
                     .calendar_events
                     .iter_mut()
                     .find(|item| item.id == event.id)
-                    .ok_or("Event not found")? = event;
+                    .ok_or("Event not found")?;
+                *target = event;
             } else {
                 data.calendar_events.push(event);
             }
