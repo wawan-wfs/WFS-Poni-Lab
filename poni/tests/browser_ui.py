@@ -18,6 +18,7 @@ with sync_playwright() as pw:
         if (command === 'current_media') return {title: 'Test track', artist: 'Test artist', playing: true, position_ms: 30000, duration_ms: 60000};
         if (command === 'system_snapshot') return {cpu_percent: 32.5, memory_used: 2147483648, memory_total: 8589934592};
         if (command === 'shortcut_status') return true;
+        if (command === 'set_panel_open' && typeof args.focus !== 'boolean') throw new Error('focus is required');
         if (command === 'search_weather_city') return [{name:'Jakarta', admin1:'Jakarta', country:'Indonesia', latitude:-6.2, longitude:106.8}];
         if (command === 'weather_forecast') return {current:{temperature_2m:30, relative_humidity_2m:70, weather_code:2, wind_speed_10m:10}, daily:{time:['2026-11-22'], temperature_2m_max:[32], temperature_2m_min:[25], weather_code:[2]}};
         if (command === 'set_weather_location') data.weather_location = args.location;
@@ -49,9 +50,16 @@ with sync_playwright() as pw:
     page.goto(f'http://127.0.0.1:{server.server_port}/index.html')
     page.evaluate('window.poniTestShortcut()')
     expect(page.locator('#open')).to_be_visible()
+    page.keyboard.press('ArrowRight')
+    expect(page.locator('#page-tasks')).to_be_visible()
+    page.keyboard.press('Escape')
+    expect(page.locator('#open')).to_be_hidden()
+    page.evaluate('window.poniTestShortcut()')
+    expect(page.locator('#open')).to_be_visible()
     page.evaluate('window.poniTestShortcut()')
     expect(page.locator('#open')).to_be_hidden()
     page.locator('#closed').dispatch_event('pointerenter')
+    page.locator('[data-page="home"]').click()
     expect(page.locator('#media-title')).to_have_text('Test track')
     expect(page.locator('#media-progress-fill')).to_have_attribute('style', 'width: 50%;')
     page.get_by_role('button', name='Next track').click()

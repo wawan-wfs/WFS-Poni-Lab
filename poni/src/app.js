@@ -28,7 +28,8 @@ function setOpen(value) {
   open.hidden = !value;
   closed.setAttribute('aria-expanded', String(value));
   const seq = ++panelSequence;
-  panelReady.then(() => invoke('set_panel_open', { session: panelSession, open: value, seq })).catch(error => { status.textContent = String(error); });
+  const focus = value && keyboardOpen;
+  panelReady.then(() => invoke('set_panel_open', { session: panelSession, open: value, focus, seq })).catch(error => { status.textContent = String(error); });
   if (value) void refreshMedia();
   if (value) void refreshSystem();
 }
@@ -50,6 +51,17 @@ window.__TAURI__.event.listen('poni-toggle', () => {
 invoke('shortcut_status').then(available => {
   if (!available) status.textContent = 'Alt+N is already in use.';
 }).catch(error => { status.textContent = String(error); });
+document.addEventListener('keydown', event => {
+  if (open.hidden) return;
+  if (event.key === 'Escape') { setOpen(false); return; }
+  if (!keyboardOpen || event.target.matches('input, textarea, select') || event.target.isContentEditable) return;
+  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+  const tabs = [...document.querySelectorAll('.tab')];
+  const active = tabs.findIndex(tab => tab.classList.contains('active'));
+  const direction = event.key === 'ArrowRight' ? 1 : -1;
+  tabs[(active + direction + tabs.length) % tabs.length].click();
+  event.preventDefault();
+});
 
 document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => {
   document.querySelectorAll('.tab').forEach(item => item.classList.toggle('active', item === tab));
