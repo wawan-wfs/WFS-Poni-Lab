@@ -16,6 +16,7 @@ with sync_playwright() as pw:
       window.__TAURI__ = { event: {listen: async (name, listener) => { window.poniTestShortcut = listener; }}, core: { invoke: async (command, args = {}) => {
         const data = JSON.parse(localStorage.getItem('test-data') || '{"tasks":[],"notes":[],"timer":{"total_ms":1500000,"remaining_ms":1500000,"ends_at_ms":null},"stopwatch":{"elapsed_ms":0,"started_at_ms":null,"laps":[]},"world_clocks":[]}');
         if (command === 'current_media') return {title: 'Test track', artist: 'Test artist', playing: true, position_ms: 30000, duration_ms: 60000};
+        if (command === 'system_snapshot') return {cpu_percent: 32.5, memory_used: 2147483648, memory_total: 8589934592};
         if (command === 'shortcut_status') return true;
         if (command === 'search_weather_city') return [{name:'Jakarta', admin1:'Jakarta', country:'Indonesia', latitude:-6.2, longitude:106.8}];
         if (command === 'weather_forecast') return {current:{temperature_2m:30, relative_humidity_2m:70, weather_code:2, wind_speed_10m:10}, daily:{time:['2026-11-22'], temperature_2m_max:[32], temperature_2m_min:[25], weather_code:[2]}};
@@ -124,6 +125,9 @@ with sync_playwright() as pw:
     expect(page.get_by_role('button', name='Remove London UK')).to_be_visible()
     page.get_by_role('button', name='Remove Jakarta').click()
     expect(page.get_by_role('button', name='Remove Jakarta')).to_have_count(0)
+    page.locator('[data-page="system"]').click()
+    expect(page.locator('#system-cpu')).to_have_text('33%')
+    expect(page.locator('#system-memory')).to_have_text('2.0 / 8.0 GB')
     page.reload()
     page.locator('#closed').dispatch_event('pointerenter')
     page.locator('[data-page="weather"]').click()

@@ -19,6 +19,7 @@
           <button class="tab" data-page="timer">◷ <span>Timer</span></button>
           <button class="tab" data-page="weather">☀ <span>Weather</span></button>
           <button class="tab" data-page="worldclock">◉ <span>World clock</span></button>
+          <button class="tab" data-page="system">▤ <span>System</span></button>
         </nav>
         <time class="clock">--:--</time>
         <button class="close" id="close" aria-label="Close panel">×</button>
@@ -56,6 +57,9 @@
           <form id="worldclock-form" class="entry"><input id="worldclock-name" aria-label="Place name" placeholder="City" maxlength="30" required><input id="worldclock-zone" aria-label="Time zone" placeholder="Asia/Jakarta" list="worldclock-zones" required><datalist id="worldclock-zones"></datalist><button type="submit">Add</button></form>
           <div class="worldclock-plan"><label for="worldclock-minute">Time here</label><input type="range" min="0" max="1439" id="worldclock-minute"><button type="button" id="worldclock-now">Now</button></div>
           <div id="worldclock-list"></div>
+        </section>
+        <section id="page-system" class="page" hidden>
+          <div class="system-grid"><div><span>CPU</span><strong id="system-cpu">—</strong><div class="system-meter"><div id="system-cpu-bar"></div></div></div><div><span>Memory</span><strong id="system-memory">—</strong><div class="system-meter"><div id="system-memory-bar"></div></div></div></div><p id="system-status" role="status" aria-live="polite"></p>
         </section>
       </main>
       <p id="status" role="status" aria-live="polite"></p>

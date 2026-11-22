@@ -16,6 +16,7 @@ let keyboardOpen = false;
 let weatherRequest = 0;
 let searchRequest = 0;
 let worldMinute = null;
+let systemPending = false;
 const panelSession = crypto.randomUUID();
 const panelReady = invoke('initialize_panel', { session: panelSession });
 panelReady.catch(error => { status.textContent = String(error); });
@@ -29,6 +30,7 @@ function setOpen(value) {
   const seq = ++panelSequence;
   panelReady.then(() => invoke('set_panel_open', { session: panelSession, open: value, seq })).catch(error => { status.textContent = String(error); });
   if (value) void refreshMedia();
+  if (value) void refreshSystem();
 }
 closed.addEventListener('click', () => setOpen(true));
 closed.addEventListener('pointerenter', () => setOpen(true));
@@ -52,6 +54,7 @@ invoke('shortcut_status').then(available => {
 document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => {
   document.querySelectorAll('.tab').forEach(item => item.classList.toggle('active', item === tab));
   document.querySelectorAll('.page').forEach(page => { page.hidden = page.id !== `page-${tab.dataset.page}`; });
+  if (tab.dataset.page === 'system') void refreshSystem();
 }));
 document.querySelectorAll('[data-media]').forEach(button => button.addEventListener('click', () => {
   invoke('media_control', { action: button.dataset.media }).then(() => setTimeout(refreshMedia, 500)).catch(error => { status.textContent = String(error); });
@@ -73,6 +76,23 @@ async function refreshMedia() {
   } finally { mediaPending = false; }
 }
 setInterval(refreshMedia, 5000);
+
+async function refreshSystem() {
+  if (systemPending || open.hidden || document.querySelector('#page-system').hidden) return;
+  systemPending = true;
+  try {
+    const sample = await invoke('system_snapshot');
+    const cpu = sample.cpu_percent;
+    const memoryPercent = sample.memory_total > 0 ? Math.min(100, sample.memory_used / sample.memory_total * 100) : null;
+    document.querySelector('#system-cpu').textContent = cpu == null ? 'Unavailable' : `${Math.round(cpu)}%`;
+    document.querySelector('#system-memory').textContent = memoryPercent == null ? 'Unavailable' : `${(sample.memory_used / 1073741824).toFixed(1)} / ${(sample.memory_total / 1073741824).toFixed(1)} GB`;
+    document.querySelector('#system-cpu-bar').style.width = `${cpu == null ? 0 : cpu}%`;
+    document.querySelector('#system-memory-bar').style.width = `${memoryPercent == null ? 0 : memoryPercent}%`;
+    document.querySelector('#system-status').textContent = '';
+  } catch (error) { document.querySelector('#system-status').textContent = String(error); }
+  finally { systemPending = false; }
+}
+setInterval(refreshSystem, 3000);
 
 function updateClock() {
   const now = new Date();

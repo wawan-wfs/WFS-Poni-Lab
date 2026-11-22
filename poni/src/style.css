@@ -64,6 +64,13 @@ textarea { resize: vertical; min-height: 55px; }
 .worldclock-time { min-width:115px; font-variant-numeric:tabular-nums; }
 .worldclock-strip { height:8px; border-radius:5px; flex:1; min-width:40px; }
 .worldclock-actions { display:flex; gap:3px; }
+.system-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; padding-top:12px; }
+.system-grid > div { background:#202023; border-radius:12px; padding:12px; }
+.system-grid span, .system-grid strong { display:block; }
+.system-grid span, #system-status { color:#aaa; font-size:12px; }
+.system-grid strong { margin:6px 0; font-size:18px; }
+.system-meter { height:5px; border-radius:5px; background:#333; overflow:hidden; }
+.system-meter div { width:0; height:100%; background:#d7d7de; }
 #timer-form { align-items: center; justify-content: center; }
 #timer-minutes { width: 75px; }
 .done { text-decoration: line-through; color: #999; }

@@ -67,8 +67,17 @@ try {
         Start-Sleep -Seconds 10
         Save-Screen 'weather-search.png'
         Click-Point ($rect.Left + 100) ($rect.Top + 100)
-        Start-Sleep -Seconds 12
+        Start-Sleep -Seconds 25
         Save-Screen 'weather-result.png'
+        try {
+            $uri = 'https://api.open-meteo.com/v1/forecast?latitude=-6.2&longitude=106.8&current=temperature_2m%2Crelative_humidity_2m%2Cweather_code%2Cwind_speed_10m&daily=temperature_2m_max%2Ctemperature_2m_min%2Cweather_code&timezone=auto&forecast_days=7'
+            $forecast = Invoke-RestMethod -Uri $uri -TimeoutSec 20
+            @{ ok = $true; days = @($forecast.daily.time).Count; current_present = ($null -ne $forecast.current) } |
+                ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'weather-probe.json') -Encoding UTF8
+        } catch {
+            @{ ok = $false; error = $_.Exception.Message } |
+                ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'weather-probe.json') -Encoding UTF8
+        }
     }
     @{ process_id = $process.Id; main_window_handle = $process.MainWindowHandle.ToInt64(); screenshot = 'desktop.png'; width_after_shortcut = $windowWidth; weather_attempted = ($bounds.Width -eq 1024 -and $bounds.Height -eq 768) } |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'observation.json') -Encoding UTF8

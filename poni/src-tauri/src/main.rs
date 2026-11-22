@@ -96,6 +96,18 @@ struct MediaSnapshot {
     duration_ms: Option<u64>,
 }
 
+#[derive(Serialize)]
+struct SystemSnapshot {
+    cpu_percent: Option<f32>,
+    memory_used: u64,
+    memory_total: u64,
+}
+
+struct SystemMonitor {
+    system: sysinfo::System,
+    last_cpu_sample: std::time::Instant,
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
 struct Timer {
@@ -213,6 +225,27 @@ fn get_data(store: State<'_, Mutex<Store>>) -> Result<AppData, String> {
         .map_err(|_| "Storage unavailable")?
         .data
         .clone())
+}
+
+#[tauri::command]
+fn system_snapshot(system: State<'_, Mutex<SystemMonitor>>) -> Result<SystemSnapshot, String> {
+    let mut monitor = system
+        .lock()
+        .map_err(|_| "System information unavailable")?;
+    let cpu = if monitor.last_cpu_sample.elapsed() >= sysinfo::MINIMUM_CPU_UPDATE_INTERVAL {
+        monitor.system.refresh_cpu_usage();
+        monitor.last_cpu_sample = std::time::Instant::now();
+        let value = monitor.system.global_cpu_usage();
+        value.is_finite().then_some(value.clamp(0.0, 100.0))
+    } else {
+        None
+    };
+    monitor.system.refresh_memory();
+    Ok(SystemSnapshot {
+        cpu_percent: cpu,
+        memory_used: monitor.system.used_memory(),
+        memory_total: monitor.system.total_memory(),
+    })
 }
 
 fn weather_client() -> Result<reqwest::Client, String> {
@@ -710,6 +743,12 @@ fn main() {
             let path = app.path().app_data_dir()?.join("data.json");
             let store = Store::open(path).map_err(std::io::Error::other)?;
             app.manage(Mutex::new(store));
+            let mut system = sysinfo::System::new();
+            system.refresh_cpu_usage();
+            app.manage(Mutex::new(SystemMonitor {
+                system,
+                last_cpu_sample: std::time::Instant::now(),
+            }));
             app.manage(Mutex::new(WindowSequence::default()));
             app.manage(ShortcutStatus(
                 app.global_shortcut().register("Alt+N").is_ok(),
@@ -726,6 +765,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             get_data,
+            system_snapshot,
             search_weather_city,
             weather_forecast,
             set_weather_location,
