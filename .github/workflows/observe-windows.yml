@@ -2,6 +2,9 @@ name: Observe Poni on Windows
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - 'observe/**'
 
 permissions:
   contents: read
