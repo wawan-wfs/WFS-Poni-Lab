@@ -11,15 +11,20 @@ Thread(target=server.serve_forever, daemon=True).start()
 with sync_playwright() as pw:
     executable = which('chromium') or which('chromium-browser') or which('google-chrome')
     browser = pw.chromium.launch(**({'executable_path': executable} if executable else {}), headless=True, args=['--no-sandbox'])
-    page = browser.new_page(viewport={'width': 720, 'height': 245})
+    page = browser.new_page(viewport={'width': 680, 'height': 200})
     page.add_init_script('''
       window.__TAURI__ = { core: { invoke: async (command, args = {}) => {
-        const data = JSON.parse(localStorage.getItem('test-data') || '{"tasks":[],"notes":[]}');
+        const data = JSON.parse(localStorage.getItem('test-data') || '{"tasks":[],"notes":[],"timer":{"total_ms":1500000,"remaining_ms":1500000,"ends_at_ms":null}}');
         if (command === 'add_task') data.tasks.push({id: crypto.randomUUID(), text: args.text, done: false});
         if (command === 'toggle_task') { const t = data.tasks.find(t => t.id === args.id); t.done = !t.done; }
         if (command === 'remove_task') data.tasks = data.tasks.filter(t => t.id !== args.id);
         if (command === 'save_note') { const n = data.notes.find(n => n.id === args.id); if (n) n.text = args.text; else data.notes.push({id: crypto.randomUUID(), text: args.text}); }
         if (command === 'remove_note') data.notes = data.notes.filter(n => n.id !== args.id);
+        if (command === 'timer_action') {
+          if (args.action === 'start') { if (args.minutes) data.timer.total_ms = data.timer.remaining_ms = args.minutes * 60000; data.timer.ends_at_ms = Date.now() + data.timer.remaining_ms; }
+          if (args.action === 'pause') { data.timer.remaining_ms = Math.max(0, data.timer.ends_at_ms - Date.now()); data.timer.ends_at_ms = null; }
+          if (args.action === 'reset') { data.timer.remaining_ms = data.timer.total_ms; data.timer.ends_at_ms = null; }
+        }
         localStorage.setItem('test-data', JSON.stringify(data)); return data;
       } } };
     ''')
@@ -46,6 +51,14 @@ with sync_playwright() as pw:
     expect(page.get_by_text('Updated note')).to_be_visible()
     page.get_by_role('button', name='Delete').click()
     expect(page.get_by_text('Updated note')).to_have_count(0)
+    page.locator('[data-page="timer"]').click()
+    page.locator('#timer-minutes').fill('5')
+    page.locator('#timer-start').click()
+    expect(page.locator('#timer-start')).to_have_text('Pause')
+    page.locator('#timer-start').click()
+    expect(page.locator('#timer-start')).to_have_text('Start')
+    page.locator('#timer-reset').click()
+    expect(page.locator('#timer-display')).to_have_text('05:00')
     assert not errors, errors
     browser.close()
 server.shutdown()

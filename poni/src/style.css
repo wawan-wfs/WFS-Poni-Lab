@@ -15,7 +15,7 @@ nav { display: flex; align-items: center; gap: 4px; flex: 1; overflow: auto; scr
 .tab.active span { display: inline; }
 header .clock { font-weight: 700; white-space: nowrap; font-size: 13px; }
 .close { font-size: 20px; }
-main { height: 175px; overflow: auto; }
+main { height: 135px; overflow: auto; }
 .home { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding-top: 14px; }
 .media { display: flex; gap: 12px; align-items: flex-start; }
 .album { display: grid; place-items: center; width: 60px; height: 60px; border-radius: 14px; background: #202023; color: #727279; font-size: 32px; flex: none; }
@@ -34,5 +34,8 @@ textarea { resize: vertical; min-height: 55px; }
 .item { display: flex; gap: 8px; align-items: center; background: #1b1b1e; padding: 6px 8px; border-radius: 8px; }
 .item p { white-space: pre-wrap; overflow-wrap: anywhere; flex: 1; margin: 0; font-size: 13px; }
 .item input { width: auto; }
+.timer-display { font-size: 30px; font-variant-numeric: tabular-nums; text-align: center; margin: 8px; }
+#timer-form { align-items: center; justify-content: center; }
+#timer-minutes { width: 75px; }
 .done { text-decoration: line-through; color: #999; }
 #status { position: absolute; bottom: 0; left: 20px; right: 20px; color: #ff9e9e; font-size: 11px; margin: 0; }

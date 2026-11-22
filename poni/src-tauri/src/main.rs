@@ -19,17 +19,46 @@ struct Note {
     text: String,
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(default)]
+struct Timer {
+    total_ms: u64,
+    remaining_ms: u64,
+    ends_at_ms: Option<u64>,
+}
+
+impl Default for Timer {
+    fn default() -> Self {
+        Self {
+            total_ms: 25 * 60_000,
+            remaining_ms: 25 * 60_000,
+            ends_at_ms: None,
+        }
+    }
+}
+
+impl Timer {
+    fn remaining_at(&self, now: u64) -> u64 {
+        self.ends_at_ms
+            .map_or(self.remaining_ms, |end| end.saturating_sub(now))
+    }
+}
+
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 struct AppData {
     tasks: Vec<Task>,
     notes: Vec<Note>,
+    timer: Timer,
 }
 
 struct Store {
     path: PathBuf,
     data: AppData,
 }
+
+#[derive(Default)]
+struct WindowSequence(u64);
 
 impl Store {
     fn open(path: PathBuf) -> Result<Self, String> {
@@ -169,12 +198,88 @@ fn remove_note(store: State<'_, Mutex<Store>>, id: Uuid) -> Result<AppData, Stri
         })
 }
 
+#[tauri::command]
+fn timer_action(
+    store: State<'_, Mutex<Store>>,
+    action: String,
+    minutes: Option<u32>,
+) -> Result<AppData, String> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|e| e.to_string())?
+        .as_millis() as u64;
+    store
+        .lock()
+        .map_err(|_| "Storage unavailable")?
+        .update(|data| {
+            match action.as_str() {
+                "start" => {
+                    if data.timer.ends_at_ms.is_none_or(|end| end <= now) {
+                        if data.timer.ends_at_ms.is_some() {
+                            data.timer.remaining_ms = 0;
+                        }
+                        if let Some(minutes) = minutes {
+                            if !(1..=1439).contains(&minutes) {
+                                return Err("Choose 1 to 1439 minutes".into());
+                            }
+                            data.timer.total_ms = u64::from(minutes) * 60_000;
+                            data.timer.remaining_ms = data.timer.total_ms;
+                        }
+                        if data.timer.remaining_ms == 0 {
+                            data.timer.remaining_ms = data.timer.total_ms;
+                        }
+                        data.timer.ends_at_ms = Some(now.saturating_add(data.timer.remaining_ms));
+                    }
+                }
+                "pause" => {
+                    data.timer.remaining_ms = data.timer.remaining_at(now);
+                    data.timer.ends_at_ms = None;
+                }
+                "reset" => {
+                    data.timer.remaining_ms = data.timer.total_ms;
+                    data.timer.ends_at_ms = None;
+                }
+                _ => return Err("Unknown timer action".into()),
+            }
+            Ok(())
+        })
+}
+
+#[tauri::command]
+fn set_panel_open(
+    window: tauri::WebviewWindow,
+    sequence: State<'_, Mutex<WindowSequence>>,
+    open: bool,
+    seq: u64,
+) -> Result<(), String> {
+    let mut last = sequence.lock().map_err(|_| "Window state unavailable")?;
+    if seq <= last.0 {
+        return Ok(());
+    }
+    let (width, height) = if open { (680.0, 200.0) } else { (200.0, 32.0) };
+    let monitor = window.current_monitor().map_err(|e| e.to_string())?;
+    window
+        .set_size(tauri::LogicalSize::new(width, height))
+        .map_err(|e| e.to_string())?;
+    if let Some(monitor) = monitor {
+        let physical_width = (width * monitor.scale_factor()).round() as u32;
+        let x =
+            monitor.position().x + (monitor.size().width.saturating_sub(physical_width) / 2) as i32;
+        window
+            .set_position(tauri::PhysicalPosition::new(x, monitor.position().y))
+            .map_err(|e| e.to_string())?;
+    }
+    last.0 = seq;
+    Ok(())
+}
+
 fn main() {
     tauri::Builder::default()
         .setup(|app| {
             let path = app.path().app_data_dir()?.join("data.json");
             let store = Store::open(path).map_err(std::io::Error::other)?;
             app.manage(Mutex::new(store));
+            app.manage(Mutex::new(WindowSequence::default()));
             if let Some(window) = app.get_webview_window("main") {
                 if let Some(monitor) = window.current_monitor()? {
                     let size = window.outer_size()?;
@@ -191,7 +296,9 @@ fn main() {
             toggle_task,
             remove_task,
             save_note,
-            remove_note
+            remove_note,
+            timer_action,
+            set_panel_open
         ])
         .run(tauri::generate_context!())
         .expect("Could not start Poni Rebuild");
@@ -240,5 +347,17 @@ mod tests {
         fs::write(&path, b"broken").unwrap();
         assert!(Store::open(path.clone()).is_err());
         assert_eq!(fs::read(path).unwrap(), b"broken");
+    }
+
+    #[test]
+    fn timer_remaining_is_saturating_and_defaults_for_old_data() {
+        let old: AppData = serde_json::from_str(r#"{"tasks":[],"notes":[]}"#).unwrap();
+        assert_eq!(old.timer.remaining_at(1), 25 * 60_000);
+        let timer = Timer {
+            ends_at_ms: Some(5000),
+            ..old.timer
+        };
+        assert_eq!(timer.remaining_at(3000), 2000);
+        assert_eq!(timer.remaining_at(6000), 0);
     }
 }

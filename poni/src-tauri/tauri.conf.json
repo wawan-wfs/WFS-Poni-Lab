@@ -6,7 +6,7 @@
   "build": { "frontendDist": "../src" },
   "app": {
     "withGlobalTauri": true,
-    "windows": [{ "label": "main", "title": "Poni Rebuild", "width": 720, "height": 245, "resizable": false, "decorations": false, "transparent": true, "alwaysOnTop": true, "skipTaskbar": true }],
+    "windows": [{ "label": "main", "title": "Poni Rebuild", "width": 200, "height": 32, "resizable": false, "decorations": false, "transparent": true, "alwaysOnTop": true, "skipTaskbar": true }],
     "security": { "csp": "default-src 'self'; script-src 'self'; style-src 'self'" }
   },
   "bundle": { "active": false }
