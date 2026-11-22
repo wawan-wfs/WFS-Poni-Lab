@@ -7,6 +7,7 @@ const open = document.querySelector('#open');
 const status = document.querySelector('#status');
 let data = { tasks: [], notes: [], timer: { total_ms: 1500000, remaining_ms: 1500000, ends_at_ms: null }, stopwatch: { elapsed_ms: 0, started_at_ms: null, laps: [] }, weather_location: null, world_clocks: [] };
 let editingNote = null;
+let editingTask = null;
 let queue = Promise.resolve();
 let panelSequence = 0;
 let closeTimer = null;
@@ -120,8 +121,23 @@ function render() {
     const row = document.createElement('div'); row.className = 'item';
     const check = document.createElement('input'); check.type = 'checkbox'; check.checked = task.done; check.setAttribute('aria-label', `Complete ${task.text}`);
     check.addEventListener('change', () => mutate('toggle_task', { id: task.id }));
-    const text = document.createElement('p'); text.textContent = task.text; text.classList.toggle('done', task.done);
-    row.append(check, text, action('Delete', () => mutate('remove_task', { id: task.id })));
+    const content = document.createElement('div'); content.className = 'task-content';
+    const text = document.createElement('p'); text.textContent = task.text; text.classList.toggle('done', task.done); content.append(text);
+    if (task.due_at_ms != null) { const due = document.createElement('small'); due.textContent = new Date(task.due_at_ms).toLocaleString(); content.append(due); }
+    if (task.description) { const detail = document.createElement('small'); detail.textContent = task.description; content.append(detail); }
+    const edit = action('Edit', () => {
+      editingTask = task.id;
+      document.querySelector('#task-input').value = task.text;
+      const due = document.querySelector('#task-due');
+      if (task.due_at_ms != null) { const date = new Date(task.due_at_ms); due.value = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16); }
+      else due.value = '';
+      const description = document.querySelector('#task-description'); description.value = task.description || ''; description.hidden = false;
+      document.querySelector('#task-submit').textContent = 'Save'; document.querySelector('#task-cancel').hidden = false;
+    });
+    edit.setAttribute('aria-label', `Edit ${task.text}`);
+    const remove = action('Delete', async () => { if (await mutate('remove_task', { id: task.id }) && editingTask === task.id) resetTaskForm(); });
+    remove.setAttribute('aria-label', `Delete ${task.text}`);
+    row.append(check, content, edit, remove);
     tasks.append(row);
   });
   const notes = document.querySelector('#notes');
@@ -172,11 +188,24 @@ function renderStopwatch() {
 }
 setInterval(() => { if (data.stopwatch.started_at_ms != null) renderStopwatch(); }, 100);
 
+function resetTaskForm() {
+  editingTask = null;
+  document.querySelector('#task-form').reset();
+  document.querySelector('#task-description').hidden = true;
+  document.querySelector('#task-cancel').hidden = true;
+  document.querySelector('#task-submit').textContent = 'Add';
+}
 document.querySelector('#task-form').addEventListener('submit', async event => {
   event.preventDefault();
   const input = document.querySelector('#task-input');
-  if (await mutate('add_task', { text: input.value })) input.value = '';
+  const dueText = document.querySelector('#task-due').value;
+  const dueAtMs = dueText ? new Date(dueText).getTime() : null;
+  if (dueAtMs != null && (!Number.isFinite(dueAtMs) || dueAtMs < 0)) { status.textContent = 'Choose a valid due date.'; return; }
+  const args = { text: input.value, dueAtMs };
+  if (editingTask) Object.assign(args, { id: editingTask, description: document.querySelector('#task-description').value });
+  if (await mutate(editingTask ? 'update_task' : 'add_task', args)) resetTaskForm();
 });
+document.querySelector('#task-cancel').addEventListener('click', resetTaskForm);
 document.querySelector('#note-form').addEventListener('submit', async event => {
   event.preventDefault();
   const input = document.querySelector('#note-input');

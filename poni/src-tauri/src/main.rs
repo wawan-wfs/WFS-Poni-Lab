@@ -12,6 +12,10 @@ struct Task {
     id: Uuid,
     text: String,
     done: bool,
+    #[serde(default)]
+    description: String,
+    #[serde(default)]
+    due_at_ms: Option<u64>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -195,6 +199,13 @@ fn valid_text(text: String, limit: usize) -> Result<String, String> {
     Ok(text.to_owned())
 }
 
+fn valid_due(due: Option<u64>) -> Result<(), String> {
+    if due.is_some_and(|value| value > 8_640_000_000_000_000) {
+        return Err("Due date is outside the supported range".into());
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn get_data(store: State<'_, Mutex<Store>>) -> Result<AppData, String> {
     Ok(store
@@ -323,8 +334,13 @@ fn shortcut_status(status: State<'_, ShortcutStatus>) -> bool {
 }
 
 #[tauri::command]
-fn add_task(store: State<'_, Mutex<Store>>, text: String) -> Result<AppData, String> {
+fn add_task(
+    store: State<'_, Mutex<Store>>,
+    text: String,
+    due_at_ms: Option<u64>,
+) -> Result<AppData, String> {
     let text = valid_text(text, 500)?;
+    valid_due(due_at_ms)?;
     store
         .lock()
         .map_err(|_| "Storage unavailable")?
@@ -333,7 +349,38 @@ fn add_task(store: State<'_, Mutex<Store>>, text: String) -> Result<AppData, Str
                 id: Uuid::new_v4(),
                 text,
                 done: false,
+                description: String::new(),
+                due_at_ms,
             });
+            Ok(())
+        })
+}
+
+#[tauri::command]
+fn update_task(
+    store: State<'_, Mutex<Store>>,
+    id: Uuid,
+    text: String,
+    description: String,
+    due_at_ms: Option<u64>,
+) -> Result<AppData, String> {
+    let text = valid_text(text, 500)?;
+    valid_due(due_at_ms)?;
+    if description.chars().count() > 10_000 {
+        return Err("Description is too long".into());
+    }
+    store
+        .lock()
+        .map_err(|_| "Storage unavailable")?
+        .update(|data| {
+            let task = data
+                .tasks
+                .iter_mut()
+                .find(|task| task.id == id)
+                .ok_or("Task not found")?;
+            task.text = text;
+            task.description = description;
+            task.due_at_ms = due_at_ms;
             Ok(())
         })
 }
@@ -685,6 +732,7 @@ fn main() {
             set_world_clocks,
             shortcut_status,
             add_task,
+            update_task,
             toggle_task,
             remove_task,
             save_note,
@@ -715,6 +763,8 @@ mod tests {
                     id: Uuid::new_v4(),
                     text: "First".into(),
                     done: false,
+                    description: String::new(),
+                    due_at_ms: None,
                 });
                 Ok(())
             })
@@ -766,6 +816,17 @@ mod tests {
         };
         assert_eq!(sw.elapsed_at(5000), 2500);
         assert_eq!(sw.elapsed_at(1000), 500);
+    }
+
+    #[test]
+    fn older_tasks_load_without_optional_fields() {
+        let id = Uuid::new_v4();
+        let data = format!(r#"{{"id":"{id}","text":"Older","done":false}}"#);
+        let task: Task = serde_json::from_str(&data).unwrap();
+        assert!(task.description.is_empty());
+        assert!(task.due_at_ms.is_none());
+        assert!(valid_due(Some(8_640_000_000_000_000)).is_ok());
+        assert!(valid_due(Some(u64::MAX)).is_err());
     }
 
     #[test]

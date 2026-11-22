@@ -40,6 +40,10 @@ textarea { resize: vertical; min-height: 55px; }
 .items { display: grid; gap: 5px; }
 .item { display: flex; gap: 8px; align-items: center; background: #1b1b1e; padding: 6px 8px; border-radius: 8px; }
 .item p { white-space: pre-wrap; overflow-wrap: anywhere; flex: 1; margin: 0; font-size: 13px; }
+.task-content { flex:1; min-width:0; }
+.task-content small { color:#aaa; display:block; margin-top:3px; overflow-wrap:anywhere; }
+#task-due { width:180px; flex:none; }
+#task-cancel { border:0; border-radius:8px; background:#2b2b30; padding:7px 10px; }
 .item input { width: auto; }
 .timer-display { font-size: 30px; font-variant-numeric: tabular-nums; text-align: center; margin: 8px; }
 .timer-modes, .stopwatch-controls { display:flex; justify-content:center; gap:8px; }

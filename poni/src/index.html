@@ -29,7 +29,7 @@
           <div class="calendar"><strong id="month"></strong><div id="week" class="week"></div></div>
         </section>
         <section id="page-tasks" class="page" hidden>
-          <form id="task-form" class="entry"><input id="task-input" aria-label="New task" maxlength="500" placeholder="Add a task" required><button type="submit">Add</button></form>
+          <form id="task-form"><div class="entry"><input id="task-input" aria-label="Task" maxlength="500" placeholder="Add a task" required><input id="task-due" type="datetime-local" aria-label="Due date"><button id="task-submit" type="submit">Add</button><button type="button" id="task-cancel" hidden>Cancel</button></div><textarea id="task-description" maxlength="10000" aria-label="Task description" placeholder="Details" hidden></textarea></form>
           <div class="items" id="tasks"></div>
         </section>
         <section id="page-notes" class="page" hidden>

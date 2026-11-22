@@ -22,7 +22,8 @@ with sync_playwright() as pw:
         if (command === 'set_weather_location') data.weather_location = args.location;
         if (command === 'set_world_clocks') data.world_clocks = args.places;
         if (command === 'media_control') localStorage.setItem('last-media-action', args.action);
-        if (command === 'add_task') data.tasks.push({id: crypto.randomUUID(), text: args.text, done: false});
+        if (command === 'add_task') data.tasks.push({id: crypto.randomUUID(), text: args.text, done: false, description:'', due_at_ms:args.dueAtMs});
+        if (command === 'update_task') { const t = data.tasks.find(t => t.id === args.id); t.text = args.text; t.description = args.description; t.due_at_ms = args.dueAtMs; }
         if (command === 'toggle_task') { const t = data.tasks.find(t => t.id === args.id); t.done = !t.done; }
         if (command === 'remove_task') data.tasks = data.tasks.filter(t => t.id !== args.id);
         if (command === 'save_note') { const n = data.notes.find(n => n.id === args.id); if (n) n.text = args.text; else data.notes.push({id: crypto.randomUUID(), text: args.text}); }
@@ -56,13 +57,19 @@ with sync_playwright() as pw:
     assert page.evaluate("localStorage.getItem('last-media-action')") == 'next'
     page.locator('[data-page="tasks"]').click()
     page.locator('#task-input').fill('Prepare meeting')
-    page.locator('#task-form button').click()
+    page.locator('#task-due').fill('2027-01-05T13:30')
+    page.locator('#task-submit').click()
     expect(page.get_by_text('Prepare meeting')).to_be_visible()
+    page.get_by_role('button', name='Edit Prepare meeting').click()
+    page.locator('#task-description').fill('Bring notes')
+    page.locator('#task-submit').click()
+    expect(page.get_by_text('Bring notes')).to_be_visible()
     page.get_by_role('checkbox', name='Complete Prepare meeting').check()
     page.reload()
     page.locator('#closed').dispatch_event('pointerenter')
     page.locator('[data-page="tasks"]').click()
     expect(page.get_by_role('checkbox', name='Complete Prepare meeting')).to_be_checked()
+    expect(page.get_by_text('Bring notes')).to_be_visible()
     page.locator('[data-page="notes"]').click()
     page.locator('#note-input').fill('First note')
     page.get_by_role('button', name='Save note').click()
