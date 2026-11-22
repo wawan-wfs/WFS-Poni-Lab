@@ -17,7 +17,7 @@ Kategori pertama tidak berarti modul sudah selesai. Belum ada ukuran yang cukup 
 - **Weather:** pencarian kota, cuaca saat ini dan prakiraan tujuh hari. Belum diverifikasi seluruh pengaturan dan tampilan asli.
 - **World clock:** lokasi, zona waktu, pengurutan dan perencanaan waktu dasar. Belum diverifikasi seluruh perilaku dan tampilan asli.
 - **Day progress:** progres hari, minggu, bulan dan tahun dengan jam bangun 07.00, tidur 23.00 dan awal minggu Senin. Pengaturan waktu, agenda, dan tugas selesai pada linimasa belum tersedia.
-- **Calendar:** kalender bulanan, tugas berdasarkan tanggal jatuh tempo, dan tambah/ubah/hapus acara lokal dengan durasi dan lokasi. Pengulangan, sinkronisasi Google/Outlook, kalender Hijriah, dan pengingat acara belum tersedia.
+- **Calendar:** kalender bulanan, tugas berdasarkan tanggal jatuh tempo, serta tambah/ubah/hapus acara lokal dengan durasi, lokasi, dan pengulangan harian/mingguan/bulanan/tahunan; acara lokal juga muncul di Home. Sinkronisasi Google/Outlook, kalender Hijriah, dan pengingat acara belum tersedia. Perilaku pengulangan tetap perlu dibandingkan dengan aplikasi asli, termasuk zona waktu dan tanggal yang tidak ada.
 
 ## Modul yang belum diimplementasikan
 
@@ -25,4 +25,4 @@ AI usage, Bluetooth, Bookmarks, Chat, Control, Currency, Dashboard, GitHub, Heal
 
 Di luar inventaris modul, sudah ada sebagian perilaku Home/notch, pemutaran media Windows, stopwatch, timer, statistik CPU/memori dan installer. Semuanya masih memerlukan perbandingan lebih lanjut. Pengingat OS telah diimplementasikan, tetapi tampilan notifikasi pada instalasi Windows belum diverifikasi. Belum dilakukan audit keamanan; audit menyeluruh direncanakan setelah kesetaraan fitur tercapai.
 
-Pengujian Windows pada commit `1cc6f0b5e00db2950084cca2cea49af158f45a41` lulus: tes Rust, build release, installer, dan pengamatan aplikasi native. Pengujian browser menggunakan backend tiruan dan tidak membuktikan seluruh integrasi Windows. Perubahan setelah commit tersebut harus diuji kembali.
+Pengujian Windows pada commit `6ea48ff031e8b76e73b1cd31516639a2578293ff` lulus: tes Rust, build release, installer, dan pengamatan aplikasi native. Pengujian browser menggunakan backend tiruan dan tidak membuktikan seluruh integrasi Windows. Perubahan setelah commit tersebut harus diuji kembali.

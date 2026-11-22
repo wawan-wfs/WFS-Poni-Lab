@@ -34,6 +34,19 @@ struct CalendarEvent {
     start_ms: u64,
     duration_minutes: u32,
     location: String,
+    #[serde(default)]
+    repeat: EventRepeat,
+}
+
+#[derive(Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum EventRepeat {
+    #[default]
+    None,
+    Daily,
+    Weekly,
+    Monthly,
+    Yearly,
 }
 
 impl CalendarEvent {
@@ -593,6 +606,7 @@ fn save_calendar_event(
     start_ms: u64,
     duration_minutes: u32,
     location: String,
+    repeat: EventRepeat,
 ) -> Result<AppData, String> {
     let mut event = CalendarEvent {
         id: id.unwrap_or_else(Uuid::new_v4),
@@ -600,6 +614,7 @@ fn save_calendar_event(
         start_ms,
         duration_minutes,
         location,
+        repeat,
     };
     event.validate()?;
     store
@@ -957,6 +972,7 @@ mod tests {
             start_ms: 1_800_000_000_000,
             duration_minutes: 30,
             location: "Office".into(),
+            repeat: EventRepeat::None,
         };
         event.validate().unwrap();
         assert_eq!(event.title, "Meeting");
@@ -977,6 +993,12 @@ mod tests {
         assert!(event.validate().is_err());
         let old_data: AppData = serde_json::from_str(r#"{"tasks":[],"notes":[]}"#).unwrap();
         assert!(old_data.calendar_events.is_empty());
+        let old_event: CalendarEvent = serde_json::from_str(&format!(
+            r#"{{"id":"{}","title":"Old","start_ms":1000,"duration_minutes":30,"location":""}}"#,
+            Uuid::new_v4()
+        ))
+        .unwrap();
+        assert!(matches!(old_event.repeat, EventRepeat::None));
     }
 
     #[test]

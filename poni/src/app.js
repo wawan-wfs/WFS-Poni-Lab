@@ -168,6 +168,15 @@ function renderCalendar() {
     cell.append(day, number);
     week.append(cell);
   }
+  const list = document.querySelector('#home-events'); list.replaceChildren();
+  const occurrences = occurrencesOnDay(selected);
+  if (!occurrences.length) list.textContent = (data.calendar_events || []).length ? 'No events' : 'No calendars yet.';
+  occurrences.forEach(({event, start}) => {
+    const button = document.createElement('button'); button.type = 'button';
+    button.textContent = `${new Date(start).toLocaleTimeString(undefined, {hour:'numeric',minute:'2-digit'})} · ${event.title}`;
+    button.addEventListener('click', () => { selectedDate = selected; displayedMonth = new Date(selected.getFullYear(), selected.getMonth(), 1); document.querySelector('[data-page="calendar"]').click(); });
+    list.append(button);
+  });
 }
 updateClock();
 setInterval(updateClock, 1000);
@@ -230,6 +239,31 @@ function render() {
   renderStopwatch();
   renderWorldClocks();
   renderMonthCalendar();
+  renderCalendar();
+}
+
+function occurrencesOnDay(day) {
+  const startDay = new Date(day.getFullYear(), day.getMonth(), day.getDate());
+  const endDay = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1);
+  const previousDay = new Date(day.getFullYear(), day.getMonth(), day.getDate() - 1);
+  const result = [];
+  for (const event of data.calendar_events || []) {
+    const original = new Date(event.start_ms);
+    if (!Number.isFinite(original.getTime())) continue;
+    if (!event.repeat || event.repeat === 'none') {
+      if (event.start_ms < endDay && event.start_ms + event.duration_minutes * 60000 > startDay) result.push({event, start:event.start_ms});
+      continue;
+    }
+    for (const date of [previousDay, startDay]) {
+      const diff = (Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) - Date.UTC(original.getFullYear(), original.getMonth(), original.getDate())) / 86400000;
+      if (diff < 0) continue;
+      const matches = event.repeat === 'daily' || (event.repeat === 'weekly' && diff % 7 === 0) || (event.repeat === 'monthly' && date.getDate() === original.getDate()) || (event.repeat === 'yearly' && date.getDate() === original.getDate() && date.getMonth() === original.getMonth());
+      if (!matches) continue;
+      const occurrence = new Date(date.getFullYear(), date.getMonth(), date.getDate(), original.getHours(), original.getMinutes(), original.getSeconds(), original.getMilliseconds()).getTime();
+      if (occurrence >= event.start_ms && occurrence < endDay && occurrence + event.duration_minutes * 60000 > startDay) result.push({event, start:occurrence});
+    }
+  }
+  return result.sort((a, b) => a.start - b.start);
 }
 
 function localInputDate(date) {
@@ -255,17 +289,17 @@ function renderMonthCalendar() {
     const button = document.createElement('button'); button.type = 'button'; button.textContent = date.getDate();
     button.classList.toggle('out', date.getMonth() !== displayedMonth.getMonth());
     button.classList.toggle('selected', date.getTime() === selectedDate.getTime());
-    button.classList.toggle('has-event', events.some(e => e.start_ms < end && e.start_ms + e.duration_minutes * 60000 > date.getTime()) || data.tasks.some(t => t.due_at_ms >= date.getTime() && t.due_at_ms < end));
+    button.classList.toggle('has-event', occurrencesOnDay(date).length > 0 || data.tasks.some(t => t.due_at_ms != null && t.due_at_ms >= date.getTime() && t.due_at_ms < end));
     button.setAttribute('aria-label', new Intl.DateTimeFormat(undefined, {dateStyle:'full'}).format(date));
     button.addEventListener('click', () => { selectedDate = date; displayedMonth = new Date(date.getFullYear(), date.getMonth(), 1); resetEventForm(); renderMonthCalendar(); }); grid.append(button);
   }
   document.querySelector('#calendar-selected').textContent = new Intl.DateTimeFormat(undefined, {dateStyle:'full'}).format(selectedDate);
   const end = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() + 1).getTime();
   const items = document.querySelector('#calendar-items'); items.replaceChildren();
-  events.filter(e => e.start_ms < end && e.start_ms + e.duration_minutes * 60000 > selectedDate.getTime()).sort((a,b) => a.start_ms - b.start_ms).forEach(event => {
+  occurrencesOnDay(selectedDate).forEach(({event, start}) => {
     const row = document.createElement('div'); row.className = 'calendar-item';
-    const text = document.createElement('span'); text.textContent = `${new Date(event.start_ms).toLocaleTimeString(undefined, {hour:'numeric',minute:'2-digit'})} · ${event.title}${event.location ? ` · ${event.location}` : ''}`;
-    const edit = action('Edit', () => { editingEvent = event.id; document.querySelector('#event-title').value = event.title; document.querySelector('#event-start').value = localInputDate(new Date(event.start_ms)); document.querySelector('#event-duration').value = event.duration_minutes; document.querySelector('#event-location').value = event.location; document.querySelector('#event-submit').textContent = 'Save'; document.querySelector('#event-cancel').hidden = false; });
+    const text = document.createElement('span'); text.textContent = `${new Date(start).toLocaleTimeString(undefined, {hour:'numeric',minute:'2-digit'})} · ${event.title}${event.location ? ` · ${event.location}` : ''}`;
+    const edit = action('Edit', () => { editingEvent = event.id; document.querySelector('#event-title').value = event.title; document.querySelector('#event-start').value = localInputDate(new Date(event.start_ms)); document.querySelector('#event-duration').value = event.duration_minutes; document.querySelector('#event-repeat').value = event.repeat || 'none'; document.querySelector('#event-location').value = event.location; document.querySelector('#event-submit').textContent = 'Save'; document.querySelector('#event-cancel').hidden = false; });
     edit.setAttribute('aria-label', `Edit event ${event.title}`);
     const remove = action('Delete', async () => { if (await mutate('remove_calendar_event', {id:event.id}) && editingEvent === event.id) resetEventForm(); }); remove.setAttribute('aria-label', `Delete event ${event.title}`);
     row.append(text, edit, remove); items.append(row);
@@ -279,7 +313,7 @@ document.querySelector('#event-cancel').addEventListener('click', resetEventForm
 document.querySelector('#calendar-form').addEventListener('submit', async event => {
   event.preventDefault(); const startMs = new Date(document.querySelector('#event-start').value).getTime();
   if (!Number.isFinite(startMs) || startMs < 0) { status.textContent = 'Choose a valid event date.'; return; }
-  const args = { id:editingEvent, title:document.querySelector('#event-title').value, startMs, durationMinutes:Number(document.querySelector('#event-duration').value), location:document.querySelector('#event-location').value };
+  const args = { id:editingEvent, title:document.querySelector('#event-title').value, startMs, durationMinutes:Number(document.querySelector('#event-duration').value), location:document.querySelector('#event-location').value, repeat:document.querySelector('#event-repeat').value };
   if (await mutate('save_calendar_event', args)) { const date = new Date(startMs); selectedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate()); displayedMonth = new Date(date.getFullYear(), date.getMonth(), 1); resetEventForm(); renderMonthCalendar(); }
 });
 

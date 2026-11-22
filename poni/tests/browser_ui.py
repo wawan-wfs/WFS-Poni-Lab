@@ -24,7 +24,7 @@ with sync_playwright() as pw:
         if (command === 'set_weather_location') data.weather_location = args.location;
         if (command === 'set_world_clocks') data.world_clocks = args.places;
         data.calendar_events ||= [];
-        if (command === 'save_calendar_event') { const e = {id:args.id || crypto.randomUUID(), title:args.title.trim(), start_ms:args.startMs, duration_minutes:args.durationMinutes, location:args.location}; const i = data.calendar_events.findIndex(item => item.id === args.id); if (i < 0) data.calendar_events.push(e); else data.calendar_events[i] = e; }
+        if (command === 'save_calendar_event') { const e = {id:args.id || crypto.randomUUID(), title:args.title.trim(), start_ms:args.startMs, duration_minutes:args.durationMinutes, location:args.location, repeat:args.repeat}; const i = data.calendar_events.findIndex(item => item.id === args.id); if (i < 0) data.calendar_events.push(e); else data.calendar_events[i] = e; }
         if (command === 'remove_calendar_event') data.calendar_events = data.calendar_events.filter(e => e.id !== args.id);
         if (command === 'media_control') localStorage.setItem('last-media-action', args.action);
         if (command === 'add_task') data.tasks.push({id: crypto.randomUUID(), text: args.text, done: false, description:'', due_at_ms:args.dueAtMs});
@@ -86,14 +86,19 @@ with sync_playwright() as pw:
     page.locator('#event-title').fill('Team meeting')
     page.locator('#event-start').fill('2027-01-05T10:00')
     page.locator('#event-duration').fill('60')
+    page.locator('#event-repeat').select_option('weekly')
     page.locator('#event-location').fill('Office')
     page.locator('#event-submit').click()
     expect(page.locator('#calendar-items')).to_contain_text('Team meeting')
     expect(page.locator('#calendar-items')).to_contain_text('Prepare meeting')
+    page.get_by_role('button', name='Tuesday, January 12, 2027').click()
+    expect(page.locator('#calendar-items')).to_contain_text('Team meeting')
+    page.get_by_role('button', name='Tuesday, January 5, 2027').click()
     page.get_by_role('button', name='Edit event Team meeting').click()
     page.locator('#event-title').fill('Team review')
     page.locator('#event-submit').click()
     expect(page.locator('#calendar-items')).to_contain_text('Team review')
+    assert page.evaluate("data.calendar_events[0].repeat") == 'weekly'
     page.reload()
     page.locator('#closed').dispatch_event('pointerenter')
     page.locator('[data-page="calendar"]').click()
@@ -104,6 +109,15 @@ with sync_playwright() as pw:
     page.get_by_role('button', name='Delete event Temporary').click()
     page.get_by_role('button', name='Delete event Team review').click()
     expect(page.locator('#calendar-items')).not_to_contain_text('Team review')
+    assert page.evaluate('''() => {
+      const old = data.calendar_events;
+      data.calendar_events = [{start_ms:new Date(2028,0,31,23,30).getTime(),duration_minutes:90,repeat:'monthly'}];
+      const feb = occurrencesOnDay(new Date(2028,1,29)).length;
+      const march = occurrencesOnDay(new Date(2028,2,31)).length;
+      const nextDay = occurrencesOnDay(new Date(2028,3,1)).length;
+      data.calendar_events = old;
+      return feb === 0 && march === 1 && nextDay === 1;
+    }''')
     page.locator('[data-page="tasks"]').click()
     page.get_by_role('checkbox', name='Complete Prepare meeting').check()
     page.reload()
@@ -180,6 +194,16 @@ with sync_playwright() as pw:
     page.locator('#closed').dispatch_event('pointerenter')
     page.locator('[data-page="weather"]').click()
     expect(page.locator('#weather-current')).to_contain_text('30°C')
+    page.locator('[data-page="home"]').click()
+    page.evaluate('''() => {
+      const now = new Date(); now.setHours(9,0,0,0);
+      data.calendar_events = [{id:'test',title:'Home event',start_ms:now.getTime(),duration_minutes:30,repeat:'none'}];
+      renderCalendar();
+    }''')
+    expect(page.get_by_role('button', name='Home event')).to_be_visible()
+    page.get_by_role('button', name='Home event').click()
+    expect(page.locator('#page-calendar')).to_be_visible()
+    expect(page.locator('#calendar-items')).to_contain_text('Home event')
     assert not errors, errors
     browser.close()
 server.shutdown()
