@@ -113,7 +113,12 @@ with sync_playwright() as pw:
     page.locator('#event-title').fill('Temporary')
     page.locator('#event-submit').click()
     expect(page.locator('#calendar-items')).to_contain_text('Team review')
+    page.once('dialog', lambda dialog: dialog.dismiss())
     page.get_by_role('button', name='Delete event Temporary').click()
+    expect(page.locator('#calendar-items')).to_contain_text('Temporary')
+    page.once('dialog', lambda dialog: dialog.accept())
+    page.get_by_role('button', name='Delete event Temporary').click()
+    page.once('dialog', lambda dialog: dialog.accept())
     page.get_by_role('button', name='Delete event Team review').click()
     expect(page.locator('#calendar-items')).not_to_contain_text('Team review')
     assert page.evaluate('''() => {

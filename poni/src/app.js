@@ -335,7 +335,11 @@ function renderMonthCalendar() {
     const text = document.createElement('span'); text.textContent = `${new Date(start).toLocaleTimeString(undefined, {hour:'numeric',minute:'2-digit'})} · ${event.title}${event.location ? ` · ${event.location}` : ''}`;
     const edit = action('Edit', () => { editingEvent = event.id; document.querySelector('#event-title').value = event.title; document.querySelector('#event-start').value = localInputDate(new Date(event.start_ms)); document.querySelector('#event-duration').value = event.duration_minutes; document.querySelector('#event-repeat').value = event.repeat || 'none'; document.querySelector('#event-location').value = event.location; document.querySelector('#event-submit').textContent = 'Save'; document.querySelector('#event-cancel').hidden = false; });
     edit.setAttribute('aria-label', `Edit event ${event.title}`);
-    const remove = action('Delete', async () => { if (await mutate('remove_calendar_event', {id:event.id}) && editingEvent === event.id) resetEventForm(); }); remove.setAttribute('aria-label', `Delete event ${event.title}`);
+    const remove = action('Delete', async () => {
+      const message = event.repeat && event.repeat !== 'none' ? 'Delete this event and all its repeats?' : 'Delete this event?';
+      if (!window.confirm(message)) return;
+      if (await mutate('remove_calendar_event', {id:event.id}) && editingEvent === event.id) resetEventForm();
+    }); remove.setAttribute('aria-label', `Delete event ${event.title}`);
     row.append(text, edit, remove); items.append(row);
   });
   data.tasks.filter(t => t.due_at_ms >= selectedDate.getTime() && t.due_at_ms < end).forEach(task => { const row = document.createElement('div'); row.className = 'calendar-item'; row.textContent = `${new Date(task.due_at_ms).toLocaleTimeString(undefined, {hour:'numeric',minute:'2-digit'})} · ${task.text} · Todo`; items.append(row); });
