@@ -15,6 +15,7 @@ with sync_playwright() as pw:
     page.add_init_script('''
       window.__TAURI__ = { core: { invoke: async (command, args = {}) => {
         const data = JSON.parse(localStorage.getItem('test-data') || '{"tasks":[],"notes":[],"timer":{"total_ms":1500000,"remaining_ms":1500000,"ends_at_ms":null}}');
+        if (command === 'media_control') localStorage.setItem('last-media-action', args.action);
         if (command === 'add_task') data.tasks.push({id: crypto.randomUUID(), text: args.text, done: false});
         if (command === 'toggle_task') { const t = data.tasks.find(t => t.id === args.id); t.done = !t.done; }
         if (command === 'remove_task') data.tasks = data.tasks.filter(t => t.id !== args.id);
@@ -32,6 +33,8 @@ with sync_playwright() as pw:
     page.on('pageerror', lambda error: errors.append(str(error)))
     page.goto(f'http://127.0.0.1:{server.server_port}/index.html')
     page.locator('#closed').dispatch_event('pointerenter')
+    page.get_by_role('button', name='Next track').click()
+    assert page.evaluate("localStorage.getItem('last-media-action')") == 'next'
     page.locator('[data-page="tasks"]').click()
     page.locator('#task-input').fill('Prepare meeting')
     page.locator('#task-form button').click()

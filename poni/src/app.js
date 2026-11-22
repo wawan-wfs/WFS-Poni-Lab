@@ -33,6 +33,9 @@ document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', (
   document.querySelectorAll('.tab').forEach(item => item.classList.toggle('active', item === tab));
   document.querySelectorAll('.page').forEach(page => { page.hidden = page.id !== `page-${tab.dataset.page}`; });
 }));
+document.querySelectorAll('[data-media]').forEach(button => button.addEventListener('click', () => {
+  invoke('media_control', { action: button.dataset.media }).catch(error => { status.textContent = String(error); });
+}));
 
 function updateClock() {
   const now = new Date();

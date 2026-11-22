@@ -246,6 +246,51 @@ fn timer_action(
 }
 
 #[tauri::command]
+fn media_control(action: &str) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
+            SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYEVENTF_KEYUP,
+            VK_MEDIA_NEXT_TRACK, VK_MEDIA_PLAY_PAUSE, VK_MEDIA_PREV_TRACK,
+        };
+        let key = match action {
+            "previous" => VK_MEDIA_PREV_TRACK,
+            "toggle" => VK_MEDIA_PLAY_PAUSE,
+            "next" => VK_MEDIA_NEXT_TRACK,
+            _ => return Err("Unknown media action".into()),
+        };
+        let event = |flags| INPUT {
+            r#type: INPUT_KEYBOARD,
+            Anonymous: INPUT_0 {
+                ki: KEYBDINPUT {
+                    wVk: key,
+                    dwFlags: flags,
+                    ..Default::default()
+                },
+            },
+        };
+        let inputs = [event(0), event(KEYEVENTF_KEYUP)];
+        // Both input records remain valid for the duration of the call.
+        let sent = unsafe {
+            SendInput(
+                inputs.len() as u32,
+                inputs.as_ptr(),
+                std::mem::size_of::<INPUT>() as i32,
+            )
+        };
+        if sent != inputs.len() as u32 {
+            return Err("Windows did not accept the media key".into());
+        }
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = action;
+        Err("Media controls require Windows".into())
+    }
+}
+
+#[tauri::command]
 fn set_panel_open(
     window: tauri::WebviewWindow,
     sequence: State<'_, Mutex<WindowSequence>>,
@@ -298,6 +343,7 @@ fn main() {
             save_note,
             remove_note,
             timer_action,
+            media_control,
             set_panel_open
         ])
         .run(tauri::generate_context!())
@@ -359,5 +405,10 @@ mod tests {
         };
         assert_eq!(timer.remaining_at(3000), 2000);
         assert_eq!(timer.remaining_at(6000), 0);
+    }
+
+    #[test]
+    fn rejects_unknown_media_commands() {
+        assert!(media_control("invalid").is_err());
     }
 }
