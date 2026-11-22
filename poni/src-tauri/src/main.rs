@@ -20,6 +20,62 @@ struct Note {
     text: String,
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+struct WeatherLocation {
+    name: String,
+    #[serde(default)]
+    country: Option<String>,
+    #[serde(default)]
+    admin1: Option<String>,
+    latitude: f64,
+    longitude: f64,
+}
+
+impl WeatherLocation {
+    fn validate(&self) -> Result<(), String> {
+        if self.name.trim().is_empty()
+            || self.name.len() > 160
+            || self.country.as_ref().is_some_and(|s| s.len() > 160)
+            || self.admin1.as_ref().is_some_and(|s| s.len() > 160)
+            || !self.latitude.is_finite()
+            || !self.longitude.is_finite()
+            || !(-90.0..=90.0).contains(&self.latitude)
+            || !(-180.0..=180.0).contains(&self.longitude)
+        {
+            return Err("Invalid weather location".into());
+        }
+        Ok(())
+    }
+}
+
+#[derive(Deserialize)]
+struct GeocodingResponse {
+    #[serde(default)]
+    results: Vec<WeatherLocation>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct ForecastCurrent {
+    temperature_2m: f64,
+    relative_humidity_2m: f64,
+    weather_code: u32,
+    wind_speed_10m: f64,
+}
+
+#[derive(Serialize, Deserialize)]
+struct ForecastDaily {
+    time: Vec<String>,
+    temperature_2m_max: Vec<f64>,
+    temperature_2m_min: Vec<f64>,
+    weather_code: Vec<u32>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct Forecast {
+    current: ForecastCurrent,
+    daily: ForecastDaily,
+}
+
 #[derive(Serialize)]
 struct MediaSnapshot {
     title: String,
@@ -78,6 +134,7 @@ struct AppData {
     notes: Vec<Note>,
     timer: Timer,
     stopwatch: Stopwatch,
+    weather_location: Option<WeatherLocation>,
 }
 
 struct Store {
@@ -134,6 +191,84 @@ fn get_data(store: State<'_, Mutex<Store>>) -> Result<AppData, String> {
         .map_err(|_| "Storage unavailable")?
         .data
         .clone())
+}
+
+fn weather_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(15))
+        .build()
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn search_weather_city(query: String) -> Result<Vec<WeatherLocation>, String> {
+    let query = valid_text(query, 100)?;
+    if query.chars().count() < 2 {
+        return Err("Enter at least two characters".into());
+    }
+    let response = weather_client()?
+        .get("https://geocoding-api.open-meteo.com/v1/search")
+        .query(&[("name", query.as_str()), ("count", "5"), ("format", "json")])
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .error_for_status()
+        .map_err(|e| e.to_string())?
+        .json::<GeocodingResponse>()
+        .await
+        .map_err(|e| e.to_string())?;
+    Ok(response
+        .results
+        .into_iter()
+        .filter(|item| item.validate().is_ok())
+        .take(5)
+        .collect())
+}
+
+#[tauri::command]
+async fn weather_forecast(location: WeatherLocation) -> Result<Forecast, String> {
+    location.validate()?;
+    let latitude = location.latitude.to_string();
+    let longitude = location.longitude.to_string();
+    weather_client()?
+        .get("https://api.open-meteo.com/v1/forecast")
+        .query(&[
+            ("latitude", latitude.as_str()),
+            ("longitude", longitude.as_str()),
+            (
+                "current",
+                "temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m",
+            ),
+            (
+                "daily",
+                "temperature_2m_max,temperature_2m_min,weather_code",
+            ),
+            ("timezone", "auto"),
+            ("forecast_days", "7"),
+        ])
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .error_for_status()
+        .map_err(|e| e.to_string())?
+        .json::<Forecast>()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn set_weather_location(
+    store: State<'_, Mutex<Store>>,
+    location: WeatherLocation,
+) -> Result<AppData, String> {
+    location.validate()?;
+    store
+        .lock()
+        .map_err(|_| "Storage unavailable")?
+        .update(|data| {
+            data.weather_location = Some(location);
+            Ok(())
+        })
 }
 
 #[tauri::command]
@@ -479,6 +614,9 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             get_data,
+            search_weather_city,
+            weather_forecast,
+            set_weather_location,
             shortcut_status,
             add_task,
             toggle_task,
@@ -566,5 +704,19 @@ mod tests {
     #[test]
     fn rejects_unknown_media_commands() {
         assert!(media_control("invalid").is_err());
+    }
+
+    #[test]
+    fn weather_locations_reject_invalid_coordinates_and_allow_missing_region() {
+        let city: WeatherLocation =
+            serde_json::from_str(r#"{"name":"Jakarta","latitude":-6.2,"longitude":106.8}"#)
+                .unwrap();
+        assert!(city.validate().is_ok());
+        assert!(city.country.is_none());
+        let invalid = WeatherLocation {
+            latitude: 91.0,
+            ..city
+        };
+        assert!(invalid.validate().is_err());
     }
 }

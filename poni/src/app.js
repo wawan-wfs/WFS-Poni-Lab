@@ -5,13 +5,15 @@ const surface = document.querySelector('#surface');
 const closed = document.querySelector('#closed');
 const open = document.querySelector('#open');
 const status = document.querySelector('#status');
-let data = { tasks: [], notes: [], timer: { total_ms: 1500000, remaining_ms: 1500000, ends_at_ms: null }, stopwatch: { elapsed_ms: 0, started_at_ms: null, laps: [] } };
+let data = { tasks: [], notes: [], timer: { total_ms: 1500000, remaining_ms: 1500000, ends_at_ms: null }, stopwatch: { elapsed_ms: 0, started_at_ms: null, laps: [] }, weather_location: null };
 let editingNote = null;
 let queue = Promise.resolve();
 let panelSequence = 0;
 let closeTimer = null;
 let mediaPending = false;
 let keyboardOpen = false;
+let weatherRequest = 0;
+let searchRequest = 0;
 
 function setOpen(value) {
   if (closed.hidden === value) return;
@@ -192,4 +194,64 @@ document.querySelectorAll('[data-timer-mode]').forEach(button => button.addEvent
 document.querySelector('#stopwatch-start').addEventListener('click', () => mutate('stopwatch_action', { action: data.stopwatch.started_at_ms == null ? 'start' : 'pause' }));
 document.querySelector('#stopwatch-lap').addEventListener('click', () => mutate('stopwatch_action', { action: 'lap' }));
 document.querySelector('#stopwatch-reset').addEventListener('click', () => mutate('stopwatch_action', { action: 'reset' }));
-queue = invoke('get_data').then(saved => { data = saved; render(); }).catch(error => { status.textContent = String(error); });
+
+function weatherDescription(code) {
+  if (code === 0) return 'Clear';
+  if (code <= 3) return 'Cloudy';
+  if (code === 45 || code === 48) return 'Fog';
+  if (code >= 95) return 'Thunderstorm';
+  if ((code >= 71 && code <= 77) || (code >= 85 && code <= 86)) return 'Snow';
+  if (code >= 51 && code <= 82) return 'Rain';
+  return 'Weather';
+}
+
+async function loadWeather(location) {
+  const request = ++weatherRequest;
+  const weatherStatus = document.querySelector('#weather-status');
+  weatherStatus.textContent = 'Loading weather…';
+  document.querySelector('#weather-current').textContent = '';
+  document.querySelector('#weather-days').replaceChildren();
+  try {
+    const forecast = await invoke('weather_forecast', { location });
+    if (request !== weatherRequest) return;
+    const current = forecast.current;
+    weatherStatus.textContent = [location.name, location.admin1, location.country].filter(Boolean).join(', ');
+    document.querySelector('#weather-current').textContent = `${Math.round(current.temperature_2m)}°C · ${weatherDescription(current.weather_code)} · ${Math.round(current.relative_humidity_2m)}% · ${Math.round(current.wind_speed_10m)} km/h`;
+    const days = document.querySelector('#weather-days');
+    days.replaceChildren();
+    forecast.daily.time.slice(0, 7).forEach((date, index) => {
+      const item = document.createElement('span');
+      const day = new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(new Date(`${date}T12:00:00`));
+      item.textContent = `${day} ${Math.round(forecast.daily.temperature_2m_max[index])}° / ${Math.round(forecast.daily.temperature_2m_min[index])}°`;
+      days.append(item);
+    });
+  } catch (error) {
+    if (request === weatherRequest) weatherStatus.textContent = `Weather unavailable: ${String(error)}`;
+  }
+}
+
+document.querySelector('#weather-search').addEventListener('submit', async event => {
+  event.preventDefault();
+  const request = ++searchRequest;
+  const weatherStatus = document.querySelector('#weather-status');
+  const results = document.querySelector('#weather-results');
+  results.replaceChildren();
+  weatherStatus.textContent = 'Searching…';
+  try {
+    const cities = await invoke('search_weather_city', { query: document.querySelector('#weather-city').value.trim() });
+    if (request !== searchRequest) return;
+    weatherStatus.textContent = cities.length ? 'Choose a city' : 'No cities found';
+    cities.forEach(city => {
+      const button = action([city.name, city.admin1, city.country].filter(Boolean).join(', '), async () => {
+        if (await mutate('set_weather_location', { location: city })) {
+          results.replaceChildren();
+          void loadWeather(city);
+        }
+      });
+      results.append(button);
+    });
+  } catch (error) {
+    if (request === searchRequest) weatherStatus.textContent = `Search failed: ${String(error)}`;
+  }
+});
+queue = invoke('get_data').then(saved => { data = saved; render(); if (data.weather_location) void loadWeather(data.weather_location); }).catch(error => { status.textContent = String(error); });

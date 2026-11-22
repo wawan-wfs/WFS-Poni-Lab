@@ -17,6 +17,9 @@ with sync_playwright() as pw:
         const data = JSON.parse(localStorage.getItem('test-data') || '{"tasks":[],"notes":[],"timer":{"total_ms":1500000,"remaining_ms":1500000,"ends_at_ms":null},"stopwatch":{"elapsed_ms":0,"started_at_ms":null,"laps":[]}}');
         if (command === 'current_media') return {title: 'Test track', artist: 'Test artist', playing: true, position_ms: 30000, duration_ms: 60000};
         if (command === 'shortcut_status') return true;
+        if (command === 'search_weather_city') return [{name:'Jakarta', admin1:'Jakarta', country:'Indonesia', latitude:-6.2, longitude:106.8}];
+        if (command === 'weather_forecast') return {current:{temperature_2m:30, relative_humidity_2m:70, weather_code:2, wind_speed_10m:10}, daily:{time:['2026-11-22'], temperature_2m_max:[32], temperature_2m_min:[25], weather_code:[2]}};
+        if (command === 'set_weather_location') data.weather_location = args.location;
         if (command === 'media_control') localStorage.setItem('last-media-action', args.action);
         if (command === 'add_task') data.tasks.push({id: crypto.randomUUID(), text: args.text, done: false});
         if (command === 'toggle_task') { const t = data.tasks.find(t => t.id === args.id); t.done = !t.done; }
@@ -85,6 +88,15 @@ with sync_playwright() as pw:
     page.locator('#stopwatch-start').click()
     page.locator('#stopwatch-reset').click()
     expect(page.locator('#stopwatch-display')).to_have_text('00:00.0')
+    page.locator('[data-page="weather"]').click()
+    page.locator('#weather-city').fill('Jakarta')
+    page.locator('#weather-search button').click()
+    page.get_by_role('button', name='Jakarta, Jakarta, Indonesia').click()
+    expect(page.locator('#weather-current')).to_contain_text('30°C')
+    page.reload()
+    page.locator('#closed').dispatch_event('pointerenter')
+    page.locator('[data-page="weather"]').click()
+    expect(page.locator('#weather-current')).to_contain_text('30°C')
     assert not errors, errors
     browser.close()
 server.shutdown()

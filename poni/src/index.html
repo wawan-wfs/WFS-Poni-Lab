@@ -17,6 +17,7 @@
           <button class="tab" data-page="tasks">☑ <span>Todo</span></button>
           <button class="tab" data-page="notes">▣ <span>Notes</span></button>
           <button class="tab" data-page="timer">◷ <span>Timer</span></button>
+          <button class="tab" data-page="weather">☀ <span>Weather</span></button>
         </nav>
         <time class="clock">--:--</time>
         <button class="close" id="close" aria-label="Close panel">×</button>
@@ -43,6 +44,12 @@
             <div class="stopwatch-controls"><button type="button" id="stopwatch-start">Start</button><button type="button" id="stopwatch-lap">Lap</button><button type="button" id="stopwatch-reset">Reset</button></div>
             <div id="stopwatch-laps"></div>
           </div>
+        </section>
+        <section id="page-weather" class="page" hidden>
+          <form id="weather-search" class="entry"><input id="weather-city" aria-label="City" minlength="2" maxlength="100" placeholder="Find a city" required><button type="submit">Search</button></form>
+          <div id="weather-results" class="weather-results"></div>
+          <p id="weather-status" role="status" aria-live="polite"></p>
+          <div id="weather-current"></div><div id="weather-days" class="weather-days"></div>
         </section>
       </main>
       <p id="status" role="status" aria-live="polite"></p>

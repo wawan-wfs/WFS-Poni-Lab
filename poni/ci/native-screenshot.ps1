@@ -2,6 +2,7 @@ $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 Add-Type @'
+using System;
 using System.Runtime.InteropServices;
 public static class CursorPosition {
     [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
