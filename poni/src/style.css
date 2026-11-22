@@ -45,6 +45,9 @@ main { height: 135px; overflow: auto; }
 .calendar-grid button.out { color:#686870; }
 .calendar-grid button.selected { background:#fa3350; }
 .calendar-grid button.has-event { text-decoration:underline; }
+.hijri-date, .hijri-setting { color:#aaa; font-size:11px; margin-top:4px; }
+.hijri-setting { display:flex; align-items:center; gap:6px; }
+.hijri-setting select { background:#1f2023; color:#fff; border:1px solid #353539; border-radius:6px; padding:3px; font-size:11px; }
 #calendar-selected { font-size:12px; }
 #calendar-items { font-size:11px; }
 .calendar-item { display:flex; align-items:center; gap:5px; margin-top:4px; }

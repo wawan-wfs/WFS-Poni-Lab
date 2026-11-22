@@ -198,6 +198,7 @@ struct AppData {
     weather_location: Option<WeatherLocation>,
     world_clocks: Vec<WorldPlace>,
     calendar_events: Vec<CalendarEvent>,
+    hijri_offset: i8,
 }
 
 struct Store {
@@ -264,6 +265,20 @@ fn get_data(store: State<'_, Mutex<Store>>) -> Result<AppData, String> {
         .map_err(|_| "Storage unavailable")?
         .data
         .clone())
+}
+
+#[tauri::command]
+fn set_hijri_offset(store: State<'_, Mutex<Store>>, offset: i8) -> Result<AppData, String> {
+    if !(-2..=2).contains(&offset) {
+        return Err("Hijri correction must be between -2 and +2 days".into());
+    }
+    store
+        .lock()
+        .map_err(|_| "Storage unavailable")?
+        .update(|data| {
+            data.hijri_offset = offset;
+            Ok(())
+        })
 }
 
 #[tauri::command]
@@ -935,6 +950,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             get_data,
+            set_hijri_offset,
             system_snapshot,
             search_weather_city,
             weather_forecast,
@@ -982,17 +998,18 @@ mod tests {
         store
             .update(|data| {
                 data.calendar_events.push(event.clone());
+                data.hijri_offset = -2;
                 Ok(())
             })
             .unwrap();
-        assert_eq!(
-            Store::open(path).unwrap().data.calendar_events[0].title,
-            "Meeting"
-        );
+        let restored = Store::open(path).unwrap().data;
+        assert_eq!(restored.calendar_events[0].title, "Meeting");
+        assert_eq!(restored.hijri_offset, -2);
         event.duration_minutes = 0;
         assert!(event.validate().is_err());
         let old_data: AppData = serde_json::from_str(r#"{"tasks":[],"notes":[]}"#).unwrap();
         assert!(old_data.calendar_events.is_empty());
+        assert_eq!(old_data.hijri_offset, 0);
         let old_event: CalendarEvent = serde_json::from_str(&format!(
             r#"{{"id":"{}","title":"Old","start_ms":1000,"duration_minutes":30,"location":""}}"#,
             Uuid::new_v4()

@@ -277,6 +277,36 @@ function resetEventForm() {
   document.querySelector('#event-submit').textContent = 'Add event';
   document.querySelector('#event-cancel').hidden = true;
 }
+const hijriMonths = ['Muharram', 'Safar', 'Rabi al-Awwal', 'Rabi al-Thani', 'Jumada al-Ula', 'Jumada al-Akhirah', 'Rajab', 'Sha’ban', 'Ramadan', 'Shawwal', 'Dhu al-Qa’dah', 'Dhu al-Hijjah'];
+let hijriFormatter = null;
+try {
+  const formatter = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura-nu-latn', {day:'numeric', month:'numeric', year:'numeric', timeZone:'UTC'});
+  if (formatter.resolvedOptions().calendar === 'islamic-umalqura') hijriFormatter = formatter;
+} catch { /* civil calendar fallback */ }
+function hijriDate(date, offset) {
+  const days = Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000) + offset;
+  if (hijriFormatter) {
+    const parts = Object.fromEntries(hijriFormatter.formatToParts(new Date(days * 86400000 + 43200000)).map(part => [part.type, part.value]));
+    const day = Number(parts.day), month = Number(parts.month), year = Number(parts.year);
+    if (day && month >= 1 && month <= 12 && year) return {day, month, year};
+  }
+  const epoch = -492148;
+  const start = (year, month) => Math.ceil(29.5 * (month - 1)) + (year - 1) * 354 + Math.floor((3 + 11 * year) / 30) + epoch;
+  const year = Math.floor((30 * (days - epoch) + 10646) / 10631);
+  const month = Math.min(12, Math.ceil((days - 29 - start(year, 1)) / 29.5) + 1);
+  return {day:days - start(year, month) + 1, month, year};
+}
+function hijriText(date, offset) {
+  const h = hijriDate(date, offset); return `${h.day} ${hijriMonths[h.month - 1]} ${h.year} AH`;
+}
+function hijriRange(date, offset) {
+  const first = hijriDate(new Date(date.getFullYear(), date.getMonth(), 1), offset);
+  const last = hijriDate(new Date(date.getFullYear(), date.getMonth() + 1, 0), offset);
+  const a = hijriMonths[first.month - 1], b = hijriMonths[last.month - 1];
+  if (first.month === last.month && first.year === last.year) return `${a} ${first.year} AH`;
+  if (first.year === last.year) return `${a} – ${b} ${last.year} AH`;
+  return `${a} ${first.year} – ${b} ${last.year} AH`;
+}
 function renderMonthCalendar() {
   const grid = document.querySelector('#calendar-grid'); grid.replaceChildren();
   document.querySelector('#calendar-month').textContent = new Intl.DateTimeFormat(undefined, { month:'long', year:'numeric' }).format(displayedMonth);
@@ -294,6 +324,10 @@ function renderMonthCalendar() {
     button.addEventListener('click', () => { selectedDate = date; displayedMonth = new Date(date.getFullYear(), date.getMonth(), 1); resetEventForm(); renderMonthCalendar(); }); grid.append(button);
   }
   document.querySelector('#calendar-selected').textContent = new Intl.DateTimeFormat(undefined, {dateStyle:'full'}).format(selectedDate);
+  const offset = data.hijri_offset ?? 0;
+  document.querySelector('#calendar-hijri-range').textContent = hijriRange(displayedMonth, offset);
+  document.querySelector('#calendar-hijri-day').textContent = hijriText(selectedDate, offset);
+  document.querySelector('#hijri-offset').value = String(offset);
   const end = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() + 1).getTime();
   const items = document.querySelector('#calendar-items'); items.replaceChildren();
   occurrencesOnDay(selectedDate).forEach(({event, start}) => {
@@ -309,6 +343,7 @@ function renderMonthCalendar() {
 }
 document.querySelector('#calendar-prev').addEventListener('click', () => { displayedMonth = new Date(displayedMonth.getFullYear(), displayedMonth.getMonth() - 1, 1); renderMonthCalendar(); });
 document.querySelector('#calendar-next').addEventListener('click', () => { displayedMonth = new Date(displayedMonth.getFullYear(), displayedMonth.getMonth() + 1, 1); renderMonthCalendar(); });
+document.querySelector('#hijri-offset').addEventListener('change', async event => { if (!await mutate('set_hijri_offset', {offset:Number(event.target.value)})) renderMonthCalendar(); });
 document.querySelector('#event-cancel').addEventListener('click', resetEventForm);
 document.querySelector('#calendar-form').addEventListener('submit', async event => {
   event.preventDefault(); const startMs = new Date(document.querySelector('#event-start').value).getTime();

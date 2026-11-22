@@ -23,6 +23,7 @@ with sync_playwright() as pw:
         if (command === 'weather_forecast') return {current:{temperature_2m:30, relative_humidity_2m:70, weather_code:2, wind_speed_10m:10}, daily:{time:['2026-11-22'], temperature_2m_max:[32], temperature_2m_min:[25], weather_code:[2]}};
         if (command === 'set_weather_location') data.weather_location = args.location;
         if (command === 'set_world_clocks') data.world_clocks = args.places;
+        if (command === 'set_hijri_offset') data.hijri_offset = args.offset;
         data.calendar_events ||= [];
         if (command === 'save_calendar_event') { const e = {id:args.id || crypto.randomUUID(), title:args.title.trim(), start_ms:args.startMs, duration_minutes:args.durationMinutes, location:args.location, repeat:args.repeat}; const i = data.calendar_events.findIndex(item => item.id === args.id); if (i < 0) data.calendar_events.push(e); else data.calendar_events[i] = e; }
         if (command === 'remove_calendar_event') data.calendar_events = data.calendar_events.filter(e => e.id !== args.id);
@@ -83,6 +84,11 @@ with sync_playwright() as pw:
     page.locator('#task-submit').click()
     expect(page.get_by_text('Bring notes')).to_be_visible()
     page.locator('[data-page="calendar"]').click()
+    assert page.evaluate("hijriText(new Date(2024, 3, 10), 0)") == '1 Shawwal 1445 AH'
+    assert page.evaluate("hijriText(new Date(2024, 3, 10), 1)") == '2 Shawwal 1445 AH'
+    expect(page.locator('#calendar-hijri-range')).to_contain_text('AH')
+    page.locator('#hijri-offset').select_option('1')
+    expect(page.locator('#hijri-offset')).to_have_value('1')
     page.locator('#event-title').fill('Team meeting')
     page.locator('#event-start').fill('2027-01-05T10:00')
     page.locator('#event-duration').fill('60')
@@ -102,6 +108,7 @@ with sync_playwright() as pw:
     page.reload()
     page.locator('#closed').dispatch_event('pointerenter')
     page.locator('[data-page="calendar"]').click()
+    expect(page.locator('#hijri-offset')).to_have_value('1')
     page.locator('#event-start').fill('2027-01-05T10:00')
     page.locator('#event-title').fill('Temporary')
     page.locator('#event-submit').click()
