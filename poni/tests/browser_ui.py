@@ -23,6 +23,9 @@ with sync_playwright() as pw:
         if (command === 'weather_forecast') return {current:{temperature_2m:30, relative_humidity_2m:70, weather_code:2, wind_speed_10m:10}, daily:{time:['2026-11-22'], temperature_2m_max:[32], temperature_2m_min:[25], weather_code:[2]}};
         if (command === 'set_weather_location') data.weather_location = args.location;
         if (command === 'set_world_clocks') data.world_clocks = args.places;
+        data.calendar_events ||= [];
+        if (command === 'save_calendar_event') { const e = {id:args.id || crypto.randomUUID(), title:args.title.trim(), start_ms:args.startMs, duration_minutes:args.durationMinutes, location:args.location}; const i = data.calendar_events.findIndex(item => item.id === args.id); if (i < 0) data.calendar_events.push(e); else data.calendar_events[i] = e; }
+        if (command === 'remove_calendar_event') data.calendar_events = data.calendar_events.filter(e => e.id !== args.id);
         if (command === 'media_control') localStorage.setItem('last-media-action', args.action);
         if (command === 'add_task') data.tasks.push({id: crypto.randomUUID(), text: args.text, done: false, description:'', due_at_ms:args.dueAtMs});
         if (command === 'update_task') { const t = data.tasks.find(t => t.id === args.id); t.text = args.text; t.description = args.description; t.due_at_ms = args.dueAtMs; }
@@ -79,6 +82,29 @@ with sync_playwright() as pw:
     page.locator('#task-description').fill('Bring notes')
     page.locator('#task-submit').click()
     expect(page.get_by_text('Bring notes')).to_be_visible()
+    page.locator('[data-page="calendar"]').click()
+    page.locator('#event-title').fill('Team meeting')
+    page.locator('#event-start').fill('2027-01-05T10:00')
+    page.locator('#event-duration').fill('60')
+    page.locator('#event-location').fill('Office')
+    page.locator('#event-submit').click()
+    expect(page.locator('#calendar-items')).to_contain_text('Team meeting')
+    expect(page.locator('#calendar-items')).to_contain_text('Prepare meeting')
+    page.get_by_role('button', name='Edit event Team meeting').click()
+    page.locator('#event-title').fill('Team review')
+    page.locator('#event-submit').click()
+    expect(page.locator('#calendar-items')).to_contain_text('Team review')
+    page.reload()
+    page.locator('#closed').dispatch_event('pointerenter')
+    page.locator('[data-page="calendar"]').click()
+    page.locator('#event-start').fill('2027-01-05T10:00')
+    page.locator('#event-title').fill('Temporary')
+    page.locator('#event-submit').click()
+    expect(page.locator('#calendar-items')).to_contain_text('Team review')
+    page.get_by_role('button', name='Delete event Temporary').click()
+    page.get_by_role('button', name='Delete event Team review').click()
+    expect(page.locator('#calendar-items')).not_to_contain_text('Team review')
+    page.locator('[data-page="tasks"]').click()
     page.get_by_role('checkbox', name='Complete Prepare meeting').check()
     page.reload()
     page.locator('#closed').dispatch_event('pointerenter')

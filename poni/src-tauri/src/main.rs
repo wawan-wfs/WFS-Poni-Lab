@@ -28,6 +28,26 @@ struct Note {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
+struct CalendarEvent {
+    id: Uuid,
+    title: String,
+    start_ms: u64,
+    duration_minutes: u32,
+    location: String,
+}
+
+impl CalendarEvent {
+    fn validate(&mut self) -> Result<(), String> {
+        self.title = valid_text(std::mem::take(&mut self.title), 200)?;
+        valid_due(Some(self.start_ms))?;
+        if !(1..=1440).contains(&self.duration_minutes) || self.location.chars().count() > 500 {
+            return Err("Invalid event duration or location".into());
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
 struct WeatherLocation {
     name: String,
     #[serde(default)]
@@ -164,6 +184,7 @@ struct AppData {
     stopwatch: Stopwatch,
     weather_location: Option<WeatherLocation>,
     world_clocks: Vec<WorldPlace>,
+    calendar_events: Vec<CalendarEvent>,
 }
 
 struct Store {
@@ -565,6 +586,56 @@ fn remove_note(store: State<'_, Mutex<Store>>, id: Uuid) -> Result<AppData, Stri
 }
 
 #[tauri::command]
+fn save_calendar_event(
+    store: State<'_, Mutex<Store>>,
+    id: Option<Uuid>,
+    title: String,
+    start_ms: u64,
+    duration_minutes: u32,
+    location: String,
+) -> Result<AppData, String> {
+    let mut event = CalendarEvent {
+        id: id.unwrap_or_else(Uuid::new_v4),
+        title,
+        start_ms,
+        duration_minutes,
+        location,
+    };
+    event.validate()?;
+    store
+        .lock()
+        .map_err(|_| "Storage unavailable")?
+        .update(|data| {
+            if id.is_some() {
+                *data
+                    .calendar_events
+                    .iter_mut()
+                    .find(|item| item.id == event.id)
+                    .ok_or("Event not found")? = event;
+            } else {
+                data.calendar_events.push(event);
+            }
+            Ok(())
+        })
+}
+
+#[tauri::command]
+fn remove_calendar_event(store: State<'_, Mutex<Store>>, id: Uuid) -> Result<AppData, String> {
+    store
+        .lock()
+        .map_err(|_| "Storage unavailable")?
+        .update(|data| {
+            let index = data
+                .calendar_events
+                .iter()
+                .position(|event| event.id == id)
+                .ok_or("Event not found")?;
+            data.calendar_events.remove(index);
+            Ok(())
+        })
+}
+
+#[tauri::command]
 fn timer_action(
     store: State<'_, Mutex<Store>>,
     action: String,
@@ -860,6 +931,8 @@ fn main() {
             remove_task,
             save_note,
             remove_note,
+            save_calendar_event,
+            remove_calendar_event,
             timer_action,
             media_control,
             current_media,
@@ -874,6 +947,36 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn calendar_event_validation_and_storage() {
+        let mut event = CalendarEvent {
+            id: Uuid::new_v4(),
+            title: "  Meeting  ".into(),
+            start_ms: 1_800_000_000_000,
+            duration_minutes: 30,
+            location: "Office".into(),
+        };
+        event.validate().unwrap();
+        assert_eq!(event.title, "Meeting");
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("data.json");
+        let mut store = Store::open(path.clone()).unwrap();
+        store
+            .update(|data| {
+                data.calendar_events.push(event.clone());
+                Ok(())
+            })
+            .unwrap();
+        assert_eq!(
+            Store::open(path).unwrap().data.calendar_events[0].title,
+            "Meeting"
+        );
+        event.duration_minutes = 0;
+        assert!(event.validate().is_err());
+        let old_data: AppData = serde_json::from_str(r#"{"tasks":[],"notes":[]}"#).unwrap();
+        assert!(old_data.calendar_events.is_empty());
+    }
 
     #[test]
     fn persists_updates_and_keeps_original_after_rejected_update() {

@@ -5,7 +5,7 @@ const surface = document.querySelector('#surface');
 const closed = document.querySelector('#closed');
 const open = document.querySelector('#open');
 const status = document.querySelector('#status');
-let data = { tasks: [], notes: [], timer: { total_ms: 1500000, remaining_ms: 1500000, ends_at_ms: null }, stopwatch: { elapsed_ms: 0, started_at_ms: null, laps: [] }, weather_location: null, world_clocks: [] };
+let data = { tasks: [], notes: [], timer: { total_ms: 1500000, remaining_ms: 1500000, ends_at_ms: null }, stopwatch: { elapsed_ms: 0, started_at_ms: null, laps: [] }, weather_location: null, world_clocks: [], calendar_events: [] };
 let editingNote = null;
 let editingTask = null;
 let queue = Promise.resolve();
@@ -19,6 +19,10 @@ let worldMinute = null;
 let systemPending = false;
 let calendarDay = null;
 let calendarToday = null;
+let selectedDate = new Date();
+selectedDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
+let displayedMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
+let editingEvent = null;
 const panelSession = crypto.randomUUID();
 const panelReady = invoke('initialize_panel', { session: panelSession });
 panelReady.catch(error => { status.textContent = String(error); });
@@ -70,6 +74,7 @@ document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', (
   document.querySelectorAll('.page').forEach(page => { page.hidden = page.id !== `page-${tab.dataset.page}`; });
   if (tab.dataset.page === 'system') void refreshSystem();
   if (tab.dataset.page === 'dayprogress') renderDayProgress();
+  if (tab.dataset.page === 'calendar') renderMonthCalendar();
 }));
 document.querySelectorAll('[data-media]').forEach(button => button.addEventListener('click', () => {
   invoke('media_control', { action: button.dataset.media }).then(() => setTimeout(refreshMedia, 500)).catch(error => { status.textContent = String(error); });
@@ -224,7 +229,59 @@ function render() {
   renderTimer();
   renderStopwatch();
   renderWorldClocks();
+  renderMonthCalendar();
 }
+
+function localInputDate(date) {
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+function resetEventForm() {
+  editingEvent = null;
+  document.querySelector('#calendar-form').reset();
+  const start = new Date(selectedDate); start.setHours(9);
+  document.querySelector('#event-start').value = localInputDate(start);
+  document.querySelector('#event-submit').textContent = 'Add event';
+  document.querySelector('#event-cancel').hidden = true;
+}
+function renderMonthCalendar() {
+  const grid = document.querySelector('#calendar-grid'); grid.replaceChildren();
+  document.querySelector('#calendar-month').textContent = new Intl.DateTimeFormat(undefined, { month:'long', year:'numeric' }).format(displayedMonth);
+  for (let i = 0; i < 7; i++) { const day = document.createElement('span'); day.textContent = new Intl.DateTimeFormat(undefined, {weekday:'narrow'}).format(new Date(2024, 0, 1 + i)); grid.append(day); }
+  const lead = (displayedMonth.getDay() + 6) % 7;
+  const events = data.calendar_events || [];
+  for (let i = 0; i < 42; i++) {
+    const date = new Date(displayedMonth.getFullYear(), displayedMonth.getMonth(), 1 - lead + i);
+    const end = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1).getTime();
+    const button = document.createElement('button'); button.type = 'button'; button.textContent = date.getDate();
+    button.classList.toggle('out', date.getMonth() !== displayedMonth.getMonth());
+    button.classList.toggle('selected', date.getTime() === selectedDate.getTime());
+    button.classList.toggle('has-event', events.some(e => e.start_ms < end && e.start_ms + e.duration_minutes * 60000 > date.getTime()) || data.tasks.some(t => t.due_at_ms >= date.getTime() && t.due_at_ms < end));
+    button.setAttribute('aria-label', new Intl.DateTimeFormat(undefined, {dateStyle:'full'}).format(date));
+    button.addEventListener('click', () => { selectedDate = date; displayedMonth = new Date(date.getFullYear(), date.getMonth(), 1); resetEventForm(); renderMonthCalendar(); }); grid.append(button);
+  }
+  document.querySelector('#calendar-selected').textContent = new Intl.DateTimeFormat(undefined, {dateStyle:'full'}).format(selectedDate);
+  const end = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate() + 1).getTime();
+  const items = document.querySelector('#calendar-items'); items.replaceChildren();
+  events.filter(e => e.start_ms < end && e.start_ms + e.duration_minutes * 60000 > selectedDate.getTime()).sort((a,b) => a.start_ms - b.start_ms).forEach(event => {
+    const row = document.createElement('div'); row.className = 'calendar-item';
+    const text = document.createElement('span'); text.textContent = `${new Date(event.start_ms).toLocaleTimeString(undefined, {hour:'numeric',minute:'2-digit'})} · ${event.title}${event.location ? ` · ${event.location}` : ''}`;
+    const edit = action('Edit', () => { editingEvent = event.id; document.querySelector('#event-title').value = event.title; document.querySelector('#event-start').value = localInputDate(new Date(event.start_ms)); document.querySelector('#event-duration').value = event.duration_minutes; document.querySelector('#event-location').value = event.location; document.querySelector('#event-submit').textContent = 'Save'; document.querySelector('#event-cancel').hidden = false; });
+    edit.setAttribute('aria-label', `Edit event ${event.title}`);
+    const remove = action('Delete', async () => { if (await mutate('remove_calendar_event', {id:event.id}) && editingEvent === event.id) resetEventForm(); }); remove.setAttribute('aria-label', `Delete event ${event.title}`);
+    row.append(text, edit, remove); items.append(row);
+  });
+  data.tasks.filter(t => t.due_at_ms >= selectedDate.getTime() && t.due_at_ms < end).forEach(task => { const row = document.createElement('div'); row.className = 'calendar-item'; row.textContent = `${new Date(task.due_at_ms).toLocaleTimeString(undefined, {hour:'numeric',minute:'2-digit'})} · ${task.text} · Todo`; items.append(row); });
+  if (!document.querySelector('#event-start').value) resetEventForm();
+}
+document.querySelector('#calendar-prev').addEventListener('click', () => { displayedMonth = new Date(displayedMonth.getFullYear(), displayedMonth.getMonth() - 1, 1); renderMonthCalendar(); });
+document.querySelector('#calendar-next').addEventListener('click', () => { displayedMonth = new Date(displayedMonth.getFullYear(), displayedMonth.getMonth() + 1, 1); renderMonthCalendar(); });
+document.querySelector('#event-cancel').addEventListener('click', resetEventForm);
+document.querySelector('#calendar-form').addEventListener('submit', async event => {
+  event.preventDefault(); const startMs = new Date(document.querySelector('#event-start').value).getTime();
+  if (!Number.isFinite(startMs) || startMs < 0) { status.textContent = 'Choose a valid event date.'; return; }
+  const args = { id:editingEvent, title:document.querySelector('#event-title').value, startMs, durationMinutes:Number(document.querySelector('#event-duration').value), location:document.querySelector('#event-location').value };
+  if (await mutate('save_calendar_event', args)) { const date = new Date(startMs); selectedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate()); displayedMonth = new Date(date.getFullYear(), date.getMonth(), 1); resetEventForm(); renderMonthCalendar(); }
+});
 
 function renderTimer() {
   const timer = data.timer;
