@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::{fs, io::Write, path::PathBuf, sync::Mutex};
 use tauri::{Emitter, Manager, State};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+use tauri_plugin_notification::NotificationExt;
 use tempfile::NamedTempFile;
 use uuid::Uuid;
 
@@ -16,6 +17,8 @@ struct Task {
     description: String,
     #[serde(default)]
     due_at_ms: Option<u64>,
+    #[serde(default)]
+    notified_due_at_ms: Option<u64>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -114,6 +117,7 @@ struct Timer {
     total_ms: u64,
     remaining_ms: u64,
     ends_at_ms: Option<u64>,
+    notified_end_ms: Option<u64>,
 }
 
 #[derive(Clone, Default, Serialize, Deserialize)]
@@ -139,6 +143,7 @@ impl Default for Timer {
             total_ms: 25 * 60_000,
             remaining_ms: 25 * 60_000,
             ends_at_ms: None,
+            notified_end_ms: None,
         }
     }
 }
@@ -384,6 +389,7 @@ fn add_task(
                 done: false,
                 description: String::new(),
                 due_at_ms,
+                notified_due_at_ms: None,
             });
             Ok(())
         })
@@ -411,11 +417,75 @@ fn update_task(
                 .iter_mut()
                 .find(|task| task.id == id)
                 .ok_or("Task not found")?;
+            if task.due_at_ms != due_at_ms {
+                task.notified_due_at_ms = None;
+            }
             task.text = text;
             task.description = description;
             task.due_at_ms = due_at_ms;
             Ok(())
         })
+}
+
+fn due_task_time(task: &Task, now: u64) -> Option<u64> {
+    let due = task.due_at_ms?;
+    (!task.done && due <= now && task.notified_due_at_ms != Some(due)).then_some(due)
+}
+
+fn notify_due(app: &tauri::AppHandle, now: u64) {
+    let store = app.state::<Mutex<Store>>();
+    let Ok(mut store) = store.lock() else { return };
+    let due_tasks: Vec<_> = store
+        .data
+        .tasks
+        .iter()
+        .filter_map(|task| due_task_time(task, now).map(|due| (task.id, due, task.text.clone())))
+        .collect();
+    for (id, due, title) in due_tasks {
+        if app
+            .notification()
+            .builder()
+            .title("Todo")
+            .body(title.as_str())
+            .show()
+            .is_ok()
+        {
+            if let Err(error) = store.update(|data| {
+                if let Some(task) = data
+                    .tasks
+                    .iter_mut()
+                    .find(|task| task.id == id && task.due_at_ms == Some(due))
+                {
+                    task.notified_due_at_ms = Some(due);
+                }
+                Ok(())
+            }) {
+                eprintln!("Could not save reminder state: {error}");
+            }
+        }
+    }
+    let timer_end = store.data.timer.ends_at_ms;
+    if let Some(end) = timer_end {
+        if end <= now
+            && store.data.timer.notified_end_ms != Some(end)
+            && app
+                .notification()
+                .builder()
+                .title("Timer")
+                .body("Time is up")
+                .show()
+                .is_ok()
+        {
+            if let Err(error) = store.update(|data| {
+                if data.timer.ends_at_ms == Some(end) {
+                    data.timer.notified_end_ms = Some(end);
+                }
+                Ok(())
+            }) {
+                eprintln!("Could not save timer reminder state: {error}");
+            }
+        }
+    }
 }
 
 #[tauri::command]
@@ -717,6 +787,7 @@ fn set_panel_open(
     sequence: State<'_, Mutex<WindowSequence>>,
     session: Uuid,
     open: bool,
+    focus: bool,
     seq: u64,
 ) -> Result<(), String> {
     let mut state = sequence.lock().map_err(|_| "Window state unavailable")?;
@@ -724,12 +795,16 @@ fn set_panel_open(
         return Ok(());
     }
     resize_panel(&window, open)?;
+    if open && focus {
+        window.set_focus().map_err(|e| e.to_string())?;
+    }
     state.last = seq;
     Ok(())
 }
 
 fn main() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_notification::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _, event| {
@@ -753,6 +828,14 @@ fn main() {
             app.manage(ShortcutStatus(
                 app.global_shortcut().register("Alt+N").is_ok(),
             ));
+            let handle = app.handle().clone();
+            std::thread::spawn(move || loop {
+                if let Ok(now) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                {
+                    notify_due(&handle, now.as_millis() as u64);
+                }
+                std::thread::sleep(std::time::Duration::from_secs(15));
+            });
             if let Some(window) = app.get_webview_window("main") {
                 if let Some(monitor) = window.current_monitor()? {
                     let size = window.outer_size()?;
@@ -805,6 +888,7 @@ mod tests {
                     done: false,
                     description: String::new(),
                     due_at_ms: None,
+                    notified_due_at_ms: None,
                 });
                 Ok(())
             })
@@ -867,6 +951,26 @@ mod tests {
         assert!(task.due_at_ms.is_none());
         assert!(valid_due(Some(8_640_000_000_000_000)).is_ok());
         assert!(valid_due(Some(u64::MAX)).is_err());
+    }
+
+    #[test]
+    fn due_task_is_reported_once_for_its_due_time() {
+        let mut task = Task {
+            id: Uuid::new_v4(),
+            text: "Meeting".into(),
+            done: false,
+            description: String::new(),
+            due_at_ms: Some(1000),
+            notified_due_at_ms: None,
+        };
+        assert_eq!(due_task_time(&task, 999), None);
+        assert_eq!(due_task_time(&task, 1000), Some(1000));
+        task.notified_due_at_ms = Some(1000);
+        assert_eq!(due_task_time(&task, 2000), None);
+        task.due_at_ms = Some(3000);
+        assert_eq!(due_task_time(&task, 3000), Some(3000));
+        task.done = true;
+        assert_eq!(due_task_time(&task, 4000), None);
     }
 
     #[test]

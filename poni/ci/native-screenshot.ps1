@@ -78,6 +78,9 @@ try {
             @{ ok = $false; error = $_.Exception.Message } |
                 ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'weather-probe.json') -Encoding UTF8
         }
+        Click-Point ($rect.Left + 290) ($rect.Top + 32)
+        Start-Sleep -Seconds 5
+        Save-Screen 'system.png'
     }
     @{ process_id = $process.Id; main_window_handle = $process.MainWindowHandle.ToInt64(); screenshot = 'desktop.png'; width_after_shortcut = $windowWidth; weather_attempted = ($bounds.Width -eq 1024 -and $bounds.Height -eq 768) } |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'observation.json') -Encoding UTF8

@@ -9,5 +9,5 @@
     "windows": [{ "label": "main", "title": "Poni Rebuild", "width": 200, "height": 32, "resizable": false, "decorations": false, "transparent": true, "alwaysOnTop": true, "skipTaskbar": true }],
     "security": { "csp": "default-src 'self'; script-src 'self'; style-src 'self'" }
   },
-  "bundle": { "active": false }
+  "bundle": { "active": true, "targets": ["nsis"], "icon": ["icons/icon.png", "icons/icon.ico"] }
 }
