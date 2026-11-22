@@ -12,6 +12,14 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - name: Unpack reference executable
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $inputFile = [System.IO.File]::OpenRead((Join-Path $PWD 'reference/poni.exe.gz'))
+          $outputFile = [System.IO.File]::Create((Join-Path $PWD 'reference/poni.exe'))
+          $gzip = [System.IO.Compression.GZipStream]::new($inputFile, [System.IO.Compression.CompressionMode]::Decompress)
+          try { $gzip.CopyTo($outputFile) } finally { $gzip.Dispose(); $outputFile.Dispose(); $inputFile.Dispose() }
       - name: Check reference executable
         shell: pwsh
         run: |
