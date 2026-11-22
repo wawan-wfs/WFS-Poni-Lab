@@ -73,6 +73,15 @@ textarea { resize: vertical; min-height: 55px; }
 .system-grid strong { margin:6px 0; font-size:18px; }
 .system-meter { height:5px; border-radius:5px; background:#333; overflow:hidden; }
 .system-meter div { width:0; height:100%; background:#d7d7de; }
+.day-head { display:flex; align-items:baseline; gap:10px; padding-top:8px; }
+.day-head strong { font-size:26px; }
+.day-head span, .day-hours { color:#aaa; font-size:12px; }
+.day-track { height:8px; border-radius:5px; background:#303034; overflow:hidden; margin:8px 0 3px; }
+.day-track div { height:100%; width:0; background:#fa3350; }
+.day-hours { display:flex; justify-content:space-between; }
+.day-periods { display:flex; gap:8px; margin-top:8px; }
+.day-periods div { flex:1; background:#202023; border-radius:8px; padding:6px 8px; font-size:12px; }
+.day-periods strong { float:right; }
 #timer-form { align-items: center; justify-content: center; }
 #timer-minutes { width: 75px; }
 .done { text-decoration: line-through; color: #999; }

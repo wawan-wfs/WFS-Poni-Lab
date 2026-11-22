@@ -69,6 +69,7 @@ document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', (
   document.querySelectorAll('.tab').forEach(item => item.classList.toggle('active', item === tab));
   document.querySelectorAll('.page').forEach(page => { page.hidden = page.id !== `page-${tab.dataset.page}`; });
   if (tab.dataset.page === 'system') void refreshSystem();
+  if (tab.dataset.page === 'dayprogress') renderDayProgress();
 }));
 document.querySelectorAll('[data-media]').forEach(button => button.addEventListener('click', () => {
   invoke('media_control', { action: button.dataset.media }).then(() => setTimeout(refreshMedia, 500)).catch(error => { status.textContent = String(error); });
@@ -107,6 +108,32 @@ async function refreshSystem() {
   finally { systemPending = false; }
 }
 setInterval(refreshSystem, 3000);
+
+function renderDayProgress(now = new Date()) {
+  const clamp = value => Math.max(0, Math.min(1, value));
+  const wake = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 7);
+  const bed = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23);
+  const day = clamp((now - wake) / (bed - wake));
+  const left = Math.max(0, bed - now);
+  document.querySelector('#day-percent').textContent = `${Math.round(day * 100)}%`;
+  document.querySelector('#day-fill').style.width = `${day * 100}%`;
+  document.querySelector('#day-remaining').textContent = left ? `of your day · ${Math.floor(left / 3600000)}h ${Math.floor(left % 3600000 / 60000)}m until bedtime` : 'of your day · past bedtime';
+  const week = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  week.setDate(week.getDate() - (week.getDay() + 6) % 7);
+  const weekEnd = new Date(week); weekEnd.setDate(weekEnd.getDate() + 7);
+  const periods = [
+    ['Week', week, weekEnd],
+    ['Month', new Date(now.getFullYear(), now.getMonth(), 1), new Date(now.getFullYear(), now.getMonth() + 1, 1)],
+    ['Year', new Date(now.getFullYear(), 0, 1), new Date(now.getFullYear() + 1, 0, 1)],
+  ];
+  const container = document.querySelector('#day-periods'); container.replaceChildren();
+  periods.forEach(([label, start, end]) => {
+    const card = document.createElement('div'); const number = document.createElement('strong');
+    number.textContent = `${Math.round(clamp((now - start) / (end - start)) * 100)}%`;
+    card.append(document.createTextNode(label), number); container.append(card);
+  });
+}
+setInterval(() => { if (!document.querySelector('#page-dayprogress').hidden) renderDayProgress(); }, 30000);
 
 function updateClock() {
   const now = new Date();
