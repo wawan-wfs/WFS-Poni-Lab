@@ -52,6 +52,14 @@ textarea { resize: vertical; min-height: 55px; }
 #weather-current { font-size:14px; }
 .weather-days { display:flex; gap:8px; margin-top:8px; overflow:auto; }
 .weather-days span { flex:none; border-radius:8px; background:#202023; padding:6px; font-size:11px; }
+.worldclock-plan { display:flex; gap:8px; align-items:center; font-size:11px; color:#aaa; }
+.worldclock-plan input { padding:0; flex:1; }
+.worldclock-plan button, .worldclock-row button { border:0; border-radius:6px; background:#2b2b30; padding:4px 7px; }
+.worldclock-row { display:flex; gap:8px; align-items:center; margin:5px 0; font-size:12px; }
+.worldclock-name { min-width:90px; max-width:130px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.worldclock-time { min-width:115px; font-variant-numeric:tabular-nums; }
+.worldclock-strip { height:8px; border-radius:5px; flex:1; min-width:40px; }
+.worldclock-actions { display:flex; gap:3px; }
 #timer-form { align-items: center; justify-content: center; }
 #timer-minutes { width: 75px; }
 .done { text-decoration: line-through; color: #999; }

@@ -11,15 +11,16 @@ Thread(target=server.serve_forever, daemon=True).start()
 with sync_playwright() as pw:
     executable = which('chromium') or which('chromium-browser') or which('google-chrome')
     browser = pw.chromium.launch(**({'executable_path': executable} if executable else {}), headless=True, args=['--no-sandbox'])
-    page = browser.new_page(viewport={'width': 680, 'height': 200})
+    page = browser.new_page(viewport={'width': 680, 'height': 200}, timezone_id='UTC', locale='en-US')
     page.add_init_script('''
       window.__TAURI__ = { event: {listen: async (name, listener) => { window.poniTestShortcut = listener; }}, core: { invoke: async (command, args = {}) => {
-        const data = JSON.parse(localStorage.getItem('test-data') || '{"tasks":[],"notes":[],"timer":{"total_ms":1500000,"remaining_ms":1500000,"ends_at_ms":null},"stopwatch":{"elapsed_ms":0,"started_at_ms":null,"laps":[]}}');
+        const data = JSON.parse(localStorage.getItem('test-data') || '{"tasks":[],"notes":[],"timer":{"total_ms":1500000,"remaining_ms":1500000,"ends_at_ms":null},"stopwatch":{"elapsed_ms":0,"started_at_ms":null,"laps":[]},"world_clocks":[]}');
         if (command === 'current_media') return {title: 'Test track', artist: 'Test artist', playing: true, position_ms: 30000, duration_ms: 60000};
         if (command === 'shortcut_status') return true;
         if (command === 'search_weather_city') return [{name:'Jakarta', admin1:'Jakarta', country:'Indonesia', latitude:-6.2, longitude:106.8}];
         if (command === 'weather_forecast') return {current:{temperature_2m:30, relative_humidity_2m:70, weather_code:2, wind_speed_10m:10}, daily:{time:['2026-11-22'], temperature_2m_max:[32], temperature_2m_min:[25], weather_code:[2]}};
         if (command === 'set_weather_location') data.weather_location = args.location;
+        if (command === 'set_world_clocks') data.world_clocks = args.places;
         if (command === 'media_control') localStorage.setItem('last-media-action', args.action);
         if (command === 'add_task') data.tasks.push({id: crypto.randomUUID(), text: args.text, done: false});
         if (command === 'toggle_task') { const t = data.tasks.find(t => t.id === args.id); t.done = !t.done; }
@@ -93,6 +94,29 @@ with sync_playwright() as pw:
     page.locator('#weather-search button').click()
     page.get_by_role('button', name='Jakarta, Jakarta, Indonesia').click()
     expect(page.locator('#weather-current')).to_contain_text('30°C')
+    page.locator('[data-page="worldclock"]').click()
+    page.locator('#worldclock-name').fill('Jakarta')
+    page.locator('#worldclock-zone').fill('Asia/Jakarta')
+    page.locator('#worldclock-form button').click()
+    expect(page.get_by_role('button', name='Remove Jakarta')).to_be_visible()
+    page.locator('#worldclock-minute').fill('720')
+    expect(page.locator('.worldclock-row').nth(1)).to_contain_text('7:00 PM')
+    page.locator('#worldclock-name').fill('London')
+    page.locator('#worldclock-zone').fill('Europe/London')
+    page.locator('#worldclock-form button').click()
+    page.get_by_role('button', name='Move London up').click()
+    expect(page.locator('.worldclock-row').nth(1)).to_contain_text('London')
+    page.locator('.worldclock-row').nth(1).get_by_role('button', name='Edit').click()
+    page.get_by_role('textbox', name='Rename London').fill('London UK')
+    page.get_by_role('button', name='Save', exact=True).click()
+    expect(page.get_by_role('button', name='Remove London UK')).to_be_visible()
+    page.reload()
+    page.locator('#closed').dispatch_event('pointerenter')
+    page.locator('[data-page="worldclock"]').click()
+    expect(page.get_by_role('button', name='Remove Jakarta')).to_be_visible()
+    expect(page.get_by_role('button', name='Remove London UK')).to_be_visible()
+    page.get_by_role('button', name='Remove Jakarta').click()
+    expect(page.get_by_role('button', name='Remove Jakarta')).to_have_count(0)
     page.reload()
     page.locator('#closed').dispatch_event('pointerenter')
     page.locator('[data-page="weather"]').click()

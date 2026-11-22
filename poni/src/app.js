@@ -5,7 +5,7 @@ const surface = document.querySelector('#surface');
 const closed = document.querySelector('#closed');
 const open = document.querySelector('#open');
 const status = document.querySelector('#status');
-let data = { tasks: [], notes: [], timer: { total_ms: 1500000, remaining_ms: 1500000, ends_at_ms: null }, stopwatch: { elapsed_ms: 0, started_at_ms: null, laps: [] }, weather_location: null };
+let data = { tasks: [], notes: [], timer: { total_ms: 1500000, remaining_ms: 1500000, ends_at_ms: null }, stopwatch: { elapsed_ms: 0, started_at_ms: null, laps: [] }, weather_location: null, world_clocks: [] };
 let editingNote = null;
 let queue = Promise.resolve();
 let panelSequence = 0;
@@ -14,6 +14,10 @@ let mediaPending = false;
 let keyboardOpen = false;
 let weatherRequest = 0;
 let searchRequest = 0;
+let worldMinute = null;
+const panelSession = crypto.randomUUID();
+const panelReady = invoke('initialize_panel', { session: panelSession });
+panelReady.catch(error => { status.textContent = String(error); });
 
 function setOpen(value) {
   if (closed.hidden === value) return;
@@ -21,7 +25,8 @@ function setOpen(value) {
   closed.hidden = value;
   open.hidden = !value;
   closed.setAttribute('aria-expanded', String(value));
-  invoke('set_panel_open', { open: value, seq: ++panelSequence }).catch(error => { status.textContent = String(error); });
+  const seq = ++panelSequence;
+  panelReady.then(() => invoke('set_panel_open', { session: panelSession, open: value, seq })).catch(error => { status.textContent = String(error); });
   if (value) void refreshMedia();
 }
 closed.addEventListener('click', () => setOpen(true));
@@ -91,7 +96,7 @@ setInterval(updateClock, 1000);
 
 function mutate(command, args) {
   const operation = queue.then(async () => {
-    data = await invoke(command, args);
+    data = await invoke(command, typeof args === 'function' ? args(data) : args);
     status.textContent = '';
     render();
     return true;
@@ -130,6 +135,7 @@ function render() {
   });
   renderTimer();
   renderStopwatch();
+  renderWorldClocks();
 }
 
 function renderTimer() {
@@ -254,4 +260,96 @@ document.querySelector('#weather-search').addEventListener('submit', async event
     if (request === searchRequest) weatherStatus.textContent = `Search failed: ${String(error)}`;
   }
 });
+
+const worldZones = document.querySelector('#worldclock-zones');
+if (typeof Intl.supportedValuesOf === 'function') {
+  for (const zone of Intl.supportedValuesOf('timeZone')) {
+    const option = document.createElement('option'); option.value = zone; worldZones.append(option);
+  }
+}
+
+function worldDate() {
+  const now = new Date();
+  return worldMinute == null ? now : new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, worldMinute);
+}
+
+function worldUpdate(change) {
+  return mutate('set_world_clocks', current => ({ places: change(current.world_clocks.map(place => ({ ...place }))) }));
+}
+
+function renderWorldClocks() {
+  const list = document.querySelector('#worldclock-list');
+  list.replaceChildren();
+  const selected = worldDate();
+  document.querySelector('#worldclock-minute').value = worldMinute == null ? selected.getHours() * 60 + selected.getMinutes() : worldMinute;
+  const places = [{ name: 'Here', zone: Intl.DateTimeFormat().resolvedOptions().timeZone }, ...data.world_clocks];
+  places.forEach((place, index) => {
+    const row = document.createElement('div'); row.className = 'worldclock-row';
+    const name = document.createElement('strong'); name.className = 'worldclock-name'; name.textContent = place.name;
+    const time = document.createElement('time'); time.className = 'worldclock-time';
+    const options = { weekday: 'short', hour: 'numeric', minute: '2-digit' };
+    if (place.zone) options.timeZone = place.zone;
+    try { time.textContent = new Intl.DateTimeFormat(undefined, options).format(selected); }
+    catch { time.textContent = 'Time unavailable'; }
+    const strip = document.createElement('div'); strip.className = 'worldclock-strip';
+    if (place.zone) {
+      try {
+        const hour = new Intl.DateTimeFormat('en-GB', { timeZone: place.zone, hour: 'numeric', hourCycle: 'h23' });
+        const day = new Date(selected.getFullYear(), selected.getMonth(), selected.getDate());
+        const stops = [];
+        for (let step = 0; step <= 24; step++) {
+          const moment = new Date(day.getFullYear(), day.getMonth(), day.getDate(), step);
+          const h = Number(hour.format(moment));
+          stops.push(`${h >= 6 && h < 18 ? '#9a9aa2' : '#34343b'} ${step * 100 / 24}%`);
+        }
+        strip.style.background = `linear-gradient(to right, ${stops.join(',')})`;
+      } catch { strip.style.background = '#34343b'; }
+    }
+    row.append(name, time, strip);
+    if (index > 0) {
+      const actions = document.createElement('div'); actions.className = 'worldclock-actions';
+      const find = places => places.findIndex(item => item.id === place.id);
+      const move = direction => worldUpdate(places => {
+        const from = find(places); const to = from + direction;
+        if (from >= 0 && to >= 0 && to < places.length) [places[from], places[to]] = [places[to], places[from]];
+        return places;
+      });
+      const up = action('↑', () => move(-1)); up.disabled = index === 1; up.setAttribute('aria-label', `Move ${place.name} up`);
+      const down = action('↓', () => move(1)); down.disabled = index === data.world_clocks.length; down.setAttribute('aria-label', `Move ${place.name} down`);
+      const rename = action('Edit', () => {
+        const form = document.createElement('form'); form.className = 'entry';
+        const input = document.createElement('input'); input.value = place.name; input.maxLength = 30; input.required = true; input.setAttribute('aria-label', `Rename ${place.name}`);
+        const save = document.createElement('button'); save.textContent = 'Save'; save.type = 'submit';
+        const cancel = action('Cancel', renderWorldClocks); form.append(input, save, cancel);
+        form.addEventListener('submit', async event => {
+          event.preventDefault();
+          const value = input.value.trim();
+          if (!value) return;
+          await worldUpdate(places => { const at = find(places); if (at >= 0) places[at].name = value; return places; });
+        });
+        row.replaceChildren(form); input.focus(); input.select();
+      });
+      const remove = action('×', () => worldUpdate(places => places.filter(item => item.id !== place.id)));
+      remove.setAttribute('aria-label', `Remove ${place.name}`);
+      actions.append(up, down, rename, remove); row.append(actions);
+    }
+    list.append(row);
+  });
+}
+
+document.querySelector('#worldclock-form').addEventListener('submit', async event => {
+  event.preventDefault();
+  const name = document.querySelector('#worldclock-name').value.trim();
+  const zone = document.querySelector('#worldclock-zone').value.trim();
+  try { new Intl.DateTimeFormat('en', { timeZone: zone }).format(); }
+  catch { status.textContent = 'Enter a valid time zone, such as Asia/Jakarta.'; return; }
+  if (await worldUpdate(places => {
+    if (!name || places.length >= 8) throw new Error('Enter a name and choose at most eight places.');
+    if (places.some(item => item.name === name && item.zone === zone)) throw new Error('This place is already listed.');
+    places.push({ id: crypto.randomUUID(), name, zone }); return places;
+  })) event.target.reset();
+});
+document.querySelector('#worldclock-minute').addEventListener('input', event => { worldMinute = Number(event.target.value); renderWorldClocks(); });
+document.querySelector('#worldclock-now').addEventListener('click', () => { worldMinute = null; renderWorldClocks(); });
+setInterval(() => { if (worldMinute == null && !document.querySelector('#page-worldclock').hidden && !document.activeElement.closest('.worldclock-row')) renderWorldClocks(); }, 60000);
 queue = invoke('get_data').then(saved => { data = saved; render(); if (data.weather_location) void loadWeather(data.weather_location); }).catch(error => { status.textContent = String(error); });

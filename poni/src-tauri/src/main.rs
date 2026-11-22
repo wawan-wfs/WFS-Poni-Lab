@@ -31,6 +31,13 @@ struct WeatherLocation {
     longitude: f64,
 }
 
+#[derive(Clone, Serialize, Deserialize)]
+struct WorldPlace {
+    id: Uuid,
+    name: String,
+    zone: String,
+}
+
 impl WeatherLocation {
     fn validate(&self) -> Result<(), String> {
         if self.name.trim().is_empty()
@@ -135,6 +142,7 @@ struct AppData {
     timer: Timer,
     stopwatch: Stopwatch,
     weather_location: Option<WeatherLocation>,
+    world_clocks: Vec<WorldPlace>,
 }
 
 struct Store {
@@ -143,7 +151,10 @@ struct Store {
 }
 
 #[derive(Default)]
-struct WindowSequence(u64);
+struct WindowSequence {
+    session: Option<Uuid>,
+    last: u64,
+}
 
 struct ShortcutStatus(bool);
 
@@ -267,6 +278,41 @@ fn set_weather_location(
         .map_err(|_| "Storage unavailable")?
         .update(|data| {
             data.weather_location = Some(location);
+            Ok(())
+        })
+}
+
+fn validate_world_clocks(places: &[WorldPlace]) -> Result<(), String> {
+    if places.len() > 8 {
+        return Err("Choose at most eight places".into());
+    }
+    let mut ids = std::collections::HashSet::new();
+    for place in places {
+        if place.name.trim().is_empty()
+            || place.name.chars().count() > 30
+            || place.zone.len() > 80
+            || place.zone.parse::<chrono_tz::Tz>().is_err()
+        {
+            return Err("Invalid city or time zone".into());
+        }
+        if !ids.insert(place.id) {
+            return Err("Duplicate place identifier".into());
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn set_world_clocks(
+    store: State<'_, Mutex<Store>>,
+    places: Vec<WorldPlace>,
+) -> Result<AppData, String> {
+    validate_world_clocks(&places)?;
+    store
+        .lock()
+        .map_err(|_| "Storage unavailable")?
+        .update(|data| {
+            data.world_clocks = places;
             Ok(())
         })
 }
@@ -555,17 +601,7 @@ fn stopwatch_action(store: State<'_, Mutex<Store>>, action: String) -> Result<Ap
         })
 }
 
-#[tauri::command]
-fn set_panel_open(
-    window: tauri::WebviewWindow,
-    sequence: State<'_, Mutex<WindowSequence>>,
-    open: bool,
-    seq: u64,
-) -> Result<(), String> {
-    let mut last = sequence.lock().map_err(|_| "Window state unavailable")?;
-    if seq <= last.0 {
-        return Ok(());
-    }
+fn resize_panel(window: &tauri::WebviewWindow, open: bool) -> Result<(), String> {
     let (width, height) = if open { (680.0, 200.0) } else { (200.0, 32.0) };
     let monitor = window.current_monitor().map_err(|e| e.to_string())?;
     window
@@ -579,7 +615,36 @@ fn set_panel_open(
             .set_position(tauri::PhysicalPosition::new(x, monitor.position().y))
             .map_err(|e| e.to_string())?;
     }
-    last.0 = seq;
+    Ok(())
+}
+
+#[tauri::command]
+fn initialize_panel(
+    window: tauri::WebviewWindow,
+    sequence: State<'_, Mutex<WindowSequence>>,
+    session: Uuid,
+) -> Result<(), String> {
+    let mut state = sequence.lock().map_err(|_| "Window state unavailable")?;
+    resize_panel(&window, false)?;
+    state.session = Some(session);
+    state.last = 0;
+    Ok(())
+}
+
+#[tauri::command]
+fn set_panel_open(
+    window: tauri::WebviewWindow,
+    sequence: State<'_, Mutex<WindowSequence>>,
+    session: Uuid,
+    open: bool,
+    seq: u64,
+) -> Result<(), String> {
+    let mut state = sequence.lock().map_err(|_| "Window state unavailable")?;
+    if state.session != Some(session) || seq <= state.last {
+        return Ok(());
+    }
+    resize_panel(&window, open)?;
+    state.last = seq;
     Ok(())
 }
 
@@ -617,6 +682,7 @@ fn main() {
             search_weather_city,
             weather_forecast,
             set_weather_location,
+            set_world_clocks,
             shortcut_status,
             add_task,
             toggle_task,
@@ -627,7 +693,8 @@ fn main() {
             media_control,
             current_media,
             stopwatch_action,
-            set_panel_open
+            set_panel_open,
+            initialize_panel
         ])
         .run(tauri::generate_context!())
         .expect("Could not start Poni Rebuild");
@@ -718,5 +785,22 @@ mod tests {
             ..city
         };
         assert!(invalid.validate().is_err());
+    }
+
+    #[test]
+    fn validates_world_clock_places() {
+        let good = WorldPlace {
+            id: Uuid::new_v4(),
+            name: "Jakarta".into(),
+            zone: "Asia/Jakarta".into(),
+        };
+        assert!(validate_world_clocks(&[good.clone()]).is_ok());
+        assert!(validate_world_clocks(&vec![good; 9]).is_err());
+        let bad = WorldPlace {
+            id: Uuid::new_v4(),
+            name: "Unknown".into(),
+            zone: "Not/A_Zone".into(),
+        };
+        assert!(validate_world_clocks(&[bad]).is_err());
     }
 }
