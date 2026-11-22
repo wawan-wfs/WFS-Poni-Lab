@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Poni Rebuild</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="app.js" defer></script>
+</head>
+<body>
+  <div class="surface" id="surface">
+    <button class="closed" id="closed" aria-expanded="false" aria-controls="open"><time class="clock">--:--</time></button>
+    <div class="open" id="open" hidden>
+      <header>
+        <nav aria-label="Modules">
+          <button class="tab active" data-page="home">⌂ <span>Home</span></button>
+          <button class="tab" data-page="tasks">☑ <span>Todo</span></button>
+          <button class="tab" data-page="notes">▣ <span>Notes</span></button>
+        </nav>
+        <time class="clock">--:--</time>
+        <button class="close" id="close" aria-label="Close panel">×</button>
+      </header>
+      <main>
+        <section id="page-home" class="page home">
+          <div class="media"><div class="album" aria-hidden="true">♫</div><div><strong>Nothing playing</strong><p>Play something in a media player</p></div></div>
+          <div class="calendar"><strong id="month"></strong><div id="week" class="week"></div></div>
+        </section>
+        <section id="page-tasks" class="page" hidden>
+          <form id="task-form" class="entry"><input id="task-input" aria-label="New task" maxlength="500" placeholder="Add a task" required><button type="submit">Add</button></form>
+          <div class="items" id="tasks"></div>
+        </section>
+        <section id="page-notes" class="page" hidden>
+          <form id="note-form" class="note-form"><textarea id="note-input" aria-label="Note" maxlength="100000" placeholder="Write a note" required></textarea><button type="submit">Save note</button><button type="button" id="note-cancel" hidden>Cancel</button></form>
+          <div class="items" id="notes"></div>
+        </section>
+      </main>
+      <p id="status" role="status" aria-live="polite"></p>
+    </div>
+  </div>
+</body>
+</html>

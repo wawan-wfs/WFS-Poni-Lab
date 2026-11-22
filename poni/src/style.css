@@ -1,0 +1,38 @@
+:root { color-scheme: dark; font-family: 'Segoe UI', sans-serif; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: transparent; color: #f5f5f7; }
+button, input, textarea { font: inherit; }
+button { color: inherit; cursor: pointer; }
+[hidden] { display: none !important; }
+.surface { position: absolute; inset: 0; }
+.closed { display: block; width: 200px; height: 32px; margin: 0 auto; border: 0; border-radius: 0 0 17px 17px; background: #000; font-weight: 700; }
+.open { position: absolute; inset: 0; background: #000; border-radius: 0 0 27px 27px; padding: 8px 18px 13px; overflow: hidden; }
+header { display: flex; align-items: center; gap: 20px; height: 32px; }
+nav { display: flex; align-items: center; gap: 4px; flex: 1; overflow: auto; scrollbar-width: none; }
+.tab, .close { border: 0; background: transparent; border-radius: 8px; color: #98989f; padding: 5px 9px; font-size: 13px; }
+.tab span { display: none; }
+.tab.active { color: #fff; background: #303034; }
+.tab.active span { display: inline; }
+header .clock { font-weight: 700; white-space: nowrap; font-size: 13px; }
+.close { font-size: 20px; }
+main { height: 175px; overflow: auto; }
+.home { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding-top: 14px; }
+.media { display: flex; gap: 12px; align-items: flex-start; }
+.album { display: grid; place-items: center; width: 60px; height: 60px; border-radius: 14px; background: #202023; color: #727279; font-size: 32px; flex: none; }
+.media strong, .calendar strong { font-size: 15px; }
+.media p { color: #8d8d95; margin: 5px 0; font-size: 13px; }
+.calendar { border-left: 1px solid #202024; padding-left: 16px; }
+.week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; margin-top: 10px; }
+.week span { text-align: center; font-size: 11px; }
+.week small { display: block; color: #898991; margin-bottom: 5px; }
+.week .today { background: #fa3350; color: white; border-radius: 8px; padding: 4px 0; }
+.entry, .note-form { display: flex; gap: 8px; margin: 8px 0; }
+input, textarea { background: #1f2023; color: #fff; border: 1px solid #353539; border-radius: 8px; padding: 8px; width: 100%; }
+textarea { resize: vertical; min-height: 55px; }
+.entry button, .note-form button, .items button { border: 0; border-radius: 8px; background: #2b2b30; padding: 7px 10px; white-space: nowrap; }
+.items { display: grid; gap: 5px; }
+.item { display: flex; gap: 8px; align-items: center; background: #1b1b1e; padding: 6px 8px; border-radius: 8px; }
+.item p { white-space: pre-wrap; overflow-wrap: anywhere; flex: 1; margin: 0; font-size: 13px; }
+.item input { width: auto; }
+.done { text-decoration: line-through; color: #999; }
+#status { position: absolute; bottom: 0; left: 20px; right: 20px; color: #ff9e9e; font-size: 11px; margin: 0; }
