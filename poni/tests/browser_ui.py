@@ -24,6 +24,7 @@ with sync_playwright() as pw:
         if (command === 'set_weather_location') data.weather_location = args.location;
         if (command === 'set_world_clocks') data.world_clocks = args.places;
         if (command === 'set_hijri_offset') data.hijri_offset = args.offset;
+        if (command === 'set_day_schedule') { data.wake_minute = args.wake; data.bed_minute = args.bed; }
         data.calendar_events ||= [];
         if (command === 'save_calendar_event') { const e = {id:args.id || crypto.randomUUID(), title:args.title.trim(), start_ms:args.startMs, duration_minutes:args.durationMinutes, location:args.location, repeat:args.repeat}; const i = data.calendar_events.findIndex(item => item.id === args.id); if (i < 0) data.calendar_events.push(e); else data.calendar_events[i] = e; }
         if (command === 'remove_calendar_event') data.calendar_events = data.calendar_events.filter(e => e.id !== args.id);
@@ -202,6 +203,16 @@ with sync_playwright() as pw:
     page.evaluate("renderDayProgress(new Date(2026, 0, 1, 23, 30))")
     expect(page.locator('#day-percent')).to_have_text('100%')
     expect(page.locator('#day-remaining')).to_contain_text('past bedtime')
+    page.locator('#day-wake').fill('08:00')
+    page.locator('#day-bed').fill('20:00')
+    page.locator('#day-schedule button').click()
+    expect(page.locator('#day-wake-label')).to_have_text('08:00')
+    page.evaluate("renderDayProgress(new Date(2026, 0, 1, 14, 0))")
+    expect(page.locator('#day-percent')).to_have_text('50%')
+    page.reload()
+    page.locator('#closed').dispatch_event('pointerenter')
+    page.locator('[data-page="dayprogress"]').click()
+    expect(page.locator('#day-wake')).to_have_value('08:00')
     page.reload()
     page.locator('#closed').dispatch_event('pointerenter')
     page.locator('[data-page="weather"]').click()

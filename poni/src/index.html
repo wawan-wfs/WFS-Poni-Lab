@@ -70,8 +70,9 @@
         <section id="page-dayprogress" class="page" hidden>
           <div class="day-head"><strong id="day-percent">0%</strong><span id="day-remaining"></span></div>
           <div class="day-track"><div id="day-fill"></div></div>
-          <div class="day-hours"><span>07:00</span><span>23:00</span></div>
+          <div class="day-hours"><span id="day-wake-label">07:00</span><span id="day-bed-label">23:00</span></div>
           <div class="day-periods" id="day-periods"></div>
+          <form id="day-schedule" class="entry"><label for="day-wake">Wake</label><input type="time" id="day-wake" required><label for="day-bed">Bed</label><input type="time" id="day-bed" required><button type="submit">Save</button></form>
         </section>
       </main>
       <p id="status" role="status" aria-live="polite"></p>

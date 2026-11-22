@@ -16,7 +16,7 @@ Kategori pertama tidak berarti modul sudah selesai. Belum ada ukuran yang cukup 
 - **Notes:** tambah, ubah, hapus dan simpan catatan dasar. Fitur catatan asli lainnya belum setara.
 - **Weather:** pencarian kota, cuaca saat ini dan prakiraan tujuh hari. Belum diverifikasi seluruh pengaturan dan tampilan asli.
 - **World clock:** lokasi, zona waktu, pengurutan dan perencanaan waktu dasar. Belum diverifikasi seluruh perilaku dan tampilan asli.
-- **Day progress:** progres hari, minggu, bulan dan tahun dengan jam bangun 07.00, tidur 23.00 dan awal minggu Senin. Pengaturan waktu, agenda, dan tugas selesai pada linimasa belum tersedia.
+- **Day progress:** progres hari, minggu, bulan dan tahun dengan pengaturan jam bangun dan tidur yang tersimpan; awal minggu masih Senin. Agenda dan tugas selesai pada linimasa belum tersedia.
 - **Calendar:** kalender bulanan, tanggal dan rentang bulan Hijriah dengan koreksi −2 hingga +2 hari, tugas berdasarkan tanggal jatuh tempo, serta tambah/ubah/hapus acara lokal dengan durasi, lokasi, dan pengulangan harian/mingguan/bulanan/tahunan; acara lokal juga muncul di Home. Sinkronisasi Google/Outlook dan pengingat acara belum tersedia. Perilaku pengulangan dan tampilan Hijriah tetap perlu dibandingkan dengan aplikasi asli, termasuk zona waktu dan tanggal yang tidak ada.
 
 ## Modul yang belum diimplementasikan

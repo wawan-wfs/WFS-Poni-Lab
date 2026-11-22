@@ -116,8 +116,14 @@ setInterval(refreshSystem, 3000);
 
 function renderDayProgress(now = new Date()) {
   const clamp = value => Math.max(0, Math.min(1, value));
-  const wake = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 7);
-  const bed = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23);
+  const wakeMinute = data.wake_minute ?? 420, bedMinute = data.bed_minute ?? 1380;
+  const wake = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, wakeMinute);
+  const bed = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, bedMinute);
+  if (bed <= wake) bed.setDate(bed.getDate() + 1);
+  const displayTime = value => `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`;
+  document.querySelector('#day-wake-label').textContent = displayTime(wakeMinute);
+  document.querySelector('#day-bed-label').textContent = displayTime(bedMinute);
+  if (!document.activeElement.closest('#day-schedule')) { document.querySelector('#day-wake').value = displayTime(wakeMinute); document.querySelector('#day-bed').value = displayTime(bedMinute); }
   const day = clamp((now - wake) / (bed - wake));
   const left = Math.max(0, bed - now);
   document.querySelector('#day-percent').textContent = `${Math.round(day * 100)}%`;
@@ -139,6 +145,13 @@ function renderDayProgress(now = new Date()) {
   });
 }
 setInterval(() => { if (!document.querySelector('#page-dayprogress').hidden) renderDayProgress(); }, 30000);
+document.querySelector('#day-schedule').addEventListener('submit', async event => {
+  event.preventDefault();
+  const minutes = value => { const [h,m] = value.split(':').map(Number); return h * 60 + m; };
+  const wake = minutes(document.querySelector('#day-wake').value), bed = minutes(document.querySelector('#day-bed').value);
+  if (wake === bed) { status.textContent = 'Choose two different times.'; return; }
+  if (await mutate('set_day_schedule', {wake, bed})) renderDayProgress();
+});
 
 function updateClock() {
   const now = new Date();

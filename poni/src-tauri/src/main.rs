@@ -199,6 +199,8 @@ struct AppData {
     world_clocks: Vec<WorldPlace>,
     calendar_events: Vec<CalendarEvent>,
     hijri_offset: i8,
+    wake_minute: Option<u16>,
+    bed_minute: Option<u16>,
 }
 
 struct Store {
@@ -277,6 +279,25 @@ fn set_hijri_offset(store: State<'_, Mutex<Store>>, offset: i8) -> Result<AppDat
         .map_err(|_| "Storage unavailable")?
         .update(|data| {
             data.hijri_offset = offset;
+            Ok(())
+        })
+}
+
+#[tauri::command]
+fn set_day_schedule(
+    store: State<'_, Mutex<Store>>,
+    wake: u16,
+    bed: u16,
+) -> Result<AppData, String> {
+    if wake >= 1440 || bed >= 1440 || wake == bed {
+        return Err("Choose two different valid times".into());
+    }
+    store
+        .lock()
+        .map_err(|_| "Storage unavailable")?
+        .update(|data| {
+            data.wake_minute = Some(wake);
+            data.bed_minute = Some(bed);
             Ok(())
         })
 }
@@ -951,6 +972,7 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             get_data,
             set_hijri_offset,
+            set_day_schedule,
             system_snapshot,
             search_weather_city,
             weather_forecast,
