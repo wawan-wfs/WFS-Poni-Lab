@@ -1,0 +1,214 @@
+name: WFS Notch — Windows CI & Browser Audit
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, reopened]
+    branches: [main]
+
+# No repository writes, privileged events, remote shell, or tunnel in CI.
+permissions:
+  contents: read
+
+concurrency:
+  group: wfs-notch-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  attribution-audit:
+    name: Verify owner push and commit identity
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout complete commit history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify actor and commit metadata
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: python3 tests/verify_push_identity.py
+
+  browser-audit:
+    name: Browser regression / static audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Playwright and Chromium
+        run: |
+          python -m pip install --disable-pip-version-check 'playwright==1.56.0'
+          python -m playwright install --with-deps chromium
+      - name: JavaScript syntax
+        run: node --check src/app.js
+      - name: Modules JavaScript syntax
+        run: node --check src/features/modules.js
+      - name: Wellness JavaScript syntax
+        run: node --check src/features/wellness.js
+      - name: Owner and GitHub squash attribution regression
+        run: python tests/test_push_identity_rules.py
+      - name: Structural and metadata audit
+        run: python tests/static_audit.py
+      - name: Product layout guard
+        run: python tests/product_layout.py
+      - name: Core browser regression
+        run: python tests/browser_smoke.py
+      - name: Calendar and system browser integration
+        run: python tests/browser_calendar.py
+      - name: Desktop module browser regression
+        run: python tests/browser_modules.py
+      - name: Wellness browser regression
+        run: python tests/browser_wellness.py
+      - name: Pomodoro work and break cycle browser regression
+        run: python tests/browser_focus_cycle.py
+      - name: Countdown preset edits and restart persistence
+        run: python tests/browser_countdown_presets.py
+      - name: Calendar month and Notes search regression
+        run: python tests/browser_calendar_notes.py
+      - name: Note optimistic revision / conflict / recovered draft regression
+        run: python tests/browser_note_conflicts.py
+      - name: Notes JSON preview / idempotent import / export browser regression
+        run: python tests/browser_notes_json.py
+      - name: Phase 15 date-only calendar and recurring-series preview
+        run: python tests/browser_calendar_all_day.py
+      - name: Phase 16 timed calendar and cancellation preview
+        run: python tests/browser_calendar_timed.py
+      - name: Phase 17 source recurrence metadata and scoped edit preview
+        run: python tests/browser_calendar_series_metadata.py
+      - name: Phase 18 task priority due editing and persistence preview
+        run: python tests/browser_tasks_phase18.py
+      - name: Repeating task completion, catch-up and persistence
+        run: python tests/browser_recurring_tasks.py
+      - name: Undo task completion, retention and restore isolation
+        run: python tests/browser_task_completion_undo.py
+      - name: Phase 22 GSMTC ambiguous app ID and stale selection regression
+        run: python tests/browser_media_ambiguity.py
+      - name: Phase 22 calendar series shift native-only preview regression
+        run: python tests/browser_calendar_shift.py
+      - name: Calendar import preview and scoped cancellation confirmation
+        run: python tests/browser_ics_import_preview.py
+      - name: Calendar cancellation history across backup restore
+        run: python tests/browser_calendar_backup_restore.py
+      - name: Calendar UI JavaScript syntax
+        run: node --check src/features/calendar.js
+      - name: System details JavaScript syntax
+        run: node --check src/features/system.js
+      - name: Media sessions JavaScript syntax
+        run: node --check src/features/media.js
+      - name: UX accessibility JavaScript syntax
+        run: node --check src/features/accessibility.js
+      - name: Multi-monitor UI JavaScript syntax
+        run: node --check src/features/displays.js
+      - name: Desktop accessibility 760x470 regression
+        run: python tests/browser_accessibility.py
+      - name: All-module finder, modal focus and Notes navigation guards
+        run: python tests/browser_module_finder.py
+      - name: Explicit monitor disconnect / no fallback UI regression
+        run: python tests/browser_display_disconnect.py
+      - name: Phase 12 screenshots - all modules / DPI matrix
+        run: python tests/browser_screenshot_matrix.py
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: WFSNotch-browser-evidence
+          path: test-results/browser-*.png
+          retention-days: 14
+          if-no-files-found: warn
+
+  rust-quality:
+    name: Rust tests / Clippy / format
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Set up Rust MSVC (x64)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+          components: rustfmt, clippy
+      - name: Rust build cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Run Rust unit tests
+        working-directory: src-tauri
+        shell: pwsh
+        run: cargo test --all-targets --verbose
+      - name: Rust Clippy diagnostics
+        working-directory: src-tauri
+        shell: pwsh
+        if: success() || failure()
+        run: cargo clippy --all-targets -- -D warnings
+      - name: Verify Rust source format
+        working-directory: src-tauri
+        shell: pwsh
+        if: success() || failure()
+        run: cargo fmt --all -- --check
+
+  windows-build:
+    name: Build Windows x64 unsigned NSIS installer
+    # Independent of rust-quality so a formatting failure does not hide build errors.
+    runs-on: windows-2022
+    timeout-minutes: 90
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+      - name: Set up Rust MSVC (x64)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - name: Rust build cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - name: Pre-cache verified official NSIS toolkit with retries
+        shell: pwsh
+        timeout-minutes: 20
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: ./scripts/prepare-nsis.ps1
+      - name: Build Windows installer with official Tauri action
+        uses: tauri-apps/tauri-action@v1
+        with:
+          projectPath: .
+          uploadWorkflowArtifacts: true
+      - name: Check generated installer and build hashes
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $directory = 'src-tauri/target/release/bundle/nsis'
+          $installers = @(Get-ChildItem $directory -Filter '*.exe' -File -ErrorAction Stop)
+          if ($installers.Count -lt 1) { throw 'No NSIS installer was produced' }
+          New-Item -ItemType Directory -Force -Path 'build-evidence' | Out-Null
+          $portable = Get-Item 'src-tauri/target/release/wfs-notch.exe' -ErrorAction Stop
+          foreach ($file in ($installers + @($portable))) {
+            $hash = Get-FileHash -Path $file.FullName -Algorithm SHA256
+            "$($hash.Hash.ToLower())  $($file.Name)" | Add-Content 'build-evidence/SHA256SUMS.txt'
+          }
+          Get-Content 'build-evidence/SHA256SUMS.txt'
+      - name: Upload installer and portable checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: WFSNotch-Windows-SHA256
+          path: build-evidence/SHA256SUMS.txt
+          retention-days: 30
+          if-no-files-found: error
+      - name: Upload unsigned portable Windows executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: WFSNotch-Windows-x64-portable-unsigned
+          path: src-tauri/target/release/wfs-notch.exe
+          retention-days: 30
+          if-no-files-found: error

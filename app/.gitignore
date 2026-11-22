@@ -1,0 +1,25 @@
+# Build output
+target/
+src-tauri/target/
+node_modules/
+dist/
+*.pdb
+# Development + secrets
+.env
+.env.*
+!.env.example
+*.local
+.vscode/
+.idea/
+# Generated evidence/artifacts
+test-results/
+build-evidence/
+playwright-report/
+# Private research/source binaries do not belong in product repository
+Poni*.exe
+Poni*.msi
+private-rea-audit/
+audit-private/
+rea-evidence/
+craft-anything-workspace/
+*.dmp
