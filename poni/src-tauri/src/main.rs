@@ -19,6 +19,15 @@ struct Note {
     text: String,
 }
 
+#[derive(Serialize)]
+struct MediaSnapshot {
+    title: String,
+    artist: String,
+    playing: bool,
+    position_ms: Option<u64>,
+    duration_ms: Option<u64>,
+}
+
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(default)]
 struct Timer {
@@ -291,6 +300,54 @@ fn media_control(action: &str) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn current_media() -> Result<Option<MediaSnapshot>, String> {
+    #[cfg(windows)]
+    {
+        use windows::Media::Control::{
+            GlobalSystemMediaTransportControlsSessionManager,
+            GlobalSystemMediaTransportControlsSessionPlaybackStatus,
+        };
+        let manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
+            .map_err(|e| e.to_string())?
+            .await
+            .map_err(|e| e.to_string())?;
+        let session = match manager.GetCurrentSession() {
+            Ok(session) => session,
+            Err(error) if error.code().0 == 0x80004003u32 as i32 => return Ok(None),
+            Err(error) => return Err(error.to_string()),
+        };
+        let props = session
+            .TryGetMediaPropertiesAsync()
+            .map_err(|e| e.to_string())?
+            .await
+            .map_err(|e| e.to_string())?;
+        let info = session.GetPlaybackInfo().map_err(|e| e.to_string())?;
+        let playing = info.PlaybackStatus().map_err(|e| e.to_string())?
+            == GlobalSystemMediaTransportControlsSessionPlaybackStatus::Playing;
+        let timeline = session.GetTimelineProperties().ok();
+        let times = timeline.and_then(|value| {
+            let start = value.StartTime().ok()?.Duration;
+            let end = value.EndTime().ok()?.Duration;
+            let position = value.Position().ok()?.Duration;
+            let total = end.saturating_sub(start).max(0) as u64 / 10_000;
+            let elapsed = position.saturating_sub(start).max(0) as u64 / 10_000;
+            Some((elapsed.min(total), total))
+        });
+        Ok(Some(MediaSnapshot {
+            title: props.Title().map_err(|e| e.to_string())?.to_string(),
+            artist: props.Artist().map_err(|e| e.to_string())?.to_string(),
+            playing,
+            position_ms: times.map(|item| item.0),
+            duration_ms: times.map(|item| item.1),
+        }))
+    }
+    #[cfg(not(windows))]
+    {
+        Err("Media information requires Windows".into())
+    }
+}
+
+#[tauri::command]
 fn set_panel_open(
     window: tauri::WebviewWindow,
     sequence: State<'_, Mutex<WindowSequence>>,
@@ -344,6 +401,7 @@ fn main() {
             remove_note,
             timer_action,
             media_control,
+            current_media,
             set_panel_open
         ])
         .run(tauri::generate_context!())

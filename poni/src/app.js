@@ -10,6 +10,7 @@ let editingNote = null;
 let queue = Promise.resolve();
 let panelSequence = 0;
 let closeTimer = null;
+let mediaPending = false;
 
 function setOpen(value) {
   if (closed.hidden === value) return;
@@ -17,6 +18,7 @@ function setOpen(value) {
   open.hidden = !value;
   closed.setAttribute('aria-expanded', String(value));
   invoke('set_panel_open', { open: value, seq: ++panelSequence }).catch(error => { status.textContent = String(error); });
+  if (value) void refreshMedia();
 }
 closed.addEventListener('click', () => setOpen(true));
 closed.addEventListener('pointerenter', () => setOpen(true));
@@ -34,8 +36,25 @@ document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', (
   document.querySelectorAll('.page').forEach(page => { page.hidden = page.id !== `page-${tab.dataset.page}`; });
 }));
 document.querySelectorAll('[data-media]').forEach(button => button.addEventListener('click', () => {
-  invoke('media_control', { action: button.dataset.media }).catch(error => { status.textContent = String(error); });
+  invoke('media_control', { action: button.dataset.media }).then(() => setTimeout(refreshMedia, 500)).catch(error => { status.textContent = String(error); });
 }));
+
+async function refreshMedia() {
+  if (mediaPending || open.hidden) return;
+  mediaPending = true;
+  try {
+    const media = await invoke('current_media');
+    document.querySelector('#media-title').textContent = media?.title || (media ? 'Unknown track' : 'Nothing playing');
+    document.querySelector('#media-artist').textContent = media?.artist || (media ? 'Unknown artist' : 'Play something in a media player');
+    document.querySelector('[data-media="toggle"]').textContent = media?.playing ? '❚❚' : '▶';
+    const percentage = media?.duration_ms > 0 ? Math.max(0, Math.min(100, media.position_ms / media.duration_ms * 100)) : 0;
+    document.querySelector('#media-progress-fill').style.width = `${percentage}%`;
+  } catch (error) {
+    document.querySelector('#media-title').textContent = 'Media unavailable';
+    document.querySelector('#media-artist').textContent = String(error);
+  } finally { mediaPending = false; }
+}
+setInterval(refreshMedia, 5000);
 
 function updateClock() {
   const now = new Date();
