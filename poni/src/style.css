@@ -10,12 +10,14 @@ button { color: inherit; cursor: pointer; }
 header { display: flex; align-items: center; gap: 20px; height: 32px; }
 nav { display: flex; align-items: center; gap: 4px; flex: 1; overflow: auto; scrollbar-width: none; }
 .tab, .close { border: 0; background: transparent; border-radius: 8px; color: #98989f; padding: 5px 9px; font-size: 13px; }
+.tab { flex:none; white-space:nowrap; }
 .tab span { display: none; }
 .tab.active { color: #fff; background: #303034; }
 .tab.active span { display: inline; }
 header .clock { font-weight: 700; white-space: nowrap; font-size: 13px; }
 .close { font-size: 20px; }
 main { height: 135px; overflow: auto; }
+.open.tall main { height: calc(100% - 40px); }
 .home { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding-top: 14px; }
 .media { display: flex; gap: 12px; align-items: flex-start; }
 .album { display: grid; place-items: center; width: 60px; height: 60px; border-radius: 14px; background: #202023; color: #727279; font-size: 32px; flex: none; }

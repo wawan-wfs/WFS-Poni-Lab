@@ -1,0 +1,25 @@
+.bookmark-form input, .bookmark-tools input { min-width: 0; }
+#bookmark-url { flex: 2 1 0; }
+#bookmark-title, #bookmark-category { flex: 1 1 0; }
+.bookmark-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.bookmark-tools input { flex: 1; min-width: 72px; }
+.bookmark-tools button, .bookmark-tools select {
+  background: #202023;
+  border: 1px solid #353539;
+  border-radius: 8px;
+  padding: 6px;
+  color: inherit;
+  font-size: 12px;
+}
+.bookmark-tools button:disabled { opacity: .45; }
+#bookmarks-status { color: #aaa; font-size: 12px; margin-bottom: 6px; }
+#bookmarks-list { color: #aaa; font-size: 13px; }
+.bookmark-row { display: flex; align-items: center; gap: 5px; }
+.bookmark-row .bookmark-link {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bookmark-link small { display: block; color: #aaa; overflow: hidden; text-overflow: ellipsis; }

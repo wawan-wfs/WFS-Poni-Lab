@@ -4,6 +4,8 @@ from pathlib import Path
 from shutil import which
 from threading import Thread
 from playwright.sync_api import expect, sync_playwright
+from currency import test_currency
+from dashboard import test_dashboard
 
 root = Path(__file__).resolve().parents[1]
 server = ThreadingHTTPServer(('127.0.0.1', 0), partial(SimpleHTTPRequestHandler, directory=str(root / 'src')))
@@ -23,6 +25,8 @@ with sync_playwright() as pw:
         if (command === 'weather_forecast') return {current:{temperature_2m:30, relative_humidity_2m:70, weather_code:2, wind_speed_10m:10}, daily:{time:['2026-11-22'], temperature_2m_max:[32], temperature_2m_min:[25], weather_code:[2]}};
         if (command === 'set_weather_location') data.weather_location = args.location;
         if (command === 'set_world_clocks') data.world_clocks = args.places;
+        if (command === 'set_dashboard_widgets') data.dashboard_widgets = args.widgets;
+        if (command === 'pomodoro_state') return {phase:'focus', total_ms:1500000, remaining_ms:1500000, ends_at_ms:null};
         if (command === 'set_hijri_offset') data.hijri_offset = args.offset;
         if (command === 'set_day_schedule') { data.wake_minute = args.wake; data.bed_minute = args.bed; }
         data.calendar_events ||= [];
@@ -227,6 +231,8 @@ with sync_playwright() as pw:
     page.get_by_role('button', name='Home event').click()
     expect(page.locator('#page-calendar')).to_be_visible()
     expect(page.locator('#calendar-items')).to_contain_text('Home event')
+    test_dashboard(page)
+    test_currency(page)
     assert not errors, errors
     browser.close()
 server.shutdown()

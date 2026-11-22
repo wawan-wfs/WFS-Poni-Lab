@@ -64,6 +64,23 @@ try {
         [CursorPosition]::mouse_event(4, 0, 0, 0, [UIntPtr]::Zero)
     }
     Save-Screen 'desktop.png'
+    # Alt+N opened Home. Left wraps to Currency, a module that needs the taller panel.
+    [CursorPosition]::keybd_event(0x25, 0, 0, [UIntPtr]::Zero)
+    [CursorPosition]::keybd_event(0x25, 0, 2, [UIntPtr]::Zero)
+    Start-Sleep -Seconds 2
+    $moduleRect = [CursorPosition+Rect]::new()
+    if (![CursorPosition]::GetWindowRect($process.MainWindowHandle, [ref]$moduleRect)) { throw 'Could not inspect the module window.' }
+    $moduleHeight = $moduleRect.Bottom - $moduleRect.Top
+    $homeHeight = $rect.Bottom - $rect.Top
+    Save-Screen 'currency.png'
+    if ($moduleHeight -lt $homeHeight + 100) { throw "Module did not expand the panel; heights were $homeHeight/$moduleHeight pixels." }
+    [CursorPosition]::keybd_event(0x27, 0, 0, [UIntPtr]::Zero)
+    [CursorPosition]::keybd_event(0x27, 0, 2, [UIntPtr]::Zero)
+    Start-Sleep -Seconds 2
+    $homeRect = [CursorPosition+Rect]::new()
+    if (![CursorPosition]::GetWindowRect($process.MainWindowHandle, [ref]$homeRect) -or ($homeRect.Bottom - $homeRect.Top) -ne $homeHeight) {
+        throw 'Home did not return to the compact height.'
+    }
     # The positions correspond to the 1024x768 reference runner; screenshots record outcomes.
     if ($bounds.Width -eq 1024 -and $bounds.Height -eq 768) {
         Click-Point ($rect.Left + 209) ($rect.Top + 32)
@@ -94,7 +111,7 @@ try {
         Start-Sleep -Seconds 5
         Save-Screen 'system.png'
     }
-    @{ process_id = $process.Id; main_window_handle = $process.MainWindowHandle.ToInt64(); screenshot = 'desktop.png'; width_after_shortcut = $windowWidth; weather_attempted = ($bounds.Width -eq 1024 -and $bounds.Height -eq 768) } |
+    @{ process_id = $process.Id; main_window_handle = $process.MainWindowHandle.ToInt64(); screenshot = 'desktop.png'; width_after_shortcut = $windowWidth; module_height = $moduleHeight; weather_attempted = ($bounds.Width -eq 1024 -and $bounds.Height -eq 768) } |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'observation.json') -Encoding UTF8
 } finally {
     if (!$process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }

@@ -1,0 +1,302 @@
+use super::Store;
+use serde::{Deserialize, Serialize};
+use std::sync::Mutex;
+use std::time::{SystemTime, UNIX_EPOCH};
+use tauri::{AppHandle, Manager, State};
+use tauri_plugin_notification::NotificationExt;
+
+#[derive(Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum Phase {
+    Focus,
+    ShortBreak,
+    LongBreak,
+}
+
+impl Phase {
+    fn completed_message(self) -> &'static str {
+        match self {
+            Self::Focus => "Focus session complete",
+            Self::ShortBreak => "Short break complete",
+            Self::LongBreak => "Long break complete",
+        }
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub(super) struct Settings {
+    focus_minutes: u16,
+    short_minutes: u16,
+    long_minutes: u16,
+    cycle_length: u16,
+    auto_break: bool,
+    auto_focus: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            focus_minutes: 25,
+            short_minutes: 5,
+            long_minutes: 15,
+            cycle_length: 4,
+            auto_break: false,
+            auto_focus: false,
+        }
+    }
+}
+
+impl Settings {
+    fn validate(&self) -> Result<(), String> {
+        if !(5..=90).contains(&self.focus_minutes)
+            || !(1..=30).contains(&self.short_minutes)
+            || !(5..=60).contains(&self.long_minutes)
+            || !(2..=8).contains(&self.cycle_length)
+        {
+            return Err("Choose valid focus, break, and cycle lengths".into());
+        }
+        Ok(())
+    }
+
+    fn duration(&self, phase: Phase) -> u64 {
+        let minutes = match phase {
+            Phase::Focus => self.focus_minutes,
+            Phase::ShortBreak => self.short_minutes,
+            Phase::LongBreak => self.long_minutes,
+        };
+        u64::from(minutes) * 60_000
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+struct Completed {
+    at_ms: u64,
+    focus_ms: u64,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub(super) struct Pomodoro {
+    phase: Phase,
+    total_ms: u64,
+    remaining_ms: u64,
+    ends_at_ms: Option<u64>,
+    cycle: u16,
+    settings: Settings,
+    completed: Vec<Completed>,
+}
+
+impl Default for Pomodoro {
+    fn default() -> Self {
+        let settings = Settings::default();
+        let total_ms = settings.duration(Phase::Focus);
+        Self {
+            phase: Phase::Focus,
+            total_ms,
+            remaining_ms: total_ms,
+            ends_at_ms: None,
+            cycle: 0,
+            settings,
+            completed: Vec::new(),
+        }
+    }
+}
+
+impl Pomodoro {
+    fn reset(&mut self, phase: Phase) {
+        self.phase = phase;
+        self.total_ms = self.settings.duration(phase);
+        self.remaining_ms = self.total_ms;
+        self.ends_at_ms = None;
+    }
+
+    fn advance(&mut self, completed_at: Option<u64>, now: u64) {
+        let next = match self.phase {
+            Phase::Focus => {
+                if let Some(at_ms) = completed_at {
+                    self.completed.push(Completed {
+                        at_ms,
+                        focus_ms: self.total_ms,
+                    });
+                    if self.completed.len() > 512 {
+                        self.completed.remove(0);
+                    }
+                    self.cycle = self.cycle.saturating_add(1);
+                }
+                if self.cycle >= self.settings.cycle_length {
+                    Phase::LongBreak
+                } else {
+                    Phase::ShortBreak
+                }
+            }
+            Phase::ShortBreak => Phase::Focus,
+            Phase::LongBreak => {
+                self.cycle = 0;
+                Phase::Focus
+            }
+        };
+        self.reset(next);
+        // Do not restart focus or breaks on reopening the app long after a session ended.
+        let finished_recently = completed_at.is_some_and(|end| now.saturating_sub(end) <= 60_000);
+        let auto_start = match self.phase {
+            Phase::Focus => self.settings.auto_focus,
+            _ => self.settings.auto_break,
+        };
+        if finished_recently && auto_start {
+            self.ends_at_ms = Some(now.saturating_add(self.total_ms));
+        }
+    }
+
+    fn settle(&mut self, now: u64) -> Option<Phase> {
+        let end = self.ends_at_ms.filter(|end| *end <= now)?;
+        let phase = self.phase;
+        self.advance(Some(end), now);
+        Some(phase)
+    }
+
+    fn apply(&mut self, action: Action, phase: Option<Phase>, now: u64) -> Result<(), String> {
+        match action {
+            Action::Toggle => {
+                if let Some(end) = self.ends_at_ms.take() {
+                    self.remaining_ms = end.saturating_sub(now);
+                } else {
+                    self.ends_at_ms = Some(now.saturating_add(self.remaining_ms));
+                }
+            }
+            Action::Reset => self.reset(self.phase),
+            Action::Skip => self.advance(None, now),
+            Action::Phase => self.reset(phase.ok_or("Choose a phase")?),
+        }
+        Ok(())
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum Action {
+    Toggle,
+    Reset,
+    Skip,
+    Phase,
+}
+
+fn now_ms() -> Result<u64, String> {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_millis() as u64)
+        .map_err(|error| error.to_string())
+}
+
+fn settle_store(store: &mut Store, now: u64) -> Result<Option<Phase>, String> {
+    if store.data.pomodoro.ends_at_ms.is_none_or(|end| end > now) {
+        return Ok(None);
+    }
+    let mut completed = None;
+    store.update(|data| {
+        completed = data.pomodoro.settle(now);
+        Ok(())
+    })?;
+    Ok(completed)
+}
+
+fn notify(app: &AppHandle, phase: Option<Phase>) {
+    if let Some(phase) = phase {
+        let _ = app
+            .notification()
+            .builder()
+            .title("Pomodoro")
+            .body(phase.completed_message())
+            .show();
+    }
+}
+
+pub(super) fn tick(app: &AppHandle, now: u64) {
+    let state = app.state::<Mutex<Store>>();
+    let completed = state
+        .lock()
+        .ok()
+        .and_then(|mut store| settle_store(&mut store, now).ok().flatten());
+    notify(app, completed);
+}
+
+#[tauri::command]
+pub(super) fn pomodoro_state(
+    app: AppHandle,
+    state: State<'_, Mutex<Store>>,
+) -> Result<Pomodoro, String> {
+    let mut store = state.lock().map_err(|_| "Storage unavailable")?;
+    let completed = settle_store(&mut store, now_ms()?)?;
+    let result = store.data.pomodoro.clone();
+    drop(store);
+    notify(&app, completed);
+    Ok(result)
+}
+
+#[tauri::command]
+pub(super) fn pomodoro_action(
+    app: AppHandle,
+    state: State<'_, Mutex<Store>>,
+    action: Action,
+    phase: Option<Phase>,
+) -> Result<Pomodoro, String> {
+    let mut store = state.lock().map_err(|_| "Storage unavailable")?;
+    let now = now_ms()?;
+    let mut completed = None;
+    let result = store.update(|data| {
+        completed = data.pomodoro.settle(now);
+        data.pomodoro.apply(action, phase, now)
+    })?;
+    drop(store);
+    notify(&app, completed);
+    Ok(result.pomodoro)
+}
+
+#[tauri::command]
+pub(super) fn pomodoro_settings(
+    app: AppHandle,
+    state: State<'_, Mutex<Store>>,
+    settings: Settings,
+) -> Result<Pomodoro, String> {
+    settings.validate()?;
+    let mut store = state.lock().map_err(|_| "Storage unavailable")?;
+    let now = now_ms()?;
+    let mut completed = None;
+    let result = store.update(|data| {
+        let timer = &mut data.pomodoro;
+        completed = timer.settle(now);
+        timer.settings = settings;
+        if timer.ends_at_ms.is_none() && timer.remaining_ms == timer.total_ms {
+            timer.reset(timer.phase);
+        }
+        Ok(())
+    })?;
+    drop(store);
+    notify(&app, completed);
+    Ok(result.pomodoro)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn preserves_paused_time_and_counts_one_completion_per_focus_session() {
+        let mut timer = Pomodoro::default();
+        timer.settings.cycle_length = 2;
+        timer.apply(Action::Toggle, None, 1000).unwrap();
+        timer.apply(Action::Toggle, None, 4000).unwrap();
+        assert_eq!(timer.remaining_ms, timer.total_ms - 3000);
+        let saved = serde_json::to_string(&timer).unwrap();
+        let mut timer: Pomodoro = serde_json::from_str(&saved).unwrap();
+        let remaining = timer.remaining_ms;
+        timer.apply(Action::Toggle, None, 5000).unwrap();
+        assert!(matches!(timer.settle(5000 + remaining), Some(Phase::Focus)));
+        assert!(timer.settle(5000 + remaining).is_none());
+        assert!(matches!(timer.phase, Phase::ShortBreak));
+        timer.apply(Action::Skip, None, 2000_000).unwrap();
+        timer.apply(Action::Toggle, None, 2000_000).unwrap();
+        assert!(timer.settle(2000_000 + timer.total_ms).is_some());
+        assert!(matches!(timer.phase, Phase::LongBreak));
+        assert_eq!(timer.completed.len(), 2);
+    }
+}

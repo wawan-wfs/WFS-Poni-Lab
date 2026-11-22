@@ -23,21 +23,47 @@ let selectedDate = new Date();
 selectedDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
 let displayedMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
 let editingEvent = null;
+const modules = window.poniModules || {};
+const mountedModules = new Set();
+let activePage = 'home';
 const panelSession = crypto.randomUUID();
 const panelReady = invoke('initialize_panel', { session: panelSession });
 panelReady.catch(error => { status.textContent = String(error); });
 
 function setOpen(value) {
   if (closed.hidden === value) return;
+  if (!value) callModule('hide');
   if (!value) keyboardOpen = false;
   closed.hidden = value;
   open.hidden = !value;
   closed.setAttribute('aria-expanded', String(value));
-  const seq = ++panelSequence;
-  const focus = value && keyboardOpen;
-  panelReady.then(() => invoke('set_panel_open', { session: panelSession, open: value, focus, seq })).catch(error => { status.textContent = String(error); });
+  updatePanelSize(value, value && keyboardOpen);
+  if (value) callModule('show');
   if (value) void refreshMedia();
   if (value) void refreshSystem();
+}
+function updatePanelSize(isOpen, focus = false) {
+  const tall = isOpen && Object.hasOwn(modules, activePage);
+  open.classList.toggle('tall', tall);
+  const seq = ++panelSequence;
+  panelReady.then(() => invoke('set_panel_open', { session: panelSession, open: isOpen, tall, focus, seq }))
+    .catch(error => { status.textContent = String(error); });
+}
+
+function callModule(method) {
+  const module = modules[activePage];
+  if (!module) return;
+  try {
+    if (method === 'show' && !mountedModules.has(activePage)) {
+      module.mount(document.getElementById('page-' + activePage));
+      mountedModules.add(activePage);
+    }
+    if (mountedModules.has(activePage)) {
+      Promise.resolve(module[method]?.()).catch(error => { status.textContent = String(error); });
+    }
+  } catch (error) {
+    status.textContent = String(error);
+  }
 }
 closed.addEventListener('click', () => setOpen(true));
 closed.addEventListener('pointerenter', () => setOpen(true));
@@ -46,7 +72,7 @@ surface.addEventListener('pointerenter', () => clearTimeout(closeTimer));
 surface.addEventListener('pointerleave', () => {
   clearTimeout(closeTimer);
   closeTimer = setTimeout(() => {
-    if (!keyboardOpen && !surface.matches(':hover') && !document.activeElement.matches('input, textarea')) setOpen(false);
+    if (!keyboardOpen && !surface.matches(':hover') && !document.activeElement.matches('input, textarea, select, [contenteditable="true"]')) setOpen(false);
   }, 450);
 });
 window.__TAURI__.event.listen('poni-toggle', () => {
@@ -70,8 +96,19 @@ document.addEventListener('keydown', event => {
 });
 
 document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => {
+  const previousPage = activePage;
+  if (tab.dataset.page !== activePage) {
+    if (!open.hidden) callModule('hide');
+    activePage = tab.dataset.page;
+  }
   document.querySelectorAll('.tab').forEach(item => item.classList.toggle('active', item === tab));
   document.querySelectorAll('.page').forEach(page => { page.hidden = page.id !== `page-${tab.dataset.page}`; });
+  tab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  open.querySelector('main').scrollTop = 0;
+  if (!open.hidden && previousPage !== activePage) {
+    if (Object.hasOwn(modules, previousPage) !== Object.hasOwn(modules, activePage)) updatePanelSize(true);
+    callModule('show');
+  }
   if (tab.dataset.page === 'system') void refreshSystem();
   if (tab.dataset.page === 'dayprogress') renderDayProgress();
   if (tab.dataset.page === 'calendar') renderMonthCalendar();
@@ -255,12 +292,12 @@ function render() {
   renderCalendar();
 }
 
-function occurrencesOnDay(day) {
+function occurrencesOnDay(day, events = data.calendar_events || []) {
   const startDay = new Date(day.getFullYear(), day.getMonth(), day.getDate());
   const endDay = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1);
   const previousDay = new Date(day.getFullYear(), day.getMonth(), day.getDate() - 1);
   const result = [];
-  for (const event of data.calendar_events || []) {
+  for (const event of events) {
     const original = new Date(event.start_ms);
     if (!Number.isFinite(original.getTime())) continue;
     if (!event.repeat || event.repeat === 'none') {

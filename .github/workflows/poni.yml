@@ -19,8 +19,12 @@ jobs:
           node-version: '22'
       - run: python -m pip install 'playwright==1.56.0'
       - run: python -m playwright install --with-deps chromium
-      - run: node --check poni/src/app.js
+      - run: for file in poni/src/*.js; do node --check "$file" || exit 1; done
       - run: python poni/tests/browser_ui.py
+      - run: python poni/tests/bookmarks.py
+      - run: python poni/tests/pomodoro.py
+      - run: python poni/tests/teleprompter.py
+      - run: python poni/tests/health.py
   windows:
     runs-on: windows-2022
     timeout-minutes: 60

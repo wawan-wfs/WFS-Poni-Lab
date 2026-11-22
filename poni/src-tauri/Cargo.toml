@@ -19,6 +19,6 @@ chrono-tz = "0.10"
 sysinfo = "=0.33.1"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_UI_Input_KeyboardAndMouse"] }
+windows-sys = { version = "0.61", features = ["Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 windows = { version = "0.61", features = ["Foundation", "Media_Control"] }
 windows-future = { version = "0.2.1", features = ["std"] }

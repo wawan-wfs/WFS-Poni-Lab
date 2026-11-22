@@ -8,6 +8,13 @@ use tauri_plugin_notification::NotificationExt;
 use tempfile::NamedTempFile;
 use uuid::Uuid;
 
+mod bookmarks;
+mod currency;
+mod dashboard;
+mod health;
+mod pomodoro;
+mod teleprompter;
+
 #[derive(Clone, Serialize, Deserialize)]
 struct Task {
     id: Uuid,
@@ -191,6 +198,12 @@ impl Timer {
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 struct AppData {
+    bookmarks: bookmarks::BookmarkData,
+    currency: currency::CurrencyData,
+    dashboard_widgets: dashboard::DashboardWidgets,
+    health: health::Health,
+    pomodoro: pomodoro::Pomodoro,
+    teleprompter: teleprompter::TeleprompterData,
     tasks: Vec<Task>,
     notes: Vec<Note>,
     timer: Timer,
@@ -874,8 +887,12 @@ fn stopwatch_action(store: State<'_, Mutex<Store>>, action: String) -> Result<Ap
         })
 }
 
-fn resize_panel(window: &tauri::WebviewWindow, open: bool) -> Result<(), String> {
-    let (width, height) = if open { (680.0, 200.0) } else { (200.0, 32.0) };
+fn resize_panel(window: &tauri::WebviewWindow, open: bool, tall: bool) -> Result<(), String> {
+    let (width, height) = match (open, tall) {
+        (true, true) => (680.0, 420.0),
+        (true, false) => (680.0, 200.0),
+        (false, _) => (200.0, 32.0),
+    };
     let monitor = window.current_monitor().map_err(|e| e.to_string())?;
     window
         .set_size(tauri::LogicalSize::new(width, height))
@@ -898,7 +915,7 @@ fn initialize_panel(
     session: Uuid,
 ) -> Result<(), String> {
     let mut state = sequence.lock().map_err(|_| "Window state unavailable")?;
-    resize_panel(&window, false)?;
+    resize_panel(&window, false, false)?;
     state.session = Some(session);
     state.last = 0;
     Ok(())
@@ -910,6 +927,7 @@ fn set_panel_open(
     sequence: State<'_, Mutex<WindowSequence>>,
     session: Uuid,
     open: bool,
+    tall: bool,
     focus: bool,
     seq: u64,
 ) -> Result<(), String> {
@@ -917,7 +935,7 @@ fn set_panel_open(
     if state.session != Some(session) || seq <= state.last {
         return Ok(());
     }
-    resize_panel(&window, open)?;
+    resize_panel(&window, open, tall)?;
     if open && focus {
         window.set_focus().map_err(|e| e.to_string())?;
     }
@@ -955,7 +973,9 @@ fn main() {
             std::thread::spawn(move || loop {
                 if let Ok(now) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
                 {
-                    notify_due(&handle, now.as_millis() as u64);
+                    let now_ms = now.as_millis() as u64;
+                    notify_due(&handle, now_ms);
+                    pomodoro::tick(&handle, now_ms);
                 }
                 std::thread::sleep(std::time::Duration::from_secs(15));
             });
@@ -970,6 +990,23 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            bookmarks::list_bookmarks,
+            bookmarks::save_bookmark,
+            bookmarks::remove_bookmark,
+            bookmarks::rename_bookmark_category,
+            bookmarks::remove_bookmark_category,
+            bookmarks::open_bookmark,
+            currency::currency_snapshot,
+            currency::refresh_currency_rates,
+            currency::save_currency_preferences,
+            dashboard::set_dashboard_widgets,
+            health::health_state,
+            health::health_record,
+            pomodoro::pomodoro_state,
+            pomodoro::pomodoro_action,
+            pomodoro::pomodoro_settings,
+            teleprompter::get_teleprompter,
+            teleprompter::save_teleprompter,
             get_data,
             set_hijri_offset,
             set_day_schedule,

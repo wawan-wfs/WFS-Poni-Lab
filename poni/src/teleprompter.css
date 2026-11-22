@@ -1,0 +1,25 @@
+.tele-editor { border: 0; margin: 0; padding: 0; min-width: 0; }
+.tele-tools, .tele-controls, .tele-reader-controls {
+  display: flex; align-items: center; gap: 5px; margin: 4px 0; font-size: 11px;
+}
+.tele-tools button, .tele-controls button, .tele-reader-controls button {
+  background: #29292e; border: 0; border-radius: 7px; padding: 4px 8px; white-space: nowrap;
+}
+.tele-tools select, .tele-name, .tele-size { background: #202024; color: white; border-radius: 6px; border: 1px solid #353539; padding: 3px; min-width: 0; }
+.tele-tools select { width: 110px; }
+.tele-name { flex: 1; }
+.tele-editor textarea { resize: none; height: 58px; min-height: 55px; font-size: 12px; }
+.tele-controls label { display: flex; align-items: center; gap: 3px; white-space: nowrap; }
+.tele-speed { width: 65px; padding: 0; }
+.tele-size { width: 43px; }
+.tele-controls input[type="checkbox"] { width: auto; }
+.tele-estimate, .tele-reader-status { margin-left: auto; color: #b2b2b6; }
+.tele-status { color: #ff9b87; font-size: 11px; margin: 0; }
+.tele-viewport {
+  position: relative; height: 98px; overflow: hidden; padding: 0 12px;
+  background: #18181c; border-radius: 8px; line-height: 1.32;
+}
+.tele-line { overflow-wrap: anywhere; color: #9999a1; padding: 2px 8px; }
+.tele-current { color: #fff; background: #2b2422; border-left: 2px solid #ffa24d; }
+.tele-cue { color: #ffa24d; font-size: .78em; }
+.tele-tail { height: 98px; }
