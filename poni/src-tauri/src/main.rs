@@ -2,7 +2,8 @@
 
 use serde::{Deserialize, Serialize};
 use std::{fs, io::Write, path::PathBuf, sync::Mutex};
-use tauri::{Manager, State};
+use tauri::{Emitter, Manager, State};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use tempfile::NamedTempFile;
 use uuid::Uuid;
 
@@ -87,6 +88,8 @@ struct Store {
 #[derive(Default)]
 struct WindowSequence(u64);
 
+struct ShortcutStatus(bool);
+
 impl Store {
     fn open(path: PathBuf) -> Result<Self, String> {
         let data = match fs::read(&path) {
@@ -131,6 +134,11 @@ fn get_data(store: State<'_, Mutex<Store>>) -> Result<AppData, String> {
         .map_err(|_| "Storage unavailable")?
         .data
         .clone())
+}
+
+#[tauri::command]
+fn shortcut_status(status: State<'_, ShortcutStatus>) -> bool {
+    status.0
 }
 
 #[tauri::command]
@@ -326,13 +334,24 @@ async fn current_media() -> Result<Option<MediaSnapshot>, String> {
             GlobalSystemMediaTransportControlsSessionPlaybackStatus,
         };
         let manager = GlobalSystemMediaTransportControlsSessionManager::RequestAsync()
-            .map_err(|e| e.to_string())?
+            .map_err(|e| format!("Media manager: {e}"))?
             .await
-            .map_err(|e| e.to_string())?;
+            .map_err(|e| format!("Media manager: {e}"))?;
+        if manager
+            .GetSessions()
+            .map_err(|e| format!("Media sessions: {e}"))?
+            .Size()
+            .map_err(|e| format!("Media session count: {e}"))?
+            == 0
+        {
+            return Ok(None);
+        }
         let session = match manager.GetCurrentSession() {
             Ok(session) => session,
-            Err(error) if error.code().0 == 0x80004003u32 as i32 => return Ok(None),
-            Err(error) => return Err(error.to_string()),
+            Err(error) if error.code().0 == 0 || error.code().0 == 0x80004003u32 as i32 => {
+                return Ok(None)
+            }
+            Err(error) => return Err(format!("Current media session: {error}")),
         };
         let props = session
             .TryGetMediaPropertiesAsync()
@@ -431,11 +450,23 @@ fn set_panel_open(
 
 fn main() {
     tauri::Builder::default()
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, _, event| {
+                    if event.state == ShortcutState::Pressed {
+                        let _ = app.emit("poni-toggle", ());
+                    }
+                })
+                .build(),
+        )
         .setup(|app| {
             let path = app.path().app_data_dir()?.join("data.json");
             let store = Store::open(path).map_err(std::io::Error::other)?;
             app.manage(Mutex::new(store));
             app.manage(Mutex::new(WindowSequence::default()));
+            app.manage(ShortcutStatus(
+                app.global_shortcut().register("Alt+N").is_ok(),
+            ));
             if let Some(window) = app.get_webview_window("main") {
                 if let Some(monitor) = window.current_monitor()? {
                     let size = window.outer_size()?;
@@ -448,6 +479,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             get_data,
+            shortcut_status,
             add_task,
             toggle_task,
             remove_task,

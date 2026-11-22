@@ -13,9 +13,10 @@ with sync_playwright() as pw:
     browser = pw.chromium.launch(**({'executable_path': executable} if executable else {}), headless=True, args=['--no-sandbox'])
     page = browser.new_page(viewport={'width': 680, 'height': 200})
     page.add_init_script('''
-      window.__TAURI__ = { core: { invoke: async (command, args = {}) => {
+      window.__TAURI__ = { event: {listen: async (name, listener) => { window.poniTestShortcut = listener; }}, core: { invoke: async (command, args = {}) => {
         const data = JSON.parse(localStorage.getItem('test-data') || '{"tasks":[],"notes":[],"timer":{"total_ms":1500000,"remaining_ms":1500000,"ends_at_ms":null},"stopwatch":{"elapsed_ms":0,"started_at_ms":null,"laps":[]}}');
         if (command === 'current_media') return {title: 'Test track', artist: 'Test artist', playing: true, position_ms: 30000, duration_ms: 60000};
+        if (command === 'shortcut_status') return true;
         if (command === 'media_control') localStorage.setItem('last-media-action', args.action);
         if (command === 'add_task') data.tasks.push({id: crypto.randomUUID(), text: args.text, done: false});
         if (command === 'toggle_task') { const t = data.tasks.find(t => t.id === args.id); t.done = !t.done; }
@@ -40,6 +41,10 @@ with sync_playwright() as pw:
     errors = []
     page.on('pageerror', lambda error: errors.append(str(error)))
     page.goto(f'http://127.0.0.1:{server.server_port}/index.html')
+    page.evaluate('window.poniTestShortcut()')
+    expect(page.locator('#open')).to_be_visible()
+    page.evaluate('window.poniTestShortcut()')
+    expect(page.locator('#open')).to_be_hidden()
     page.locator('#closed').dispatch_event('pointerenter')
     expect(page.locator('#media-title')).to_have_text('Test track')
     expect(page.locator('#media-progress-fill')).to_have_attribute('style', 'width: 50%;')

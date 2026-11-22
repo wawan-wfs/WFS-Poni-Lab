@@ -11,9 +11,11 @@ let queue = Promise.resolve();
 let panelSequence = 0;
 let closeTimer = null;
 let mediaPending = false;
+let keyboardOpen = false;
 
 function setOpen(value) {
   if (closed.hidden === value) return;
+  if (!value) keyboardOpen = false;
   closed.hidden = value;
   open.hidden = !value;
   closed.setAttribute('aria-expanded', String(value));
@@ -27,9 +29,17 @@ surface.addEventListener('pointerenter', () => clearTimeout(closeTimer));
 surface.addEventListener('pointerleave', () => {
   clearTimeout(closeTimer);
   closeTimer = setTimeout(() => {
-    if (!surface.matches(':hover') && !document.activeElement.matches('input, textarea')) setOpen(false);
+    if (!keyboardOpen && !surface.matches(':hover') && !document.activeElement.matches('input, textarea')) setOpen(false);
   }, 450);
 });
+window.__TAURI__.event.listen('poni-toggle', () => {
+  const shouldOpen = open.hidden;
+  keyboardOpen = shouldOpen;
+  setOpen(shouldOpen);
+}).catch(error => { status.textContent = String(error); });
+invoke('shortcut_status').then(available => {
+  if (!available) status.textContent = 'Alt+N is already in use.';
+}).catch(error => { status.textContent = String(error); });
 
 document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => {
   document.querySelectorAll('.tab').forEach(item => item.classList.toggle('active', item === tab));
