@@ -153,7 +153,12 @@ try {
     if ($bounds.Width -eq 1024 -and $bounds.Height -eq 768) {
         function Find-Setting([string]$text) {
             Click-Point ($settingsRect.Left + 102) ($settingsRect.Top + 98)
-            [System.Windows.Forms.SendKeys]::SendWait('^a')
+            Start-Sleep -Milliseconds 200
+            [CursorPosition]::keybd_event(0x11, 0, 0, [UIntPtr]::Zero)
+            [CursorPosition]::keybd_event(0x41, 0, 0, [UIntPtr]::Zero)
+            [CursorPosition]::keybd_event(0x41, 0, 2, [UIntPtr]::Zero)
+            [CursorPosition]::keybd_event(0x11, 0, 2, [UIntPtr]::Zero)
+            Start-Sleep -Milliseconds 200
             [System.Windows.Forms.SendKeys]::SendWait($text)
             Start-Sleep -Milliseconds 400
             [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
@@ -197,12 +202,17 @@ try {
         Save-Screen 'settings-pomodoro.png'
 
         $profile = Get-Content -Raw -LiteralPath $dataPath | ConvertFrom-Json
-        if ($profile.pomodoro.settings.cycle_length -ne 8 -or
-            @($profile.settings.timer_presets) -notcontains 35 -or
-            !$profile.settings.timer_then_break -or
-            $profile.pomodoro.settings.focus_sound -ne 'white' -or
-            !$profile.pomodoro.settings.focus_sound_breaks) {
-            throw 'Pomodoro and Timer settings were not saved in the application profile.'
+        $observed = @{
+            cycle_length = $profile.pomodoro.settings.cycle_length
+            preset_saved = @($profile.settings.timer_presets) -contains 35
+            timer_then_break = $profile.settings.timer_then_break
+            focus_sound = $profile.pomodoro.settings.focus_sound
+            focus_sound_breaks = $profile.pomodoro.settings.focus_sound_breaks
+        }
+        $observed | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'pomodoro-settings.json') -Encoding UTF8
+        if ($observed.cycle_length -ne 8 -or !$observed.preset_saved -or !$observed.timer_then_break -or
+            $observed.focus_sound -ne 'white' -or !$observed.focus_sound_breaks) {
+            throw ('Unexpected Pomodoro settings after native input: ' + ($observed | ConvertTo-Json -Compress))
         }
         $pomodoroChecked = $true
     }
