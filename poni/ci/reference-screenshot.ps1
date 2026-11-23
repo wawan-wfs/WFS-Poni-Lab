@@ -143,6 +143,30 @@ public static class PoniPointer {
                         $safeName = $section.ToLowerInvariant() -replace '[^a-z]+','-'
                         Save-Desktop "settings-$safeName.png"
                     }
+                    # The original's search opens the first match when Enter is pressed.
+                    # Use distinct labels for pages farther down the 1024x768 sidebar.
+                    $settingsSearches = [ordered]@{
+                        screentime = 'Track screen time'
+                        'day-progress' = 'Remind me at bedtime'
+                        health = 'Track health'
+                        pomodoro = 'Focus sessions before a long break'
+                        weather = 'Weather city celsius'
+                        todo = 'Mark late tasks as done'
+                        'live-activities' = 'Rotate between activities'
+                        mirror = 'Show mirror'
+                        notifications = 'Show Windows notifications in Poni'
+                    }
+                    foreach ($entry in $settingsSearches.GetEnumerator()) {
+                        [PoniPointer]::SetCursorPos(144, 123) | Out-Null
+                        [PoniPointer]::mouse_event(2, 0, 0, 0, [UIntPtr]::Zero)
+                        [PoniPointer]::mouse_event(4, 0, 0, 0, [UIntPtr]::Zero)
+                        [System.Windows.Forms.SendKeys]::SendWait('^a')
+                        [System.Windows.Forms.SendKeys]::SendWait($entry.Value)
+                        Start-Sleep -Milliseconds 250
+                        [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+                        Start-Sleep -Seconds 2
+                        Save-Desktop "settings-$($entry.Key).png"
+                    }
                 }
             }
         } else {
