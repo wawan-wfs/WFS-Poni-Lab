@@ -92,7 +92,19 @@ public static class PoniPointer {
                 [PoniPointer]::mouse_event(2, 0, 0, 0, [UIntPtr]::Zero)
                 [PoniPointer]::mouse_event(4, 0, 0, 0, [UIntPtr]::Zero)
                 Start-Sleep -Seconds 5
-                Save-Desktop '04-settings.png'
+                Save-Desktop '04-setup-final.png'
+                # Finish first-run setup, then reopen the gear for the regular Settings pages.
+                [PoniPointer]::SetCursorPos(842, 684) | Out-Null
+                [PoniPointer]::mouse_event(2, 0, 0, 0, [UIntPtr]::Zero)
+                [PoniPointer]::mouse_event(4, 0, 0, 0, [UIntPtr]::Zero)
+                Start-Sleep -Seconds 2
+                [PoniPointer]::SetCursorPos(512, 15) | Out-Null
+                Start-Sleep -Seconds 3
+                [PoniPointer]::SetCursorPos(821, 24) | Out-Null
+                [PoniPointer]::mouse_event(2, 0, 0, 0, [UIntPtr]::Zero)
+                [PoniPointer]::mouse_event(4, 0, 0, 0, [UIntPtr]::Zero)
+                Start-Sleep -Seconds 4
+                Save-Desktop '05-settings-general.png'
                 Add-Type -AssemblyName UIAutomationClient
                 Add-Type -AssemblyName UIAutomationTypes
                 $root = [System.Windows.Automation.AutomationElement]::RootElement
@@ -107,9 +119,13 @@ public static class PoniPointer {
                     $details.errors += 'The Poni Settings window was not reported after clicking the gear.'
                 } else {
                     $sections = @('Modules', 'Media', 'Calendar', 'Dock', 'Drop & clipboard', 'About')
+                    $clickable = [System.Windows.Automation.PropertyCondition]::new(
+                        [System.Windows.Automation.AutomationElement]::IsInvokePatternAvailableProperty, $true
+                    )
+                    $buttons = @($settings.FindAll([System.Windows.Automation.TreeScope]::Descendants, $clickable))
+                    $details.observations += @{ stage = 'settings-controls'; buttons = @($buttons | ForEach-Object { $_.Current.Name }) }
                     foreach ($section in $sections) {
-                        $name = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, $section)
-                        $item = $settings.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $name)
+                        $item = $buttons | Where-Object { $_.Current.Name.Trim() -eq $section } | Select-Object -First 1
                         $invoke = $null
                         if ($item -and $item.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invoke)) {
                             $invoke.Invoke()
