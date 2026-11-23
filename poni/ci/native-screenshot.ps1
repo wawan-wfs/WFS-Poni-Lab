@@ -193,12 +193,14 @@ try {
         Find-Setting 'start a break after the timer'
         [System.Windows.Forms.SendKeys]::SendWait(' ')
         Start-Sleep -Seconds 2
-        Find-Setting 'pomodoro background audio noise'
-        [System.Windows.Forms.SendKeys]::SendWait('{DOWN}')
-        Start-Sleep -Seconds 2
         Find-Setting 'keep playing in breaks'
         [System.Windows.Forms.SendKeys]::SendWait(' ')
         Start-Sleep -Seconds 2
+        # Select the sound last because WebView2's native menu can consume the next mouse click.
+        Find-Setting 'pomodoro background audio noise'
+        [System.Windows.Forms.SendKeys]::SendWait('{DOWN}')
+        Start-Sleep -Seconds 2
+        [System.Windows.Forms.SendKeys]::SendWait('{TAB}')
         Save-Screen 'settings-pomodoro.png'
 
         $profile = Get-Content -Raw -LiteralPath $dataPath | ConvertFrom-Json
