@@ -1,3 +1,5 @@
+param([switch]$OpenSettings)
+
 $ErrorActionPreference = 'Stop'
 $outputDir = Join-Path $env:GITHUB_WORKSPACE 'reference-observation'
 New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
@@ -85,6 +87,39 @@ public static class PoniPointer {
             Start-Sleep -Seconds 5
             Save-Desktop '03-hover.png'
             $details.observations += @{ stage = 'pointer-actions'; note = 'Clicked observed defaults link, then hovered near top centre; inspect screenshots to verify outcomes.' }
+            if ($OpenSettings) {
+                [PoniPointer]::SetCursorPos(821, 24) | Out-Null
+                [PoniPointer]::mouse_event(2, 0, 0, 0, [UIntPtr]::Zero)
+                [PoniPointer]::mouse_event(4, 0, 0, 0, [UIntPtr]::Zero)
+                Start-Sleep -Seconds 5
+                Save-Desktop '04-settings.png'
+                Add-Type -AssemblyName UIAutomationClient
+                Add-Type -AssemblyName UIAutomationTypes
+                $root = [System.Windows.Automation.AutomationElement]::RootElement
+                $processIdCondition = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::ProcessIdProperty, $process.Id)
+                $windows = @($root.FindAll([System.Windows.Automation.TreeScope]::Children, $processIdCondition))
+                $details.observations += @{
+                    stage = 'settings'
+                    windows = @($windows | ForEach-Object { $_.Current.Name })
+                }
+                $settings = $windows | Where-Object { $_.Current.Name -match 'Settings' } | Select-Object -First 1
+                if (!$settings) {
+                    $details.errors += 'The Poni Settings window was not reported after clicking the gear.'
+                } else {
+                    $sections = @('Modules', 'Media', 'Calendar', 'Dock', 'Drop & clipboard', 'About')
+                    foreach ($section in $sections) {
+                        $name = [System.Windows.Automation.PropertyCondition]::new([System.Windows.Automation.AutomationElement]::NameProperty, $section)
+                        $item = $settings.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $name)
+                        $invoke = $null
+                        if ($item -and $item.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invoke)) {
+                            $invoke.Invoke()
+                            Start-Sleep -Milliseconds 750
+                            $safeName = $section.ToLowerInvariant() -replace '[^a-z]+','-'
+                            Save-Desktop "settings-$safeName.png"
+                        }
+                    }
+                }
+            }
         } else {
             $details.errors += 'Pointer actions skipped because the expected desktop size or process was unavailable.'
         }

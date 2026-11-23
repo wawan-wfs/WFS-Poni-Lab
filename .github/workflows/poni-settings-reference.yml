@@ -1,0 +1,33 @@
+name: Poni 1.8.1 Settings observation
+on:
+  workflow_dispatch:
+  push:
+    branches: [poni/rebuild]
+    paths:
+      - .github/workflows/poni-settings-reference.yml
+      - poni/ci/reference-screenshot.ps1
+permissions:
+  contents: read
+jobs:
+  observe:
+    runs-on: windows-2022
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: poni-reference
+          sparse-checkout: reference
+          persist-credentials: false
+      - name: Open the original Settings window
+        shell: pwsh
+        run: ./poni/ci/reference-screenshot.ps1 -OpenSettings
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: poni-original-settings
+          path: reference-observation/
+          retention-days: 14
