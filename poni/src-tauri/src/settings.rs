@@ -1,7 +1,7 @@
 use crate::Store;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, sync::Mutex};
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 
 const MODULES: &[&str] = &[
     "home",
@@ -47,6 +47,14 @@ enum MirrorShape {
     Circle,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub(super) enum WeekStart {
+    Windows,
+    Monday,
+    Sunday,
+}
+
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(default)]
 pub(super) struct PoniSettings {
@@ -58,6 +66,9 @@ pub(super) struct PoniSettings {
     module_shortcuts: bool,
     mirror_enabled: bool,
     mirror_shape: MirrorShape,
+    pub(super) calendar_enabled: bool,
+    pub(super) meeting_reminder_minutes: u16,
+    pub(super) week_start: WeekStart,
     module_order: Vec<String>,
     hidden_modules: Vec<String>,
     default_module: String,
@@ -76,6 +87,9 @@ impl Default for PoniSettings {
             module_shortcuts: true,
             mirror_enabled: true,
             mirror_shape: MirrorShape::Rounded,
+            calendar_enabled: true,
+            meeting_reminder_minutes: 5,
+            week_start: WeekStart::Windows,
             module_order: MODULES.iter().map(|id| (*id).to_string()).collect(),
             hidden_modules: Vec::new(),
             default_module: "home".into(),
@@ -96,6 +110,9 @@ pub(super) struct SettingsPatch {
     module_shortcuts: Option<bool>,
     mirror_enabled: Option<bool>,
     mirror_shape: Option<MirrorShape>,
+    calendar_enabled: Option<bool>,
+    meeting_reminder_minutes: Option<u16>,
+    week_start: Option<WeekStart>,
     module_order: Option<Vec<String>>,
     hidden_modules: Option<Vec<String>>,
     default_module: Option<String>,
@@ -120,6 +137,7 @@ impl PoniSettings {
     fn normalize(&mut self) {
         self.hover_delay = self.hover_delay.min(800);
         self.close_delay = self.close_delay.min(1500);
+        self.meeting_reminder_minutes = self.meeting_reminder_minutes.min(30);
         normalize_list(&mut self.module_order);
         normalize_list(&mut self.hidden_modules);
         for id in MODULES {
@@ -148,7 +166,7 @@ impl PoniSettings {
         }
     }
 
-    fn visible(&self, id: &str) -> bool {
+    pub(super) fn visible(&self, id: &str) -> bool {
         known(id) && self.hidden_modules.iter().all(|hidden| hidden != id)
     }
 
@@ -157,6 +175,12 @@ impl PoniSettings {
             || patch.close_delay.is_some_and(|ms| ms > 1500)
         {
             return Err("Choose a delay within the displayed range".into());
+        }
+        if patch
+            .meeting_reminder_minutes
+            .is_some_and(|minutes| minutes > 30)
+        {
+            return Err("Choose a meeting reminder between 0 and 30 minutes".into());
         }
         if patch
             .module_order
@@ -196,6 +220,11 @@ impl PoniSettings {
         self.module_shortcuts = patch.module_shortcuts.unwrap_or(self.module_shortcuts);
         self.mirror_enabled = patch.mirror_enabled.unwrap_or(self.mirror_enabled);
         self.mirror_shape = patch.mirror_shape.unwrap_or(self.mirror_shape);
+        self.calendar_enabled = patch.calendar_enabled.unwrap_or(self.calendar_enabled);
+        self.meeting_reminder_minutes = patch
+            .meeting_reminder_minutes
+            .unwrap_or(self.meeting_reminder_minutes);
+        self.week_start = patch.week_start.unwrap_or(self.week_start);
         self.remember_module = patch.remember_module.unwrap_or(self.remember_module);
         self.normalize();
         Ok(())
@@ -212,12 +241,17 @@ pub(super) fn get_poni_settings(store: State<'_, Mutex<Store>>) -> Result<PoniSe
 
 #[tauri::command]
 pub(super) fn set_poni_settings(
+    app: AppHandle,
     store: State<'_, Mutex<Store>>,
     patch: SettingsPatch,
 ) -> Result<PoniSettings, String> {
-    let mut store = store.lock().map_err(|_| "Storage unavailable")?;
-    let updated = store.update(|data| data.settings.apply(patch))?;
-    Ok(updated.settings)
+    let result = store
+        .lock()
+        .map_err(|_| "Storage unavailable")?
+        .update(|data| data.settings.apply(patch))?
+        .settings;
+    let _ = app.emit_to("main", "poni-settings-changed", &result);
+    Ok(result)
 }
 
 #[tauri::command]
@@ -273,5 +307,37 @@ mod tests {
         };
         assert!(settings.apply(invalid_delay).is_err());
         assert_eq!(settings.hover_delay, 0);
+    }
+
+    #[test]
+    fn calendar_defaults_migrate_and_accept_the_original_reminder_range() {
+        let mut settings: PoniSettings = serde_json::from_str("{}").unwrap();
+        assert!(settings.calendar_enabled);
+        assert_eq!(settings.meeting_reminder_minutes, 5);
+        assert_eq!(settings.week_start, WeekStart::Windows);
+
+        let patch = serde_json::from_str(
+            r#"{"calendar_enabled":false,"meeting_reminder_minutes":0,"week_start":"sunday"}"#,
+        )
+        .unwrap();
+        settings.apply(patch).unwrap();
+        assert!(!settings.calendar_enabled);
+        assert_eq!(settings.meeting_reminder_minutes, 0);
+        assert_eq!(settings.week_start, WeekStart::Sunday);
+        let saved = serde_json::to_value(&settings).unwrap();
+        assert_eq!(saved["week_start"], "sunday");
+
+        settings
+            .apply(SettingsPatch {
+                meeting_reminder_minutes: Some(30),
+                ..SettingsPatch::default()
+            })
+            .unwrap();
+        let invalid = SettingsPatch {
+            meeting_reminder_minutes: Some(31),
+            ..SettingsPatch::default()
+        };
+        assert!(settings.apply(invalid).is_err());
+        assert_eq!(settings.meeting_reminder_minutes, 30);
     }
 }

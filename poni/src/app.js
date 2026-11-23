@@ -21,6 +21,7 @@ let searchRequest = 0;
 let systemPending = false;
 let calendarDay = null;
 let calendarToday = null;
+let regionalFirstWeekday = 1;
 let selectedDate = new Date();
 selectedDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate());
 let displayedMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
@@ -33,7 +34,7 @@ let preferences = {
   hover_delay: 0, close_delay: 450, module_shortcuts: true,
   module_order: [], hidden_modules: [], default_module: 'home',
   remember_module: false, last_module: null,
-  mirror_enabled: true, mirror_shape: 'rounded'
+  mirror_enabled: true, mirror_shape: 'rounded', calendar_enabled: true, week_start: 'windows'
 };
 const mountedModules = new Set();
 let activePage = 'home';
@@ -56,17 +57,18 @@ function setOpen(value) {
   open.hidden = !value;
   closed.setAttribute('aria-expanded', String(value));
   updatePanelSize(value, value && keyboardOpen);
-  if (value) callModule('show');
+  if (value) {
+    moduleTabs.get(activePage)?.scrollIntoView({block:'nearest', inline:'nearest'});
+    callModule('show');
+  }
   if (value) void refreshMedia();
   if (value) void refreshSystem();
 }
 function updatePanelSize(isOpen, focus = false) {
   const tall = isOpen && isTallPage(activePage);
-  const settingsView = isOpen && activePage === 'settings';
   open.classList.toggle('tall', tall);
-  open.classList.toggle('settings-view', settingsView);
   const seq = ++panelSequence;
-  panelReady.then(() => invoke('set_panel_open', { session: panelSession, open: isOpen, tall, settingsView, focus, seq }))
+  panelReady.then(() => invoke('set_panel_open', { session: panelSession, open: isOpen, tall, focus, seq }))
     .catch(error => { status.textContent = String(error); });
 }
 
@@ -93,15 +95,53 @@ function applyPreferences(value) {
     if (!selectModule(preferences.default_module)) navigation.querySelector('.tab:not([hidden])')?.click();
   }
   document.querySelector('#header-clock').hidden = !preferences.header_clock;
+  document.querySelector('#home-calendar').hidden = !preferences.calendar_enabled;
   window.poniMirror?.configure({enabled:preferences.mirror_enabled, shape:preferences.mirror_shape});
   updateClock();
+  refreshWeekLayout();
 }
 
+function firstWeekday() {
+  if (preferences.week_start === 'monday') return 1;
+  if (preferences.week_start === 'sunday') return 0;
+  return regionalFirstWeekday;
+}
+
+function refreshWeekLayout() {
+  const first = firstWeekday();
+  const list = document.querySelector('#task-repeat-days');
+  for (let offset = 0; offset < 7; offset++) {
+    list.append(repeatDays[(first + offset) % 7].parentElement);
+  }
+  if (activePage === 'calendar') renderMonthCalendar();
+  if (activePage === 'dayprogress') renderDayProgress();
+}
+
+invoke('calendar_first_weekday').then(day => {
+  if (day == null) {
+    // Some WebViews expose the locale default when starting the app outside Windows.
+    const locale = new Intl.Locale(Intl.DateTimeFormat().resolvedOptions().locale);
+    const first = (locale.getWeekInfo?.() || locale.weekInfo)?.firstDay;
+    if (Number.isInteger(first) && first >= 1 && first <= 7) day = first % 7;
+  }
+  if (!Number.isInteger(day) || day < 0 || day > 6) return;
+  regionalFirstWeekday = day;
+  refreshWeekLayout();
+}).catch(error => { status.textContent = String(error); });
+
 window.poniMirror?.mount(document.querySelector('#mirror'));
-window.addEventListener('poni-settings-changed', event => applyPreferences(event.detail));
+window.__TAURI__.event.listen('poni-settings-changed', event => applyPreferences(event.payload))
+  .catch(error => { status.textContent = String(error); });
+window.__TAURI__.event.listen('poni-settings-open-module', event => {
+  if (!moduleTabs.has(event.payload) || moduleTabs.get(event.payload).hidden) return;
+  keyboardOpen = true;
+  setOpen(true);
+  selectModule(event.payload);
+  updatePanelSize(true, true);
+}).catch(error => { status.textContent = String(error); });
 
 function isTallPage(page) {
-  return page === 'tasks' || page === 'dayprogress' || Object.hasOwn(modules, page);
+  return page === 'tasks' || page === 'calendar' || page === 'dayprogress' || Object.hasOwn(modules, page);
 }
 
 function callModule(method) {
@@ -128,11 +168,23 @@ closed.addEventListener('pointerenter', () => {
 });
 closed.addEventListener('pointerleave', () => clearTimeout(hoverTimer));
 document.querySelector('#close').addEventListener('click', () => setOpen(false));
+const settingsGear = document.getElementById('settings-gear');
+settingsGear.addEventListener('click', async () => {
+  settingsGear.disabled = true;
+  try {
+    await invoke('open_poni_settings');
+    setOpen(false);
+  } catch (error) {
+    status.textContent = String(error);
+  } finally {
+    settingsGear.disabled = false;
+  }
+});
 surface.addEventListener('pointerenter', () => clearTimeout(closeTimer));
 surface.addEventListener('pointerleave', () => {
   clearTimeout(closeTimer);
   closeTimer = setTimeout(() => {
-    if (!keyboardOpen && activePage !== 'settings' && !surface.matches(':hover') && !document.activeElement.matches('input, textarea, select, [contenteditable="true"]')) setOpen(false);
+    if (!keyboardOpen && !surface.matches(':hover') && !document.activeElement.matches('input, textarea, select, [contenteditable="true"]')) setOpen(false);
   }, preferences.close_delay);
 });
 window.__TAURI__.event.listen('poni-toggle', () => {
@@ -146,7 +198,7 @@ invoke('shortcut_status').then(available => {
 document.addEventListener('keydown', event => {
   if (open.hidden) return;
   if (event.key === 'Escape') { setOpen(false); return; }
-  if (!keyboardOpen || !preferences.module_shortcuts || activePage === 'settings' ||
+  if (!keyboardOpen || !preferences.module_shortcuts ||
       event.target.matches('input, textarea, select') || event.target.isContentEditable) return;
   if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
   const tabs = [...navigation.querySelectorAll('.tab:not([hidden])')];
@@ -170,11 +222,11 @@ document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', (
   tab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   open.querySelector('main').scrollTop = 0;
   if (!open.hidden && previousPage !== activePage) {
-    if (previousPage === 'settings' || activePage === 'settings' || isTallPage(previousPage) !== isTallPage(activePage)) {
-      updatePanelSize(true, activePage === 'settings');
+    if (isTallPage(previousPage) !== isTallPage(activePage)) {
+      updatePanelSize(true);
     }
     callModule('show');
-    if (activePage !== 'settings' && preferences.remember_module) {
+    if (preferences.remember_module) {
       const selected = activePage;
       preferences = { ...preferences, last_module: selected };
       clearTimeout(rememberTimer);
@@ -254,7 +306,7 @@ function renderDayProgress(now = new Date()) {
   document.querySelector('#day-remaining').textContent = left ? `of your day · ${Math.floor(left / 3600000)}h ${Math.floor(left % 3600000 / 60000)}m until bedtime` : 'of your day · past bedtime';
   renderDayAgenda(wake, bed);
   const week = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  week.setDate(week.getDate() - (week.getDay() + 6) % 7);
+  week.setDate(week.getDate() - (week.getDay() - firstWeekday() + 7) % 7);
   const weekEnd = new Date(week); weekEnd.setDate(weekEnd.getDate() + 7);
   const periods = [
     ['Week', week, weekEnd],
@@ -375,6 +427,17 @@ function mutate(command, args) {
   });
   queue = operation.catch(error => { status.textContent = String(error); return false; });
   return queue;
+}
+
+function importCalendarFile(text) {
+  const operation = queue.then(async () => {
+    const result = await invoke('import_calendar_ics', {text});
+    data = result.data;
+    render();
+    return result.summary;
+  });
+  queue = operation.catch(() => {});
+  return operation;
 }
 
 function action(label, handler) {
@@ -549,9 +612,15 @@ function hijriRange(date, offset) {
 function renderMonthCalendar() {
   const grid = document.querySelector('#calendar-grid'); grid.replaceChildren();
   document.querySelector('#calendar-month').textContent = new Intl.DateTimeFormat(undefined, { month:'long', year:'numeric' }).format(displayedMonth);
-  for (let i = 0; i < 7; i++) { const day = document.createElement('span'); day.textContent = new Intl.DateTimeFormat(undefined, {weekday:'narrow'}).format(new Date(2024, 0, 1 + i)); grid.append(day); }
-  const lead = (displayedMonth.getDay() + 6) % 7;
-  const events = data.calendar_events || [];
+  const first = firstWeekday();
+  const weekdayLabel = new Intl.DateTimeFormat(undefined, {weekday:'short'});
+  for (let i = 0; i < 7; i++) {
+    const day = document.createElement('span');
+    const date = new Date(2024, 0, 7 + (first + i) % 7);
+    day.textContent = weekdayLabel.format(date);
+    grid.append(day);
+  }
+  const lead = (displayedMonth.getDay() - first + 7) % 7;
   for (let i = 0; i < 42; i++) {
     const date = new Date(displayedMonth.getFullYear(), displayedMonth.getMonth(), 1 - lead + i);
     const end = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1).getTime();
@@ -747,3 +816,4 @@ document.querySelector('#weather-search').addEventListener('submit', async event
 });
 
 queue = invoke('get_data').then(saved => { data = saved; applyPreferences(data.settings); render(); if (data.weather_location) void loadWeather(data.weather_location); }).catch(error => { status.textContent = String(error); });
+window.poniIcsImport?.mount(document.getElementById('calendar-import'), importCalendarFile);

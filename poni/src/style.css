@@ -21,8 +21,11 @@ main { height: 135px; overflow: auto; }
 .home { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding-top: 14px; }
 .home:has(#mirror:not([hidden])) { grid-template-columns: minmax(0,1.6fr) minmax(0,1fr) 104px; gap:16px; }
 #mirror { align-self:center; }
-.settings-gear { font-size:17px; }
-.open.settings-view { border-radius:0 0 17px 17px; }
+.settings-gear { border:0; background:transparent; border-radius:8px; color:#98989f; padding:5px 9px; font-size:17px; }
+.settings-gear:hover { background:#303034; color:#fff; }
+.home:has(#home-calendar[hidden]) { grid-template-columns: minmax(0,1fr); }
+.home:has(#home-calendar[hidden]):has(#mirror:not([hidden])) { grid-template-columns: minmax(0,1fr) 104px; }
+.settings-window { margin:0; width:100%; height:100%; background:#111114; }
 .media { display: flex; gap: 12px; align-items: flex-start; }
 .album { display: grid; place-items: center; width: 60px; height: 60px; border-radius: 14px; background: #202023; color: #727279; font-size: 32px; flex: none; }
 .media strong, .calendar strong { font-size: 15px; }
@@ -62,6 +65,9 @@ main { height: 135px; overflow: auto; }
 .calendar-form input, .calendar-form select { font-size:11px; padding:4px; flex:1 1 90px; width:auto; min-width:0; }
 .calendar-form select { background:#1f2023; color:#fff; border:1px solid #353539; border-radius:8px; }
 .calendar-form button { font-size:11px; }
+#calendar-import { margin:8px 0; font-size:12px; color:#bbb; }
+#calendar-import label, #calendar-import output { display:block; }
+#calendar-import input { max-width:260px; }
 .entry, .note-form { display: flex; gap: 8px; margin: 8px 0; }
 input, textarea { background: #1f2023; color: #fff; border: 1px solid #353539; border-radius: 8px; padding: 8px; width: 100%; }
 textarea { resize: vertical; min-height: 55px; }

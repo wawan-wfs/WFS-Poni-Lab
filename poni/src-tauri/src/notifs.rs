@@ -14,6 +14,7 @@ pub(super) enum Source {
     Todo,
     Timer,
     Pomodoro,
+    Calendar,
 }
 
 #[derive(Clone, Deserialize, Serialize)]

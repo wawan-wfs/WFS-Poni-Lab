@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const sources = { todo: 'Todo', timer: 'Timer', pomodoro: 'Pomodoro' };
+  const sources = { todo: 'Todo', timer: 'Timer', pomodoro: 'Pomodoro', calendar: 'Calendar' };
   const shortTime = new Intl.DateTimeFormat(undefined, {hour: 'numeric', minute: '2-digit'});
   const fullDay = new Intl.DateTimeFormat(undefined, {dateStyle: 'medium'});
   let elements;

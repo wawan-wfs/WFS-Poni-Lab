@@ -20,7 +20,7 @@
       { id: 'dashboard', title: 'Dashboard', icon: '⊞', color: 'blue', link: 'dashboard',
         hint: 'Choose and reorder your Dashboard widgets.' },
       { id: 'calendar', title: 'Calendar', icon: '▤', color: 'red', link: 'calendar',
-        hint: 'Manage local events and Hijri date correction.' },
+        hint: 'Calendar display, meeting reminders, and the first day of the week.' },
       { id: 'weather', title: 'Weather', icon: '☀', color: 'cyan', link: 'weather',
         hint: 'Search for your city and choose the forecast location.' },
       { id: 'prayer', title: 'Prayer Times', icon: '◒', color: 'green', link: 'prayer',
@@ -64,6 +64,9 @@
     ['modules', 'Remember the last module', 'startup restore last tab', 'remember-module'],
     ['mirror', 'Show the Mirror on Home', 'camera webcam local video', 'mirror-enabled'],
     ['mirror', 'Mirror shape', 'rounded circle camera', 'mirror-shape'],
+    ['calendar', 'Show calendar', 'calendar visibility home kalender', 'calendar-enabled'],
+    ['calendar', 'Meeting reminder', 'calendar notification event minutes pertemuan pengingat', 'meeting-reminder'],
+    ['calendar', 'Week starts on', 'calendar first day monday sunday minggu senin awal pekan', 'week-start'],
   ];
 
   const option = (label, value) => {
@@ -163,7 +166,7 @@
     row(container, title, description, input);
   }
 
-  function delay(container, id, title, key, max, step, disabled = false) {
+  function range(container, id, title, key, { max, step, disabled = false, unit, spokenUnit, description }) {
     const box = create('span', 'settings-range');
     const input = create('input');
     const output = create('span', 'settings-range-value');
@@ -176,14 +179,18 @@
     input.value = settings[key];
     input.disabled = disabled;
     const showValue = () => {
-      output.textContent = input.value + ' ms';
-      input.setAttribute('aria-valuetext', input.value + ' milliseconds');
+      output.textContent = input.value + ' ' + unit;
+      input.setAttribute('aria-valuetext', input.value + ' ' + spokenUnit);
     };
     showValue();
     input.addEventListener('input', showValue);
     input.addEventListener('change', () => void change({ [key]: Number(input.value) }, id));
     box.append(input, output);
-    row(container, title, null, box);
+    row(container, title, description, box);
+  }
+
+  function delay(container, id, title, key, max, step, disabled = false) {
+    range(container, id, title, key, { max, step, disabled, unit: 'ms', spokenUnit: 'milliseconds' });
   }
 
   function general(content) {
@@ -208,6 +215,20 @@
       'Open the Mirror from Home to preview your camera.', 'mirror_enabled');
     select(controls, 'mirror-shape', 'Mirror shape', null, 'mirror_shape',
       [['rounded', 'Rounded'], ['circle', 'Circle']], !settings.mirror_enabled);
+  }
+
+  function calendar(content) {
+    const controls = group(content);
+    toggle(controls, 'calendar-enabled', 'Show calendar', null, 'calendar_enabled');
+    range(controls, 'meeting-reminder', 'Meeting reminder', 'meeting_reminder_minutes', {
+      max: 30, step: 1, unit: 'min', spokenUnit: 'minutes',
+      description: 'Poni pops up this many minutes before a local event (0 = off).',
+    });
+    select(controls, 'week-start', 'Week starts on',
+      'Applies to the Calendar tab and Day Progress.',
+      'week_start', [['windows', 'As in Windows'], ['monday', 'Monday'], ['sunday', 'Sunday']]);
+    const hidden = settings.hidden_modules.includes('calendar');
+    content.append(button(hidden ? 'Show Calendar in Modules' : 'Open Calendar', () => void openLink('calendar')));
   }
 
   function move(id, target, after = false, focusId = null) {
@@ -290,13 +311,23 @@
       'Otherwise Poni opens the default module.', 'remember_module');
   }
 
-  function openLink(id) {
+  async function openLink(id) {
     const trigger = document.querySelector('.tab[data-page="' + id + '"]');
-    if (!trigger || trigger.hidden || settings.hidden_modules.includes(id)) {
+    if (trigger?.hidden || settings.hidden_modules.includes(id)) {
       choose('modules', 'visible-' + id);
       return;
     }
-    trigger.click();
+    if (trigger) {
+      trigger.click();
+      return;
+    }
+    try {
+      await window.__TAURI__.core.invoke('show_poni_module', { module: id });
+    } catch (error) {
+      await refresh();
+      if (settings?.hidden_modules.includes(id)) choose('modules', 'visible-' + id);
+      else banner.textContent = String(error);
+    }
   }
 
   function feature(content, page) {
@@ -305,9 +336,9 @@
     const title = names[page.link] || page.title;
     const hidden = settings.hidden_modules.includes(page.link);
     content.append(button(hidden ? 'Show ' + title + ' in Modules' : 'Open ' + title,
-      () => openLink(page.link)));
+      () => void openLink(page.link)));
     if (page.id === 'chat') {
-      content.append(button('Open Translate', () => openLink('translate')));
+      content.append(button('Open Translate', () => void openLink('translate')));
     }
   }
 
@@ -359,6 +390,7 @@
         if (active === 'general') general(controls);
         else if (active === 'modules') modules(controls);
         else if (active === 'mirror') mirror(controls);
+        else if (active === 'calendar') calendar(controls);
         else feature(controls, current);
       }
     }

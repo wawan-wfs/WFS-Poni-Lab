@@ -11,12 +11,14 @@ use uuid::Uuid;
 mod aiusage;
 mod bluetooth;
 mod bookmarks;
+mod calendar_reminders;
 mod chat;
 mod control;
 mod currency;
 mod dashboard;
 mod github;
 mod health;
+mod ics_import;
 mod notes;
 mod notifs;
 mod pomodoro;
@@ -268,6 +270,7 @@ impl Timer {
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 struct AppData {
+    calendar_reminder_ledger: calendar_reminders::ReminderLedger,
     settings: settings::PoniSettings,
     ai_usage: aiusage::AiUsage,
     chat: chat::ChatData,
@@ -1026,17 +1029,11 @@ fn stopwatch_action(store: State<'_, Mutex<Store>>, action: String) -> Result<Ap
         })
 }
 
-fn resize_panel(
-    window: &tauri::WebviewWindow,
-    open: bool,
-    tall: bool,
-    settings_view: bool,
-) -> Result<(), String> {
-    let (mut width, mut height): (f64, f64) = match (open, tall, settings_view) {
-        (true, _, true) => (900.0, 640.0),
-        (true, true, _) => (680.0, 420.0),
-        (true, false, _) => (680.0, 200.0),
-        (false, _, _) => (200.0, 32.0),
+fn resize_panel(window: &tauri::WebviewWindow, open: bool, tall: bool) -> Result<(), String> {
+    let (mut width, mut height): (f64, f64) = match (open, tall) {
+        (true, true) => (680.0, 420.0),
+        (true, false) => (680.0, 200.0),
+        (false, _) => (200.0, 32.0),
     };
     let monitor = window.current_monitor().map_err(|e| e.to_string())?;
     if let Some(monitor) = &monitor {
@@ -1066,7 +1063,7 @@ fn initialize_panel(
     session: Uuid,
 ) -> Result<(), String> {
     let mut state = sequence.lock().map_err(|_| "Window state unavailable")?;
-    resize_panel(&window, false, false, false)?;
+    resize_panel(&window, false, false)?;
     state.session = Some(session);
     state.last = 0;
     Ok(())
@@ -1079,7 +1076,6 @@ fn set_panel_open(
     session: Uuid,
     open: bool,
     tall: bool,
-    settings_view: Option<bool>,
     focus: bool,
     seq: u64,
 ) -> Result<(), String> {
@@ -1087,12 +1083,77 @@ fn set_panel_open(
     if state.session != Some(session) || seq <= state.last {
         return Ok(());
     }
-    resize_panel(&window, open, tall, settings_view.unwrap_or_default())?;
+    resize_panel(&window, open, tall)?;
     if open && focus {
         window.set_focus().map_err(|e| e.to_string())?;
     }
     state.last = seq;
     Ok(())
+}
+
+#[tauri::command]
+async fn open_poni_settings(app: tauri::AppHandle) -> Result<(), String> {
+    let window = if let Some(window) = app.get_webview_window("settings") {
+        window
+    } else {
+        tauri::WebviewWindowBuilder::new(
+            &app,
+            "settings",
+            tauri::WebviewUrl::App("settings.html".into()),
+        )
+        .title("Poni Settings")
+        .inner_size(900.0, 700.0)
+        .min_inner_size(530.0, 420.0)
+        .center()
+        .build()
+        .map_err(|error| error.to_string())?
+    };
+    window.show().map_err(|error| error.to_string())?;
+    if window.is_minimized().map_err(|error| error.to_string())? {
+        window.unminimize().map_err(|error| error.to_string())?;
+    }
+    window.set_focus().map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn show_poni_module(
+    app: tauri::AppHandle,
+    store: State<'_, Mutex<Store>>,
+    module: String,
+) -> Result<(), String> {
+    let visible = store
+        .lock()
+        .map_err(|_| "Storage unavailable")?
+        .data
+        .settings
+        .visible(&module);
+    if !visible {
+        return Err("Enable this module in Settings before opening it".into());
+    }
+    app.emit_to("main", "poni-settings-open-module", module)
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn calendar_first_weekday() -> Option<u8> {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::Globalization::{GetLocaleInfoEx, LOCALE_IFIRSTDAYOFWEEK};
+        let mut value = [0u16; 4];
+        let written = unsafe {
+            GetLocaleInfoEx(
+                std::ptr::null(),
+                LOCALE_IFIRSTDAYOFWEEK,
+                value.as_mut_ptr(),
+                value.len() as i32,
+            )
+        };
+        if written == 2 && (u16::from(b'0')..=u16::from(b'6')).contains(&value[0]) {
+            // Windows returns Monday as 0. The calendar renderer uses Sunday as 0.
+            return Some(((value[0] - u16::from(b'0') + 1) % 7) as u8);
+        }
+    }
+    None
 }
 
 fn main() {
@@ -1130,6 +1191,7 @@ fn main() {
                     let now_ms = now.as_millis() as u64;
                     notify_due(&handle, now_ms);
                     pomodoro::tick(&handle, now_ms);
+                    calendar_reminders::tick(&handle, now_ms);
                     screentime::sample(&handle);
                 }
                 std::thread::sleep(std::time::Duration::from_secs(15));
@@ -1146,6 +1208,10 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             settings::get_poni_settings,
+            open_poni_settings,
+            show_poni_module,
+            calendar_first_weekday,
+            ics_import::import_calendar_ics,
             settings::set_poni_settings,
             settings::remember_poni_module,
             aiusage::ai_usage_state,

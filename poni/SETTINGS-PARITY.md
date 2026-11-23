@@ -20,6 +20,8 @@ Tangkapan `native-observation/settings.png` memperlihatkan Settings Rust yang di
 
 Baseline memiliki 25 kontrol standar dengan padanan sebagian dan 176 tanpa padanan. Panel Settings Rust kini menambahkan pilihan baru untuk `hoverDelay`, `mirrorEnabled`, dan `mirrorShape`, serta memperluas padanan untuk `headerClock`, `clock24h`, `openOnHover`, `closeDelay`, dan `moduleShortcuts`. Dengan klasifikasi yang sama, 173 kontrol standar masih belum memiliki padanan. Bagian Modules yang dibuat dengan renderer khusus juga kini memiliki pengaturan urutan, visibilitas, modul awal dan riwayat modul terakhir. Daftar di bawah mempertahankan status baseline untuk melacak perbedaan.
 
+Putaran Calendar memindahkan Settings Rust ke jendela terpisah dan menambahkan `meetingReminderMinutes`, serta memperluas padanan untuk `calendarEnabled` dan `weekStart`. Dengan metode hitung yang sama, **172 dari 201 kontrol standar** masih belum memiliki padanan. Pengaturan minggu berlaku untuk Calendar, pemilih hari pengulangan di Todo, dan Day Progress. Impor ICS lokal tersedia untuk acara berjam yang didukung. Langganan URL belum dibuat.
+
 | Jenis kontrol | Deklarasi | Masuk katalog build |
 | --- | ---: | ---: |
 | Sakelar | 115 | 115 |

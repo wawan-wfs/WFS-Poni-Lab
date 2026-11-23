@@ -45,8 +45,7 @@
   <script src="worldclock.js" defer></script>
   <link rel="stylesheet" href="mirror.css">
   <script src="mirror.js" defer></script>
-  <link rel="stylesheet" href="settings.css">
-  <script src="settings.js" defer></script>
+  <script src="ics-import.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -83,13 +82,13 @@
           <button class="tab" data-page="currency" title="Currency" aria-label="Currency">¤ <span>Currency</span></button>
         </nav>
         <time class="clock" id="header-clock">--:--</time>
-        <button class="tab settings-gear" type="button" id="settings-gear" data-page="settings" title="Settings" aria-label="Settings">⚙</button>
+        <button class="settings-gear" type="button" id="settings-gear" title="Settings" aria-label="Settings">⚙</button>
         <button class="close" id="close" aria-label="Close panel">×</button>
       </header>
       <main>
         <section id="page-home" class="page home">
           <div class="media"><div class="album" aria-hidden="true">♫</div><div class="media-info"><strong id="media-title">Nothing playing</strong><p id="media-artist">Play something in a media player</p><div class="media-progress" aria-hidden="true"><div id="media-progress-fill"></div></div><div class="media-controls"><button type="button" data-media="previous" aria-label="Previous track">◀◀</button><button type="button" data-media="toggle" aria-label="Play or pause">▶</button><button type="button" data-media="next" aria-label="Next track">▶▶</button></div></div></div>
-          <div class="calendar"><strong id="month"></strong><div id="week" class="week" aria-label="Next seven days"></div><div id="home-events" class="calendar-empty"></div></div>
+          <div class="calendar" id="home-calendar"><strong id="month"></strong><div id="week" class="week" aria-label="Next seven days"></div><div id="home-events" class="calendar-empty"></div></div>
           <div id="mirror"></div>
         </section>
         <section id="page-tasks" class="page" hidden>
@@ -104,6 +103,7 @@
         <section id="page-calendar" class="page" hidden>
           <div class="calendar-layout"><div><div class="calendar-navigation"><button type="button" id="calendar-prev" aria-label="Previous month">‹</button><strong id="calendar-month"></strong><button type="button" id="calendar-next" aria-label="Next month">›</button></div><div id="calendar-grid" class="calendar-grid"></div><div id="calendar-hijri-range" class="hijri-date"></div></div>
           <div><strong id="calendar-selected"></strong><div id="calendar-hijri-day" class="hijri-date"></div><label class="hijri-setting">Hijri correction <select id="hijri-offset" aria-label="Hijri date correction"><option value="-2">−2 days</option><option value="-1">−1 day</option><option value="0">Umm al-Qura</option><option value="1">+1 day</option><option value="2">+2 days</option></select></label><div id="calendar-items"></div><form id="calendar-form" class="calendar-form"><input id="event-title" placeholder="Event title" maxlength="200" aria-label="Event title" required><input id="event-start" type="datetime-local" aria-label="Event start" required><input id="event-duration" type="number" min="1" max="1440" value="30" aria-label="Duration in minutes" required><select id="event-repeat" aria-label="Repeat event"><option value="none">Once</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="yearly">Yearly</option></select><input id="event-location" placeholder="Location" maxlength="500" aria-label="Event location"><button type="submit" id="event-submit">Add event</button><button type="button" id="event-cancel" hidden>Cancel</button></form></div></div>
+          <div id="calendar-import"></div>
         </section>
         <section id="page-timer" class="page" hidden>
           <div class="timer-modes"><button type="button" class="timer-mode active" data-timer-mode="countdown">Timer</button><button type="button" class="timer-mode" data-timer-mode="stopwatch">Stopwatch</button></div>
@@ -150,7 +150,6 @@
         <section id="page-aiusage" class="page" hidden></section>
         <section id="page-bluetooth" class="page" hidden></section>
         <section id="page-chat" class="page" hidden></section>
-        <section id="page-settings" class="page" hidden></section>
       </main>
       <p id="status" role="status" aria-live="polite"></p>
     </div>

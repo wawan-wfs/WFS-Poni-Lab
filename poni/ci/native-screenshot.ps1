@@ -9,6 +9,9 @@ public static class CursorPosition {
     [DllImport("user32.dll")] public static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
     [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(System.IntPtr window, out Rect rect);
+    [DllImport("user32.dll", EntryPoint="FindWindowW", CharSet=CharSet.Unicode)] public static extern System.IntPtr FindWindow(string className, string title);
+    [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr window, out uint processId);
+    [DllImport("user32.dll", EntryPoint="PostMessageW")] public static extern bool PostMessage(System.IntPtr window, uint message, System.IntPtr wParam, System.IntPtr lParam);
     [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left, Top, Right, Bottom; }
 }
 '@
@@ -125,18 +128,31 @@ try {
         Start-Sleep -Seconds 5
         Save-Screen 'system.png'
     }
+    $mainHandle = $process.MainWindowHandle
     Click-Point ($rect.Right - 93) ($rect.Top + 25)
-    Start-Sleep -Seconds 3
+    $settingsHandle = [IntPtr]::Zero
+    for ($attempt = 0; $attempt -lt 8 -and $settingsHandle -eq [IntPtr]::Zero; $attempt++) {
+        Start-Sleep -Milliseconds 750
+        $settingsHandle = [CursorPosition]::FindWindow($null, 'Poni Settings')
+    }
+    Save-Screen 'settings.png'
+    if ($settingsHandle -eq [IntPtr]::Zero -or $settingsHandle -eq $mainHandle) {
+        throw 'The gear did not open a separate Poni Settings window.'
+    }
+    $settingsPid = [uint32]0
+    [CursorPosition]::GetWindowThreadProcessId($settingsHandle, [ref]$settingsPid) | Out-Null
+    if ($settingsPid -ne [uint32]$process.Id) { throw 'Settings window belongs to another process.' }
     $settingsRect = [CursorPosition+Rect]::new()
-    if (![CursorPosition]::GetWindowRect($process.MainWindowHandle, [ref]$settingsRect)) {
-        throw 'Could not inspect the Settings panel.'
+    if (![CursorPosition]::GetWindowRect($settingsHandle, [ref]$settingsRect)) {
+        throw 'Could not inspect the separate Settings window.'
     }
     $settingsWidth = $settingsRect.Right - $settingsRect.Left
-    Save-Screen 'settings.png'
-    if ($bounds.Width -eq 1024 -and $settingsWidth -lt $windowWidth + 100) {
-        throw "Settings gear did not expand the window; widths were $windowWidth/$settingsWidth pixels."
+    [CursorPosition]::PostMessage($settingsHandle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
+    Start-Sleep -Seconds 2
+    if ($process.HasExited -or [CursorPosition]::FindWindow($null, 'Poni Settings') -ne [IntPtr]::Zero) {
+        throw 'Closing Settings did not leave the notch running independently.'
     }
-    @{ process_id = $process.Id; main_window_handle = $process.MainWindowHandle.ToInt64(); screenshot = 'desktop.png'; width_after_shortcut = $windowWidth; module_height = $moduleHeight; settings_width = $settingsWidth; weather_attempted = ($bounds.Width -eq 1024 -and $bounds.Height -eq 768) } |
+    @{ process_id = $process.Id; main_window_handle = $mainHandle.ToInt64(); screenshot = 'desktop.png'; width_after_shortcut = $windowWidth; module_height = $moduleHeight; settings_width = $settingsWidth; settings_window_handle = $settingsHandle.ToInt64(); settings_closed_independently = $true; weather_attempted = ($bounds.Width -eq 1024 -and $bounds.Height -eq 768) } |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'observation.json') -Encoding UTF8
 } finally {
     if (!$process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
