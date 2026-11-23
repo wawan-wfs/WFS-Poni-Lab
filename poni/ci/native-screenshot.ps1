@@ -148,12 +148,42 @@ try {
         throw 'Could not inspect the separate Settings window.'
     }
     $settingsWidth = $settingsRect.Right - $settingsRect.Left
+    $screenTimeChecked = $false
+    if ($bounds.Width -eq 1024 -and $bounds.Height -eq 768) {
+        function Find-Setting([string]$text) {
+            Click-Point ($settingsRect.Left + 102) ($settingsRect.Top + 98)
+            [System.Windows.Forms.SendKeys]::SendWait('^a')
+            [System.Windows.Forms.SendKeys]::SendWait($text)
+            Start-Sleep -Milliseconds 400
+            [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+            Start-Sleep -Milliseconds 400
+        }
+
+        Find-Setting 'stop counting after idle'
+        [System.Windows.Forms.SendKeys]::SendWait('{END}')
+        Start-Sleep -Seconds 2
+        Find-Setting 'excluded executable'
+        [System.Windows.Forms.SendKeys]::SendWait('notepad.exe{ENTER}')
+        Start-Sleep -Seconds 2
+        Save-Screen 'settings-screentime.png'
+
+        $dataPaths = @($env:APPDATA, [Environment]::GetFolderPath('ApplicationData')) |
+            ForEach-Object { Join-Path $_ 'id.wfs.ponirebuild/data.json' } |
+            Select-Object -Unique
+        $dataPath = $dataPaths | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+        if (!$dataPath) { throw 'Screen Time changes did not create the application profile.' }
+        $screenTime = (Get-Content -Raw -LiteralPath $dataPath | ConvertFrom-Json).screen_time
+        if ($screenTime.idle_seconds -ne 600 -or @($screenTime.excluded_apps) -notcontains 'notepad.exe') {
+            throw 'Screen Time did not save the idle limit and excluded executable.'
+        }
+        $screenTimeChecked = $true
+    }
     [CursorPosition]::PostMessage($settingsHandle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
     Start-Sleep -Seconds 2
     if ($process.HasExited -or [CursorPosition]::FindWindowByTitle('Poni Settings') -ne [IntPtr]::Zero) {
         throw 'Closing Settings did not leave the notch running independently.'
     }
-    @{ process_id = $process.Id; main_window_handle = $mainHandle.ToInt64(); screenshot = 'desktop.png'; width_after_shortcut = $windowWidth; module_height = $moduleHeight; settings_width = $settingsWidth; settings_window_handle = $settingsHandle.ToInt64(); settings_closed_independently = $true; weather_attempted = ($bounds.Width -eq 1024 -and $bounds.Height -eq 768) } |
+    @{ process_id = $process.Id; main_window_handle = $mainHandle.ToInt64(); screenshot = 'desktop.png'; width_after_shortcut = $windowWidth; module_height = $moduleHeight; settings_width = $settingsWidth; settings_window_handle = $settingsHandle.ToInt64(); settings_closed_independently = $true; screen_time_saved = $screenTimeChecked; weather_attempted = ($bounds.Width -eq 1024 -and $bounds.Height -eq 768) } |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'observation.json') -Encoding UTF8
 } finally {
     if (!$process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }

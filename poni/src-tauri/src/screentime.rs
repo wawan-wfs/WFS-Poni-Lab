@@ -8,7 +8,8 @@ use std::{
 };
 use tauri::{AppHandle, Emitter, Manager, State};
 
-const RETAIN_DAYS: i64 = 7;
+const RETAIN_DAYS: i64 = 35;
+const SUMMARY_DAYS: i64 = 7;
 
 #[derive(Clone, Default, Deserialize, Serialize)]
 pub(super) struct ScreenTime {
@@ -126,13 +127,20 @@ fn merge(target: &mut Day, source: &Day) {
 }
 
 fn flush(store: &mut Store, tracker: &mut Tracker, today: NaiveDate) -> Result<(), String> {
-    if tracker.pending.is_empty() {
+    let cutoff = today - chrono::Duration::days(RETAIN_DAYS - 1);
+    let expired = store
+        .data
+        .screen_time
+        .days
+        .first_key_value()
+        .is_some_and(|(date, _)| *date < cutoff);
+    if tracker.pending.is_empty() && !expired {
+        tracker.flush_at = Some(Instant::now());
         return Ok(());
     }
     store.update(|data| {
-        let cutoff = today - chrono::Duration::days(RETAIN_DAYS - 1);
         data.screen_time.days.retain(|date, _| *date >= cutoff);
-        for (date, day) in &tracker.pending {
+        for (date, day) in tracker.pending.range(cutoff..) {
             merge(data.screen_time.days.entry(*date).or_default(), day);
         }
         Ok(())
@@ -151,7 +159,7 @@ pub(super) fn screentime_summary(
     let tracker = tracker.lock().map_err(|_| "Screen Time unavailable")?;
     let store = store.lock().map_err(|_| "Storage unavailable")?;
     let today = Local::now().date_naive();
-    let cutoff = today - chrono::Duration::days(if week { RETAIN_DAYS - 1 } else { 0 });
+    let cutoff = today - chrono::Duration::days(if week { SUMMARY_DAYS - 1 } else { 0 });
     let mut total = Day::default();
     for (date, day) in store
         .data
@@ -259,16 +267,17 @@ pub(super) fn sample(app: &AppHandle) {
     let store = app.state::<Mutex<Store>>();
     let Ok(mut store) = store.lock() else { return };
     let preferences = &store.data.screen_time.preferences;
-    if !preferences.enabled {
-        return;
-    }
     let now = Instant::now();
     let local = Local::now();
     let today = local.date_naive();
     let previous = tracker.previous.take();
-    if let Some(name) = active_application(preferences.idle_seconds)
-        .filter(|name| !preferences.excluded_apps.contains(name))
-    {
+    let active = if preferences.enabled {
+        active_application(preferences.idle_seconds)
+            .filter(|name| !preferences.excluded_apps.contains(name))
+    } else {
+        None
+    };
+    if let Some(name) = active {
         if let Some((since, previous_name)) = previous {
             let seconds = now.saturating_duration_since(since).as_secs();
             if (1..=25).contains(&seconds) {
@@ -391,5 +400,19 @@ mod tests {
             .is_err());
         assert_eq!(preferences.idle_seconds, 600);
         assert_eq!(preferences.excluded_apps, ["steam.exe"]);
+    }
+
+    #[test]
+    fn old_rows_expire_even_without_new_tracking_samples() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = Store::open(dir.path().join("data.json")).unwrap();
+        let today = NaiveDate::from_ymd_opt(2026, 11, 24).unwrap();
+        let expired = today - chrono::Duration::days(35);
+        let retained = today - chrono::Duration::days(34);
+        store.data.screen_time.days.insert(expired, Day::default());
+        store.data.screen_time.days.insert(retained, Day::default());
+        flush(&mut store, &mut Tracker::default(), today).unwrap();
+        assert!(!store.data.screen_time.days.contains_key(&expired));
+        assert!(store.data.screen_time.days.contains_key(&retained));
     }
 }
