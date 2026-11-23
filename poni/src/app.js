@@ -6,8 +6,8 @@ const closed = document.querySelector('#closed');
 const open = document.querySelector('#open');
 const status = document.querySelector('#status');
 let data = { tasks: [], notes: [], timer: { total_ms: 1500000, remaining_ms: 1500000, ends_at_ms: null }, stopwatch: { elapsed_ms: 0, started_at_ms: null, laps: [] }, weather_location: null, world_clocks: [], calendar_events: [] };
-let editingNote = null;
 let editingTask = null;
+const expandedTasks = new Set();
 let queue = Promise.resolve();
 let panelSequence = 0;
 let closeTimer = null;
@@ -15,7 +15,6 @@ let mediaPending = false;
 let keyboardOpen = false;
 let weatherRequest = 0;
 let searchRequest = 0;
-let worldMinute = null;
 let systemPending = false;
 let calendarDay = null;
 let calendarToday = null;
@@ -51,7 +50,7 @@ function updatePanelSize(isOpen, focus = false) {
 }
 
 function isTallPage(page) {
-  return page === 'dayprogress' || Object.hasOwn(modules, page);
+  return page === 'tasks' || page === 'dayprogress' || Object.hasOwn(modules, page);
 }
 
 function callModule(method) {
@@ -317,10 +316,17 @@ function render() {
     const row = document.createElement('div'); row.className = 'item';
     const check = document.createElement('input'); check.type = 'checkbox'; check.checked = task.done; check.setAttribute('aria-label', `Complete ${task.text}`);
     check.addEventListener('change', () => mutate('toggle_task', { id: task.id }));
+    check.disabled = Boolean(task.repeated);
     const content = document.createElement('div'); content.className = 'task-content';
     const text = document.createElement('p'); text.textContent = task.text; text.classList.toggle('done', task.done); content.append(text);
     if (task.due_at_ms != null) { const due = document.createElement('small'); due.textContent = new Date(task.due_at_ms).toLocaleString(); content.append(due); }
     if (task.description) { const detail = document.createElement('small'); detail.textContent = task.description; content.append(detail); }
+    if (task.repeat) {
+      const label = document.createElement('small');
+      const days = task.repeat.days.map(day => taskDayNames[day]).join(', ');
+      label.textContent = `Repeats ${days} · ${taskTimeLabel(task.repeat.minute)}`;
+      content.append(label);
+    }
     const edit = action('Edit', () => {
       editingTask = task.id;
       document.querySelector('#task-input').value = task.text;
@@ -328,28 +334,75 @@ function render() {
       if (task.due_at_ms != null) { const date = new Date(task.due_at_ms); due.value = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16); }
       else due.value = '';
       const description = document.querySelector('#task-description'); description.value = task.description || ''; description.hidden = false;
+      for (const input of repeatDays) {
+        input.checked = task.repeat?.days.includes(Number(input.value)) ?? false;
+        input.disabled = task.done;
+      }
+      repeatTime.value = task.repeat ? taskTimeLabel(task.repeat.minute) : '';
+      document.querySelector('#task-repeat').open = Boolean(task.repeat);
       document.querySelector('#task-submit').textContent = 'Save'; document.querySelector('#task-cancel').hidden = false;
     });
     edit.setAttribute('aria-label', `Edit ${task.text}`);
     const remove = action('Delete', async () => { if (await mutate('remove_task', { id: task.id }) && editingTask === task.id) resetTaskForm(); });
     remove.setAttribute('aria-label', `Delete ${task.text}`);
-    row.append(check, content, edit, remove);
-    tasks.append(row);
-  });
-  const notes = document.querySelector('#notes');
-  notes.replaceChildren();
-  data.notes.forEach(note => {
-    const row = document.createElement('div'); row.className = 'item';
-    const text = document.createElement('p'); text.textContent = note.text;
-    const edit = action('Edit', () => { editingNote = note.id; document.querySelector('#note-input').value = note.text; document.querySelector('#note-cancel').hidden = false; });
-    row.append(text, edit, action('Delete', () => mutate('remove_note', { id: note.id })));
-    notes.append(row);
+    const card = document.createElement('div');
+    card.className = 'task-card';
+    const steps = task.steps || [];
+    const stepsPanel = taskStepsPanel(task, steps);
+    const details = action(steps.length ? `Steps ${steps.filter(step => step.done).length}/${steps.length}` : 'Steps', () => {
+      if (expandedTasks.has(task.id)) expandedTasks.delete(task.id);
+      else expandedTasks.add(task.id);
+      stepsPanel.hidden = !expandedTasks.has(task.id);
+      details.setAttribute('aria-expanded', String(!stepsPanel.hidden));
+    });
+    details.setAttribute('aria-label', `Steps for ${task.text}`);
+    details.setAttribute('aria-expanded', String(!stepsPanel.hidden));
+    row.append(check, content, details, edit, remove);
+    card.append(row, stepsPanel);
+    tasks.append(card);
   });
   renderTimer();
   renderStopwatch();
-  renderWorldClocks();
   renderMonthCalendar();
   renderCalendar();
+}
+
+function taskStepsPanel(task, steps) {
+  const panel = document.createElement('div');
+  panel.className = 'task-steps';
+  panel.hidden = !expandedTasks.has(task.id);
+  for (const step of steps) {
+    const row = document.createElement('div');
+    row.className = 'task-step';
+    const check = document.createElement('input');
+    check.type = 'checkbox';
+    check.checked = step.done;
+    check.setAttribute('aria-label', `Complete step ${step.text}`);
+    check.addEventListener('change', () => mutate('update_task_step', {taskId: task.id, stepId: step.id, action:'toggle'}));
+    const text = document.createElement('span');
+    text.textContent = step.text;
+    text.classList.toggle('done', step.done);
+    const remove = action('Remove', () => mutate('update_task_step', {taskId: task.id, stepId: step.id, action:'remove'}));
+    remove.setAttribute('aria-label', `Remove step ${step.text}`);
+    row.append(check, text, remove);
+    panel.append(row);
+  }
+  const form = document.createElement('form');
+  form.className = 'task-step';
+  const input = document.createElement('input');
+  input.setAttribute('aria-label', 'New step');
+  input.placeholder = 'Add a step';
+  input.maxLength = 500;
+  input.required = true;
+  const submit = document.createElement('button');
+  submit.textContent = 'Add step';
+  form.append(input, submit);
+  form.addEventListener('submit', event => {
+    event.preventDefault();
+    void mutate('update_task_step', {taskId: task.id, action:'add', text:input.value});
+  });
+  panel.append(form);
+  return panel;
 }
 
 function occurrencesOnDay(day, events = data.calendar_events || []) {
@@ -500,12 +553,29 @@ function renderStopwatch() {
 }
 setInterval(() => { if (data.stopwatch.started_at_ms != null) renderStopwatch(); }, 100);
 
+const taskDayNames = [...Array(7)].map((_, day) =>
+  new Intl.DateTimeFormat(undefined, {weekday:'short'}).format(new Date(2026, 0, 4 + day)));
+const repeatTime = document.querySelector('#task-repeat-time');
+const repeatDays = taskDayNames.map((name, day) => {
+  const label = document.createElement('label');
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.value = day;
+  label.append(box, ' ' + name);
+  document.querySelector('#task-repeat-days').append(label);
+  return box;
+});
+const taskTimeLabel = minute => [Math.floor(minute / 60), minute % 60]
+  .map(part => String(part).padStart(2, '0')).join(':');
+
 function resetTaskForm() {
   editingTask = null;
   document.querySelector('#task-form').reset();
   document.querySelector('#task-description').hidden = true;
   document.querySelector('#task-cancel').hidden = true;
   document.querySelector('#task-submit').textContent = 'Add';
+  document.querySelector('#task-repeat').open = false;
+  repeatDays.forEach(input => { input.disabled = false; });
 }
 document.querySelector('#task-form').addEventListener('submit', async event => {
   event.preventDefault();
@@ -513,17 +583,15 @@ document.querySelector('#task-form').addEventListener('submit', async event => {
   const dueText = document.querySelector('#task-due').value;
   const dueAtMs = dueText ? new Date(dueText).getTime() : null;
   if (dueAtMs != null && (!Number.isFinite(dueAtMs) || dueAtMs < 0)) { status.textContent = 'Choose a valid due date.'; return; }
-  const args = { text: input.value, dueAtMs };
+  const days = repeatDays.filter(box => box.checked).map(box => Number(box.value));
+  if (days.length && !repeatTime.value) { status.textContent = 'Choose a repeat time.'; return; }
+  const [hour, minute] = repeatTime.value.split(':').map(Number);
+  const repeat = days.length ? {days, minute: hour * 60 + minute} : null;
+  const args = { text: input.value, dueAtMs, repeat };
   if (editingTask) Object.assign(args, { id: editingTask, description: document.querySelector('#task-description').value });
   if (await mutate(editingTask ? 'update_task' : 'add_task', args)) resetTaskForm();
 });
 document.querySelector('#task-cancel').addEventListener('click', resetTaskForm);
-document.querySelector('#note-form').addEventListener('submit', async event => {
-  event.preventDefault();
-  const input = document.querySelector('#note-input');
-  if (await mutate('save_note', { id: editingNote, text: input.value })) { input.value = ''; editingNote = null; document.querySelector('#note-cancel').hidden = true; }
-});
-document.querySelector('#note-cancel').addEventListener('click', () => { editingNote = null; document.querySelector('#note-input').value = ''; document.querySelector('#note-cancel').hidden = true; });
 document.querySelector('#timer-form').addEventListener('submit', event => {
   event.preventDefault();
   const timer = data.timer;
@@ -602,95 +670,4 @@ document.querySelector('#weather-search').addEventListener('submit', async event
   }
 });
 
-const worldZones = document.querySelector('#worldclock-zones');
-if (typeof Intl.supportedValuesOf === 'function') {
-  for (const zone of Intl.supportedValuesOf('timeZone')) {
-    const option = document.createElement('option'); option.value = zone; worldZones.append(option);
-  }
-}
-
-function worldDate() {
-  const now = new Date();
-  return worldMinute == null ? now : new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, worldMinute);
-}
-
-function worldUpdate(change) {
-  return mutate('set_world_clocks', current => ({ places: change(current.world_clocks.map(place => ({ ...place }))) }));
-}
-
-function renderWorldClocks() {
-  const list = document.querySelector('#worldclock-list');
-  list.replaceChildren();
-  const selected = worldDate();
-  document.querySelector('#worldclock-minute').value = worldMinute == null ? selected.getHours() * 60 + selected.getMinutes() : worldMinute;
-  const places = [{ name: 'Here', zone: Intl.DateTimeFormat().resolvedOptions().timeZone }, ...data.world_clocks];
-  places.forEach((place, index) => {
-    const row = document.createElement('div'); row.className = 'worldclock-row';
-    const name = document.createElement('strong'); name.className = 'worldclock-name'; name.textContent = place.name;
-    const time = document.createElement('time'); time.className = 'worldclock-time';
-    const options = { weekday: 'short', hour: 'numeric', minute: '2-digit' };
-    if (place.zone) options.timeZone = place.zone;
-    try { time.textContent = new Intl.DateTimeFormat(undefined, options).format(selected); }
-    catch { time.textContent = 'Time unavailable'; }
-    const strip = document.createElement('div'); strip.className = 'worldclock-strip';
-    if (place.zone) {
-      try {
-        const hour = new Intl.DateTimeFormat('en-GB', { timeZone: place.zone, hour: 'numeric', hourCycle: 'h23' });
-        const day = new Date(selected.getFullYear(), selected.getMonth(), selected.getDate());
-        const stops = [];
-        for (let step = 0; step <= 24; step++) {
-          const moment = new Date(day.getFullYear(), day.getMonth(), day.getDate(), step);
-          const h = Number(hour.format(moment));
-          stops.push(`${h >= 6 && h < 18 ? '#9a9aa2' : '#34343b'} ${step * 100 / 24}%`);
-        }
-        strip.style.background = `linear-gradient(to right, ${stops.join(',')})`;
-      } catch { strip.style.background = '#34343b'; }
-    }
-    row.append(name, time, strip);
-    if (index > 0) {
-      const actions = document.createElement('div'); actions.className = 'worldclock-actions';
-      const find = places => places.findIndex(item => item.id === place.id);
-      const move = direction => worldUpdate(places => {
-        const from = find(places); const to = from + direction;
-        if (from >= 0 && to >= 0 && to < places.length) [places[from], places[to]] = [places[to], places[from]];
-        return places;
-      });
-      const up = action('↑', () => move(-1)); up.disabled = index === 1; up.setAttribute('aria-label', `Move ${place.name} up`);
-      const down = action('↓', () => move(1)); down.disabled = index === data.world_clocks.length; down.setAttribute('aria-label', `Move ${place.name} down`);
-      const rename = action('Edit', () => {
-        const form = document.createElement('form'); form.className = 'entry';
-        const input = document.createElement('input'); input.value = place.name; input.maxLength = 30; input.required = true; input.setAttribute('aria-label', `Rename ${place.name}`);
-        const save = document.createElement('button'); save.textContent = 'Save'; save.type = 'submit';
-        const cancel = action('Cancel', renderWorldClocks); form.append(input, save, cancel);
-        form.addEventListener('submit', async event => {
-          event.preventDefault();
-          const value = input.value.trim();
-          if (!value) return;
-          await worldUpdate(places => { const at = find(places); if (at >= 0) places[at].name = value; return places; });
-        });
-        row.replaceChildren(form); input.focus(); input.select();
-      });
-      const remove = action('×', () => worldUpdate(places => places.filter(item => item.id !== place.id)));
-      remove.setAttribute('aria-label', `Remove ${place.name}`);
-      actions.append(up, down, rename, remove); row.append(actions);
-    }
-    list.append(row);
-  });
-}
-
-document.querySelector('#worldclock-form').addEventListener('submit', async event => {
-  event.preventDefault();
-  const name = document.querySelector('#worldclock-name').value.trim();
-  const zone = document.querySelector('#worldclock-zone').value.trim();
-  try { new Intl.DateTimeFormat('en', { timeZone: zone }).format(); }
-  catch { status.textContent = 'Enter a valid time zone, such as Asia/Jakarta.'; return; }
-  if (await worldUpdate(places => {
-    if (!name || places.length >= 8) throw new Error('Enter a name and choose at most eight places.');
-    if (places.some(item => item.name === name && item.zone === zone)) throw new Error('This place is already listed.');
-    places.push({ id: crypto.randomUUID(), name, zone }); return places;
-  })) event.target.reset();
-});
-document.querySelector('#worldclock-minute').addEventListener('input', event => { worldMinute = Number(event.target.value); renderWorldClocks(); });
-document.querySelector('#worldclock-now').addEventListener('click', () => { worldMinute = null; renderWorldClocks(); });
-setInterval(() => { if (worldMinute == null && !document.querySelector('#page-worldclock').hidden && !document.activeElement.closest('.worldclock-row')) renderWorldClocks(); }, 60000);
 queue = invoke('get_data').then(saved => { data = saved; render(); if (data.weather_location) void loadWeather(data.weather_location); }).catch(error => { status.textContent = String(error); });

@@ -9,6 +9,8 @@ from chat import test_chat
 from dashboard import test_dashboard
 from translate import test_translate
 from next_modules import test_next_modules
+from notes import test_notes
+from worldclock import test_worldclock
 
 root = Path(__file__).resolve().parents[1]
 server = ThreadingHTTPServer(('127.0.0.1', 0), partial(SimpleHTTPRequestHandler, directory=str(root / 'src')))
@@ -36,12 +38,25 @@ with sync_playwright() as pw:
         if (command === 'save_calendar_event') { const e = {id:args.id || crypto.randomUUID(), title:args.title.trim(), start_ms:args.startMs, duration_minutes:args.durationMinutes, location:args.location, repeat:args.repeat}; const i = data.calendar_events.findIndex(item => item.id === args.id); if (i < 0) data.calendar_events.push(e); else data.calendar_events[i] = e; }
         if (command === 'remove_calendar_event') data.calendar_events = data.calendar_events.filter(e => e.id !== args.id);
         if (command === 'media_control') localStorage.setItem('last-media-action', args.action);
-        if (command === 'add_task') data.tasks.push({id: crypto.randomUUID(), text: args.text, done: false, description:'', due_at_ms:args.dueAtMs});
-        if (command === 'update_task') { const t = data.tasks.find(t => t.id === args.id); t.text = args.text; t.description = args.description; t.due_at_ms = args.dueAtMs; }
-        if (command === 'toggle_task') { const t = data.tasks.find(t => t.id === args.id); t.done = !t.done; t.done_at_ms = t.done ? Date.now() : null; }
+        if (command === 'add_task') data.tasks.push({id: crypto.randomUUID(), text: args.text, done: false, description:'', due_at_ms:args.dueAtMs, repeat:args.repeat, steps:[]});
+        if (command === 'update_task') { const t = data.tasks.find(t => t.id === args.id); t.text = args.text; t.description = args.description; t.due_at_ms = args.dueAtMs; t.repeat = args.repeat; }
+        if (command === 'toggle_task') {
+          const task = data.tasks.find(t => t.id === args.id);
+          task.done = !task.done;
+          task.done_at_ms = task.done ? Date.now() : null;
+          if (task.repeat && task.done) {
+            data.tasks.unshift({...task, id:crypto.randomUUID(), done:false, done_at_ms:null, steps:task.steps.map(step => ({...step, done:false}))});
+            task.repeat = null;
+            task.repeated = true;
+          }
+        }
+        if (command === 'update_task_step') {
+          const task = data.tasks.find(t => t.id === args.taskId);
+          if (args.action === 'add') task.steps.push({id:crypto.randomUUID(), text:args.text, done:false});
+          if (args.action === 'toggle') { const step = task.steps.find(s => s.id === args.stepId); step.done = !step.done; }
+          if (args.action === 'remove') task.steps = task.steps.filter(s => s.id !== args.stepId);
+        }
         if (command === 'remove_task') data.tasks = data.tasks.filter(t => t.id !== args.id);
-        if (command === 'save_note') { const n = data.notes.find(n => n.id === args.id); if (n) n.text = args.text; else data.notes.push({id: crypto.randomUUID(), text: args.text}); }
-        if (command === 'remove_note') data.notes = data.notes.filter(n => n.id !== args.id);
         if (command === 'timer_action') {
           if (args.action === 'start') { if (args.minutes) data.timer.total_ms = data.timer.remaining_ms = args.minutes * 60000; data.timer.ends_at_ms = Date.now() + data.timer.remaining_ms; }
           if (args.action === 'pause') { data.timer.remaining_ms = Math.max(0, data.timer.ends_at_ms - Date.now()); data.timer.ends_at_ms = null; }
@@ -145,16 +160,24 @@ with sync_playwright() as pw:
     page.locator('[data-page="tasks"]').click()
     expect(page.get_by_role('checkbox', name='Complete Prepare meeting')).to_be_checked()
     expect(page.get_by_text('Bring notes')).to_be_visible()
-    page.locator('[data-page="notes"]').click()
-    page.locator('#note-input').fill('First note')
-    page.get_by_role('button', name='Save note').click()
-    expect(page.get_by_text('First note')).to_be_visible()
-    page.get_by_role('button', name='Edit').click()
-    page.locator('#note-input').fill('Updated note')
-    page.get_by_role('button', name='Save note').click()
-    expect(page.get_by_text('Updated note')).to_be_visible()
-    page.get_by_role('button', name='Delete').click()
-    expect(page.get_by_text('Updated note')).to_have_count(0)
+    page.locator('#task-input').fill('Weekly review')
+    page.locator('#task-repeat summary').click()
+    page.get_by_role('checkbox', name='Mon', exact=True).check()
+    page.locator('#task-repeat-time').fill('09:30')
+    page.locator('#task-submit').click()
+    expect(page.get_by_text('Repeats Mon · 09:30')).to_be_visible()
+    page.get_by_role('button', name='Steps for Weekly review').click()
+    page.get_by_role('textbox', name='New step').fill('Check notes')
+    page.get_by_role('button', name='Add step').click()
+    page.get_by_role('checkbox', name='Complete step Check notes').check()
+    task_done = page.get_by_role('checkbox', name='Complete Weekly review')
+    expect(task_done).not_to_be_checked()
+    task_done.click()
+    expect(task_done).to_have_count(2)
+    expect(task_done.last).to_be_disabled()
+    page.get_by_role('button', name='Steps for Weekly review').first.click()
+    expect(page.get_by_role('checkbox', name='Complete step Check notes').first).not_to_be_checked()
+    test_notes(page)
     page.locator('[data-page="timer"]').click()
     page.locator('#timer-minutes').fill('5')
     page.locator('#timer-start').click()
@@ -176,29 +199,7 @@ with sync_playwright() as pw:
     page.locator('#weather-search button').click()
     page.get_by_role('button', name='Jakarta, Jakarta, Indonesia').click()
     expect(page.locator('#weather-current')).to_contain_text('30°C')
-    page.locator('[data-page="worldclock"]').click()
-    page.locator('#worldclock-name').fill('Jakarta')
-    page.locator('#worldclock-zone').fill('Asia/Jakarta')
-    page.locator('#worldclock-form button').click()
-    expect(page.get_by_role('button', name='Remove Jakarta')).to_be_visible()
-    page.locator('#worldclock-minute').fill('720')
-    expect(page.locator('.worldclock-row').nth(1)).to_contain_text('7:00 PM')
-    page.locator('#worldclock-name').fill('London')
-    page.locator('#worldclock-zone').fill('Europe/London')
-    page.locator('#worldclock-form button').click()
-    page.get_by_role('button', name='Move London up').click()
-    expect(page.locator('.worldclock-row').nth(1)).to_contain_text('London')
-    page.locator('.worldclock-row').nth(1).get_by_role('button', name='Edit').click()
-    page.get_by_role('textbox', name='Rename London').fill('London UK')
-    page.get_by_role('button', name='Save', exact=True).click()
-    expect(page.get_by_role('button', name='Remove London UK')).to_be_visible()
-    page.reload()
-    page.locator('#closed').dispatch_event('pointerenter')
-    page.locator('[data-page="worldclock"]').click()
-    expect(page.get_by_role('button', name='Remove Jakarta')).to_be_visible()
-    expect(page.get_by_role('button', name='Remove London UK')).to_be_visible()
-    page.get_by_role('button', name='Remove Jakarta').click()
-    expect(page.get_by_role('button', name='Remove Jakarta')).to_have_count(0)
+    test_worldclock(page)
     page.locator('[data-page="system"]').click()
     expect(page.locator('#system-cpu')).to_have_text('33%')
     expect(page.locator('#system-memory')).to_have_text('2.0 / 8.0 GB')

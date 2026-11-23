@@ -17,6 +17,7 @@ mod currency;
 mod dashboard;
 mod github;
 mod health;
+mod notes;
 mod notifs;
 mod pomodoro;
 mod prayer;
@@ -39,12 +40,67 @@ struct Task {
     due_at_ms: Option<u64>,
     #[serde(default)]
     notified_due_at_ms: Option<u64>,
+    #[serde(default)]
+    repeat: Option<TaskRepeat>,
+    #[serde(default)]
+    repeated: bool,
+    #[serde(default)]
+    steps: Vec<TaskStep>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
-struct Note {
+struct TaskRepeat {
+    days: Vec<u8>,
+    minute: u16,
+}
+
+impl TaskRepeat {
+    fn next_due(&self, after_ms: u64) -> Result<u64, String> {
+        use chrono::{Datelike, Days, Local, TimeZone, Utc};
+
+        if self.days.is_empty()
+            || self.days.len() > 7
+            || self.days.iter().any(|day| *day > 6)
+            || self.minute >= 1440
+        {
+            return Err("Choose repeat days and a valid time".into());
+        }
+        let after = i64::try_from(after_ms)
+            .ok()
+            .and_then(chrono::DateTime::<Utc>::from_timestamp_millis)
+            .ok_or("Repeat date is outside the supported range")?;
+        let date = after.with_timezone(&Local).date_naive();
+        for day_offset in 0..=14 {
+            let Some(day) = date.checked_add_days(Days::new(day_offset)) else {
+                break;
+            };
+            if !self
+                .days
+                .contains(&(day.weekday().num_days_from_sunday() as u8))
+            {
+                continue;
+            }
+            let Some(at) =
+                day.and_hms_opt(u32::from(self.minute / 60), u32::from(self.minute % 60), 0)
+            else {
+                continue;
+            };
+            // Pick the earlier occurrence on a fall-back day. Skip nonexistent wall-clock times.
+            if let Some(due) = Local.from_local_datetime(&at).earliest() {
+                if due.timestamp_millis() > after.timestamp_millis() {
+                    return Ok(due.timestamp_millis() as u64);
+                }
+            }
+        }
+        Err("No upcoming occurrence for this schedule".into())
+    }
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+struct TaskStep {
     id: Uuid,
     text: String,
+    done: bool,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -225,7 +281,7 @@ struct AppData {
     pomodoro: pomodoro::Pomodoro,
     teleprompter: teleprompter::TeleprompterData,
     tasks: Vec<Task>,
-    notes: Vec<Note>,
+    notes: Vec<notes::Note>,
     timer: Timer,
     stopwatch: Stopwatch,
     weather_location: Option<WeatherLocation>,
@@ -479,9 +535,10 @@ fn add_task(
     store: State<'_, Mutex<Store>>,
     text: String,
     due_at_ms: Option<u64>,
+    repeat: Option<TaskRepeat>,
 ) -> Result<AppData, String> {
     let text = valid_text(text, 500)?;
-    valid_due(due_at_ms)?;
+    let due_at_ms = task_due(due_at_ms, repeat.as_ref())?;
     store
         .lock()
         .map_err(|_| "Storage unavailable")?
@@ -494,6 +551,9 @@ fn add_task(
                 description: String::new(),
                 due_at_ms,
                 notified_due_at_ms: None,
+                repeat,
+                repeated: false,
+                steps: Vec::new(),
             });
             Ok(())
         })
@@ -506,9 +566,10 @@ fn update_task(
     text: String,
     description: String,
     due_at_ms: Option<u64>,
+    repeat: Option<TaskRepeat>,
 ) -> Result<AppData, String> {
     let text = valid_text(text, 500)?;
-    valid_due(due_at_ms)?;
+    let due_at_ms = task_due(due_at_ms, repeat.as_ref())?;
     if description.chars().count() > 10_000 {
         return Err("Description is too long".into());
     }
@@ -527,8 +588,27 @@ fn update_task(
             task.text = text;
             task.description = description;
             task.due_at_ms = due_at_ms;
+            if task.done && repeat.is_some() {
+                return Err("Reopen the task before setting a repeat".into());
+            }
+            task.repeat = repeat;
             Ok(())
         })
+}
+
+fn now_ms() -> Result<u64, String> {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_millis() as u64)
+        .map_err(|_| "Check your computer clock".into())
+}
+
+fn task_due(due_at_ms: Option<u64>, repeat: Option<&TaskRepeat>) -> Result<Option<u64>, String> {
+    valid_due(due_at_ms)?;
+    match repeat {
+        Some(schedule) => Ok(Some(schedule.next_due(now_ms()?)?)),
+        None => Ok(due_at_ms),
+    }
 }
 
 fn due_task_time(task: &Task, now: u64) -> Option<u64> {
@@ -605,15 +685,85 @@ fn toggle_task(store: State<'_, Mutex<Store>>, id: Uuid) -> Result<AppData, Stri
                 .iter_mut()
                 .find(|task| task.id == id)
                 .ok_or("Task not found")?;
-            task.done = !task.done;
-            task.done_at_ms = if task.done {
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .ok()
-                    .map(|elapsed| elapsed.as_millis() as u64)
-            } else {
-                None
-            };
+            let next = complete_or_reopen_task(task, now_ms()?)?;
+            if let Some(next) = next {
+                data.tasks.insert(0, next);
+            }
+            Ok(())
+        })
+}
+
+fn complete_or_reopen_task(task: &mut Task, now: u64) -> Result<Option<Task>, String> {
+    if task.repeated {
+        return Err("The next occurrence is already in the task list".into());
+    }
+    let next = task
+        .repeat
+        .as_ref()
+        .map(|schedule| {
+            let mut copy = task.clone();
+            copy.due_at_ms = Some(schedule.next_due(now.max(task.due_at_ms.unwrap_or(now)))?);
+            copy.id = Uuid::new_v4();
+            copy.done = false;
+            copy.done_at_ms = None;
+            copy.notified_due_at_ms = None;
+            for step in &mut copy.steps {
+                step.done = false;
+            }
+            Ok::<_, String>(copy)
+        })
+        .transpose()?;
+    task.done = !task.done;
+    task.done_at_ms = task.done.then_some(now);
+    if next.is_some() {
+        task.repeated = true;
+        task.repeat = None;
+    }
+    Ok(next)
+}
+
+#[tauri::command]
+fn update_task_step(
+    store: State<'_, Mutex<Store>>,
+    task_id: Uuid,
+    step_id: Option<Uuid>,
+    action: String,
+    text: Option<String>,
+) -> Result<AppData, String> {
+    store
+        .lock()
+        .map_err(|_| "Storage unavailable")?
+        .update(|data| {
+            let task = data
+                .tasks
+                .iter_mut()
+                .find(|task| task.id == task_id)
+                .ok_or("Task not found")?;
+            match action.as_str() {
+                "add" => {
+                    if task.steps.len() >= 100 {
+                        return Err("A task can have at most 100 steps".into());
+                    }
+                    task.steps.push(TaskStep {
+                        id: Uuid::new_v4(),
+                        text: valid_text(text.unwrap_or_default(), 500)?,
+                        done: false,
+                    });
+                }
+                "toggle" | "remove" => {
+                    let index = task
+                        .steps
+                        .iter()
+                        .position(|step| Some(step.id) == step_id)
+                        .ok_or("Step not found")?;
+                    if action == "toggle" {
+                        task.steps[index].done = !task.steps[index].done;
+                    } else {
+                        task.steps.remove(index);
+                    }
+                }
+                _ => return Err("Unknown step action".into()),
+            }
             Ok(())
         })
 }
@@ -630,50 +780,6 @@ fn remove_task(store: State<'_, Mutex<Store>>, id: Uuid) -> Result<AppData, Stri
                 .position(|task| task.id == id)
                 .ok_or("Task not found")?;
             data.tasks.remove(position);
-            Ok(())
-        })
-}
-
-#[tauri::command]
-fn save_note(
-    store: State<'_, Mutex<Store>>,
-    id: Option<Uuid>,
-    text: String,
-) -> Result<AppData, String> {
-    let text = valid_text(text, 100_000)?;
-    store
-        .lock()
-        .map_err(|_| "Storage unavailable")?
-        .update(|data| {
-            match id {
-                Some(id) => {
-                    data.notes
-                        .iter_mut()
-                        .find(|note| note.id == id)
-                        .ok_or("Note not found")?
-                        .text = text
-                }
-                None => data.notes.push(Note {
-                    id: Uuid::new_v4(),
-                    text,
-                }),
-            }
-            Ok(())
-        })
-}
-
-#[tauri::command]
-fn remove_note(store: State<'_, Mutex<Store>>, id: Uuid) -> Result<AppData, String> {
-    store
-        .lock()
-        .map_err(|_| "Storage unavailable")?
-        .update(|data| {
-            let position = data
-                .notes
-                .iter()
-                .position(|note| note.id == id)
-                .ok_or("Note not found")?;
-            data.notes.remove(position);
             Ok(())
         })
 }
@@ -1064,6 +1170,7 @@ fn main() {
             currency::currency_snapshot,
             currency::refresh_currency_rates,
             currency::save_currency_preferences,
+            currency::open_currency_source,
             dashboard::set_dashboard_widgets,
             health::health_state,
             health::health_record,
@@ -1084,9 +1191,12 @@ fn main() {
             add_task,
             update_task,
             toggle_task,
+            update_task_step,
             remove_task,
-            save_note,
-            remove_note,
+            notes::notes_get,
+            notes::notes_save,
+            notes::notes_delete,
+            notes::notes_save_study,
             save_calendar_event,
             remove_calendar_event,
             timer_action,
@@ -1103,6 +1213,49 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn completing_a_repeat_keeps_history_and_resets_the_next_checklist() {
+        use chrono::{Datelike, Local, Timelike, Utc};
+
+        let schedule = TaskRepeat {
+            days: vec![1],
+            minute: 9 * 60 + 30,
+        };
+        let now = 1_800_000_000_000;
+        let first_due = schedule.next_due(now).unwrap();
+        let mut task = Task {
+            id: Uuid::new_v4(),
+            text: "Weekly review".into(),
+            done: false,
+            done_at_ms: None,
+            description: "Bring notes".into(),
+            due_at_ms: Some(first_due),
+            notified_due_at_ms: Some(first_due),
+            repeat: Some(schedule),
+            repeated: false,
+            steps: vec![TaskStep {
+                id: Uuid::new_v4(),
+                text: "Read notes".into(),
+                done: true,
+            }],
+        };
+        let next = complete_or_reopen_task(&mut task, now).unwrap().unwrap();
+        assert!(task.done && task.repeated && task.steps[0].done);
+        assert!(task.repeat.is_none());
+        assert!(!next.done && !next.steps[0].done);
+        assert_ne!(task.id, next.id);
+        assert_eq!(next.description, task.description);
+        assert!(next.notified_due_at_ms.is_none());
+        let due = next.due_at_ms.unwrap();
+        assert!(due > first_due);
+        let local = chrono::DateTime::<Utc>::from_timestamp_millis(due as i64)
+            .unwrap()
+            .with_timezone(&Local);
+        assert_eq!(local.weekday().num_days_from_sunday(), 1);
+        assert_eq!((local.hour(), local.minute()), (9, 30));
+        assert!(complete_or_reopen_task(&mut task, now).is_err());
+    }
 
     #[test]
     fn calendar_event_validation_and_storage() {
@@ -1157,6 +1310,9 @@ mod tests {
                     description: String::new(),
                     due_at_ms: None,
                     notified_due_at_ms: None,
+                    repeat: None,
+                    repeated: false,
+                    steps: Vec::new(),
                 });
                 Ok(())
             })
@@ -1231,6 +1387,9 @@ mod tests {
             description: String::new(),
             due_at_ms: Some(1000),
             notified_due_at_ms: None,
+            repeat: None,
+            repeated: false,
+            steps: Vec::new(),
         };
         assert_eq!(due_task_time(&task, 999), None);
         assert_eq!(due_task_time(&task, 1000), Some(1000));

@@ -39,6 +39,10 @@
   <script src="bluetooth.js" defer></script>
   <link rel="stylesheet" href="chat.css">
   <script src="chat.js" defer></script>
+  <link rel="stylesheet" href="notes.css">
+  <script src="notes.js" defer></script>
+  <link rel="stylesheet" href="worldclock.css">
+  <script src="worldclock.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -83,13 +87,14 @@
           <div class="calendar"><strong id="month"></strong><div id="week" class="week" aria-label="Next seven days"></div><div id="home-events" class="calendar-empty"></div></div>
         </section>
         <section id="page-tasks" class="page" hidden>
-          <form id="task-form"><div class="entry"><input id="task-input" aria-label="Task" maxlength="500" placeholder="Add a task" required><input id="task-due" type="datetime-local" aria-label="Due date"><button id="task-submit" type="submit">Add</button><button type="button" id="task-cancel" hidden>Cancel</button></div><textarea id="task-description" maxlength="10000" aria-label="Task description" placeholder="Details" hidden></textarea></form>
+          <form id="task-form">
+            <div class="entry"><input id="task-input" aria-label="Task" maxlength="500" placeholder="Add a task" required><input id="task-due" type="datetime-local" aria-label="Due date"><button id="task-submit" type="submit">Add</button><button type="button" id="task-cancel" hidden>Cancel</button></div>
+            <textarea id="task-description" maxlength="10000" aria-label="Task description" placeholder="Details" hidden></textarea>
+            <details id="task-repeat"><summary>Repeat</summary><div id="task-repeat-days"></div><label>Repeat time <input id="task-repeat-time" type="time"></label></details>
+          </form>
           <div class="items" id="tasks"></div>
         </section>
-        <section id="page-notes" class="page" hidden>
-          <form id="note-form" class="note-form"><textarea id="note-input" aria-label="Note" maxlength="100000" placeholder="Write a note" required></textarea><button type="submit">Save note</button><button type="button" id="note-cancel" hidden>Cancel</button></form>
-          <div class="items" id="notes"></div>
-        </section>
+        <section id="page-notes" class="page" hidden></section>
         <section id="page-calendar" class="page" hidden>
           <div class="calendar-layout"><div><div class="calendar-navigation"><button type="button" id="calendar-prev" aria-label="Previous month">‹</button><strong id="calendar-month"></strong><button type="button" id="calendar-next" aria-label="Next month">›</button></div><div id="calendar-grid" class="calendar-grid"></div><div id="calendar-hijri-range" class="hijri-date"></div></div>
           <div><strong id="calendar-selected"></strong><div id="calendar-hijri-day" class="hijri-date"></div><label class="hijri-setting">Hijri correction <select id="hijri-offset" aria-label="Hijri date correction"><option value="-2">−2 days</option><option value="-1">−1 day</option><option value="0">Umm al-Qura</option><option value="1">+1 day</option><option value="2">+2 days</option></select></label><div id="calendar-items"></div><form id="calendar-form" class="calendar-form"><input id="event-title" placeholder="Event title" maxlength="200" aria-label="Event title" required><input id="event-start" type="datetime-local" aria-label="Event start" required><input id="event-duration" type="number" min="1" max="1440" value="30" aria-label="Duration in minutes" required><select id="event-repeat" aria-label="Repeat event"><option value="none">Once</option><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option><option value="yearly">Yearly</option></select><input id="event-location" placeholder="Location" maxlength="500" aria-label="Event location"><button type="submit" id="event-submit">Add event</button><button type="button" id="event-cancel" hidden>Cancel</button></form></div></div>
@@ -110,11 +115,7 @@
           <p id="weather-status" role="status" aria-live="polite"></p>
           <div id="weather-current"></div><div id="weather-days" class="weather-days"></div>
         </section>
-        <section id="page-worldclock" class="page" hidden>
-          <form id="worldclock-form" class="entry"><input id="worldclock-name" aria-label="Place name" placeholder="City" maxlength="30" required><input id="worldclock-zone" aria-label="Time zone" placeholder="Asia/Jakarta" list="worldclock-zones" required><datalist id="worldclock-zones"></datalist><button type="submit">Add</button></form>
-          <div class="worldclock-plan"><label for="worldclock-minute">Time here</label><input type="range" min="0" max="1439" id="worldclock-minute"><button type="button" id="worldclock-now">Now</button></div>
-          <div id="worldclock-list"></div>
-        </section>
+        <section id="page-worldclock" class="page" hidden></section>
         <section id="page-system" class="page" hidden>
           <div class="system-grid"><div><span>CPU</span><strong id="system-cpu">—</strong><div class="system-meter"><div id="system-cpu-bar"></div></div></div><div><span>Memory</span><strong id="system-memory">—</strong><div class="system-meter"><div id="system-memory-bar"></div></div></div></div><p id="system-status" role="status" aria-live="polite"></p>
         </section>

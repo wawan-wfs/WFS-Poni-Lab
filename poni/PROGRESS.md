@@ -10,12 +10,14 @@ Inventaris mencakup 23 modul yang terdaftar melalui `N.register` di aset Poni 1.
 
 Angka 100% mengukur cakupan inventaris modul. Kesetaraan penuh menunggu perbandingan fitur, tampilan, penyimpanan, integrasi, dan penanganan kesalahan dengan aplikasi asli.
 
+[Daftar verifikasi kesetaraan](PARITY.md) memuat skenario dan bukti yang diperlukan untuk setiap modul serta fitur di luar inventaris.
+
 ## Modul yang sudah dimulai
 
-- **Todo:** tambah, ubah, hapus, selesaikan, tanggal jatuh tempo dan pengingat dasar. Pengulangan, subtask, dan fitur lain belum setara.
-- **Notes:** tambah, ubah, hapus dan simpan catatan dasar. Fitur catatan asli lainnya belum setara.
+- **Todo:** tugas dapat memiliki daftar langkah, tanggal jatuh tempo, dan jadwal berulang pada hari serta waktu pilihan. Menyelesaikan tugas berulang menyimpan riwayat dan membuat tugas berikutnya dengan langkah yang belum dicentang. Pemrosesan bahasa alami, tempat sampah, dan pilihan tindak lanjut ketika tugas terlambat belum tersedia.
+- **Notes:** daftar catatan dengan judul dari baris pertama, pencarian, penyimpanan otomatis, serta mode Cards dengan dek, pengacakan, pengulangan, dan skor. Tautan dari Todo, pengeditan melalui AI, dan beberapa pintasan serta animasi belum tersedia.
 - **Weather:** pencarian kota, cuaca saat ini dan prakiraan tujuh hari. Belum diverifikasi seluruh pengaturan dan tampilan asli.
-- **World clock:** lokasi, zona waktu, pengurutan dan perencanaan waktu dasar. Belum diverifikasi seluruh perilaku dan tampilan asli.
+- **World clock:** pencarian kota dan zona waktu, pengurutan, pita jam siang dan malam, serta perencanaan per 15 menit dengan keyboard atau pointer. Katalog kota serta pengaturan format jam dan penempatan di notch belum sepenuhnya setara.
 - **Day progress:** progres hari, minggu, bulan dan tahun, pengaturan waktu bangun dan tidur, serta linimasa acara lokal dan tugas yang sudah selesai. Awal minggu masih Senin.
 - **Calendar:** kalender bulanan, tanggal dan rentang bulan Hijriah dengan koreksi −2 hingga +2 hari, tugas berdasarkan tanggal jatuh tempo, serta tambah/ubah/hapus acara lokal dengan durasi, lokasi, dan pengulangan harian/mingguan/bulanan/tahunan; acara lokal juga muncul di Home. Sinkronisasi Google/Outlook dan pengingat acara belum tersedia. Perilaku pengulangan dan tampilan Hijriah tetap perlu dibandingkan dengan aplikasi asli, termasuk zona waktu dan tanggal yang tidak ada.
 - **Bookmarks** menyimpan tautan serta kategori, mendukung pencarian, pengeditan, penyalinan, dan membuka tautan di browser. Saran dari clipboard dan pengambilan favicon masih belum tersedia.
@@ -23,7 +25,7 @@ Angka 100% mengukur cakupan inventaris modul. Kesetaraan penuh menunggu perbandi
 - **Teleprompter** menyimpan skrip, mengimpor TXT, dan menggulir teks dengan pengaturan kecepatan, ukuran, serta hitung mundur. Panel baca terpisah, pintasan global, dan pengecualian perekaman layar masih belum tersedia.
 - **Dashboard** menyimpan empat slot pilihan, dengan widget jam, progres hari, agenda, tugas, jam dunia, sistem, cuaca, media, timer, Pomodoro, dan kutipan. Kontrol cepat Windows, peluncur, dan pilihan widget Poni lainnya masih belum tersedia.
 - **Health** menyimpan hitungan air, peregangan, pernapasan, dan hari aktif. Istirahat mata berjalan di dalam panel, dengan target tetap dan tanpa jadwal pengingat.
-- **Currency** mengonversi mata uang, menyimpan pasangan favorit, dan memakai kurs referensi Frankfurter dengan salinan kurs lokal. Jangkauan mata uang dan jadwal pembaruan mengikuti penyedia tersebut.
+- **Currency** memakai kurs ECB dengan ExchangeRate-API sebagai cadangan, memformat angka sesuai wilayah Windows, menerima singkatan seperti `50rb`, dan menyimpan pasangan favorit serta kurs lokal. Tampilan, lokalisasi, pengaturan lintas layar, dan perilaku percobaan ulang belum sepenuhnya diverifikasi.
 - **Control** menyediakan Keep Awake, volume keluaran, mute keluaran dan mikrofon, serta akses ke halaman Pengaturan Windows. Pengelolaan Wi-Fi, Bluetooth, dan pengaturan tampilan dari dalam panel masih belum tersedia.
 - **GitHub** menampilkan PR publik yang dibuat pengguna dan permintaan review publik. PR privat memerlukan integrasi akun. Akses langsung ke API GitHub masih perlu diuji pada Windows.
 - **Notifications** menyimpan riwayat pengingat Todo, Timer dan Pomodoro, dengan filter, penandaan dibaca, dan penghapusan. Pembacaan notifikasi aplikasi Windows lain belum tersedia.

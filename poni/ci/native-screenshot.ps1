@@ -25,6 +25,12 @@ try {
     $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
     [CursorPosition]::SetCursorPos([int]($bounds.X + $bounds.Width / 2), [int]($bounds.Y + 12)) | Out-Null
     Start-Sleep -Seconds 5
+    $hoverImage = [System.Drawing.Bitmap]::new($bounds.Width, $bounds.Height)
+    $hoverGraphics = [System.Drawing.Graphics]::FromImage($hoverImage)
+    try {
+        $hoverGraphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+        $hoverImage.Save((Join-Path $outputDir 'home-hover.png'), [System.Drawing.Imaging.ImageFormat]::Png)
+    } finally { $hoverGraphics.Dispose(); $hoverImage.Dispose() }
     [CursorPosition]::SetCursorPos([int]($bounds.X + 10), [int]($bounds.Y + $bounds.Height - 10)) | Out-Null
     Start-Sleep -Seconds 2
     $process.Refresh()

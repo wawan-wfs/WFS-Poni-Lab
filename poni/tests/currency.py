@@ -6,13 +6,17 @@ CURRENCY_MOCK = '''
     window.__TAURI__.core.invoke = async (command, args = {}) => {
         const key = 'currency-test-data';
         const pair = {from: 'USD', to: 'IDR'};
-        const data = JSON.parse(localStorage.getItem(key) || 'null') || {preferences: {pair, favourites: [pair]}, table: null};
-        if (command === 'currency_snapshot') return data;
+        const stored = JSON.parse(localStorage.getItem(key) || 'null');
+        const data = stored || {preferences: {pair, favourites: [pair]}, local: 'IDR', locale: 'en-US', ecb: null, open: null, errors: {}};
+        if (command === 'currency_snapshot') return {...data, due: !stored || Boolean(localStorage.getItem('currency-test-offline'))};
         if (command === 'refresh_currency_rates') {
-            if (localStorage.getItem('currency-test-offline')) throw new Error('Network unavailable');
-            data.table = {date: '2026-11-20', rates: {USD: 1, IDR: 18263, EUR: 0.90992}, fetched_at: 1795132800};
+            if (localStorage.getItem('currency-test-offline')) {
+                return {...data, errors:{ecb:'Network unavailable', open:'Network unavailable'}};
+            }
+            data.ecb = {base:'EUR', date:'2026-11-20', rates:{USD: 1.099, IDR: 20071.37}, fetched_at:1795132800};
+            data.open = {base:'USD', date:'2026-11-23', rates:{IDR: 18210, EUR: 0.910, AED: 3.6725}, fetched_at:1795392152};
             localStorage.setItem(key, JSON.stringify(data));
-            return data.table;
+            return data;
         }
         if (command === 'save_currency_preferences') {
             data.preferences = args.preferences;
@@ -26,21 +30,36 @@ CURRENCY_MOCK = '''
 
 def test_currency(page):
     page.evaluate(CURRENCY_MOCK)
-    page.locator('[data-page="currency"]').click()
-    expect(page.locator('#currency-status')).to_contain_text('Frankfurter')
-    page.get_by_role('textbox', name='Amount', exact=True).fill('2.5')
+    tab = page.locator('[data-page="currency"]')
+    tab.click()
+    expect(page.locator('#currency-source')).to_have_text('ECB')
+    amount = page.get_by_role('textbox', name='Amount', exact=True)
+    expect(amount).to_have_attribute('placeholder', '100')
+    amount.fill('2,5')
     expect(page.locator('#currency-result')).to_contain_text('45,658')
     page.get_by_role('button', name='Swap currencies').click()
-    expect(page.get_by_label('From currency')).to_have_value('IDR')
-    expect(page.get_by_label('To currency')).to_have_value('USD')
+    expect(page.get_by_role('button', name='From currency')).to_have_text('IDR · Indonesian Rupiah⌄')
+    expect(page.get_by_role('button', name='To currency')).to_have_text('USD · US Dollar⌄')
+    amount.fill('50rb')
+    expect(page.locator('#currency-result')).to_contain_text('2.74')
     page.get_by_role('button', name='Favourite this pair').click()
     expect(page.get_by_role('button', name='IDR → USD')).to_be_visible()
+    page.get_by_role('button', name='To currency').click()
+    page.keyboard.press('Escape')
+    expect(page.get_by_role('listbox')).to_have_count(0)
+    expect(page.locator('#open')).to_be_visible()
+    page.get_by_role('button', name='To currency').click()
+    page.get_by_role('option', name='AED · United Arab Emirates Dirham').click()
+    expect(page.locator('#currency-source')).to_have_text('ExchangeRate-API')
+    expect(page.locator('#currency-result')).to_contain_text('10.08')
     page.evaluate("localStorage.setItem('currency-test-offline', '1')")
-    page.get_by_role('button', name='Refresh rates').click()
-    expect(page.locator('#currency-status')).to_contain_text('Saved rates')
+    page.locator('[data-page="home"]').click()
+    tab.click()
+    expect(page.locator('#currency-status')).to_contain_text('couldn’t get newer ones')
     page.get_by_role('button', name='USD → IDR').click()
+    amount.fill('2.5')
     expect(page.locator('#currency-result')).to_contain_text('45,658')
-    page.get_by_role('textbox', name='Amount', exact=True).fill('oops')
+    amount.fill('oops')
     expect(page.locator('#currency-result')).to_have_text('—')
     expect(page.get_by_role('button', name='Copy', exact=True)).to_be_disabled()
     page.evaluate("localStorage.removeItem('currency-test-offline')")
