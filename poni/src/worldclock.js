@@ -540,7 +540,12 @@
         const snapshot = await invoke('get_data');
         if (!shown || visit !== request || before !== revision) return;
         places = (snapshot.world_clocks || []).filter(place => validZone(place.zone));
-        clock24h = snapshot.clock24h !== false;
+        const clockFormat = snapshot.settings?.clock_format;
+        if (clockFormat === 'region') {
+          clock24h = !new Intl.DateTimeFormat(undefined, {hour:'numeric'}).resolvedOptions().hour12;
+        } else {
+          clock24h = clockFormat ? clockFormat === 'h24' : snapshot.clock24h !== false;
+        }
         loaded = true;
         if (!places.length) editing = false;
         report.textContent = '';

@@ -125,7 +125,18 @@ try {
         Start-Sleep -Seconds 5
         Save-Screen 'system.png'
     }
-    @{ process_id = $process.Id; main_window_handle = $process.MainWindowHandle.ToInt64(); screenshot = 'desktop.png'; width_after_shortcut = $windowWidth; module_height = $moduleHeight; weather_attempted = ($bounds.Width -eq 1024 -and $bounds.Height -eq 768) } |
+    Click-Point ($rect.Right - 93) ($rect.Top + 25)
+    Start-Sleep -Seconds 3
+    $settingsRect = [CursorPosition+Rect]::new()
+    if (![CursorPosition]::GetWindowRect($process.MainWindowHandle, [ref]$settingsRect)) {
+        throw 'Could not inspect the Settings panel.'
+    }
+    $settingsWidth = $settingsRect.Right - $settingsRect.Left
+    Save-Screen 'settings.png'
+    if ($bounds.Width -eq 1024 -and $settingsWidth -lt $windowWidth + 100) {
+        throw "Settings gear did not expand the window; widths were $windowWidth/$settingsWidth pixels."
+    }
+    @{ process_id = $process.Id; main_window_handle = $process.MainWindowHandle.ToInt64(); screenshot = 'desktop.png'; width_after_shortcut = $windowWidth; module_height = $moduleHeight; settings_width = $settingsWidth; weather_attempted = ($bounds.Width -eq 1024 -and $bounds.Height -eq 768) } |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'observation.json') -Encoding UTF8
 } finally {
     if (!$process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }

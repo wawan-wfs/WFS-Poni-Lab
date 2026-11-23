@@ -2,6 +2,8 @@
 
 Targetnya adalah kesetaraan fungsi, tampilan, dan perilaku dengan Poni 1.8.1 untuk Windows x64. Inventaris modul dan capaian implementasi ada di [PROGRESS.md](PROGRESS.md). **Baseline kesetaraan penuh yang terverifikasi adalah 0 dari 23 modul.** Kesetaraan aplikasi juga memerlukan kelulusan komponen di luar inventaris tersebut.
 
+[Inventaris Settings](SETTINGS-PARITY.md) mendata 32 bagian yang terlihat, wizard Setup, dan 201 kontrol standar yang tersedia dalam build asli. Daftar juga mencatat renderer khusus yang belum dapat dihitung per kontrol dengan metode yang sama.
+
 ## Acuan dan bukti yang tersedia
 
 - Acuan eksekusi adalah `poni.exe` dengan SHA-256 `8f3f62d41e11210c5524fda430aa12171bbe6e56b578db7ff5dbfc299e71eb43`. Pengamatan native lama mencakup pemasangan awal, pilihan pengaturan bawaan, dan Home saat kursor diarahkan ke notch. Arsip lokal pengamatan asli ada di `/workspace/work/poni-observation2.zip`. Tiga tangkapan berukuran 1024 × 768 dan metadata mencatat Windows NT 10.0.20348.0.

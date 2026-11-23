@@ -19,6 +19,10 @@ header .clock { font-weight: 700; white-space: nowrap; font-size: 13px; }
 main { height: 135px; overflow: auto; }
 .open.tall main { height: calc(100% - 40px); }
 .home { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding-top: 14px; }
+.home:has(#mirror:not([hidden])) { grid-template-columns: minmax(0,1.6fr) minmax(0,1fr) 104px; gap:16px; }
+#mirror { align-self:center; }
+.settings-gear { font-size:17px; }
+.open.settings-view { border-radius:0 0 17px 17px; }
 .media { display: flex; gap: 12px; align-items: flex-start; }
 .album { display: grid; place-items: center; width: 60px; height: 60px; border-radius: 14px; background: #202023; color: #727279; font-size: 32px; flex: none; }
 .media strong, .calendar strong { font-size: 15px; }

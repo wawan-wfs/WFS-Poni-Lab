@@ -1,0 +1,231 @@
+.settings-page {
+  --settings-panel: #1b1b1f;
+  --settings-line: rgba(255, 255, 255, 0.08);
+  --settings-dim: #a2a2aa;
+  --settings-accent: #0a84ff;
+  display: grid;
+  grid-template-columns: minmax(146px, 28%) minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+  background: #111114;
+  color: #f2f2f5;
+  font: 13px "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+}
+
+.settings-page button, .settings-page input, .settings-page select { font: inherit; }
+
+.settings-sidebar {
+  overflow: auto;
+  scrollbar-width: thin;
+  padding: 10px 8px 14px;
+  border-inline-end: 1px solid var(--settings-line);
+}
+
+.settings-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px 12px;
+  font-size: 14px;
+}
+
+.settings-mark {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  color: #fff;
+  background: linear-gradient(135deg, #314d8e, #16223e);
+  font-weight: 700;
+  flex: none;
+}
+
+.settings-page .settings-search {
+  width: 100%;
+  padding: 6px 8px;
+  border-color: var(--settings-line);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.settings-menu-group {
+  margin: 12px 7px 5px;
+  color: var(--settings-dim);
+  font-size: 10px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.settings-menu-item {
+  display: flex;
+  align-items: center;
+  text-align: start;
+  gap: 7px;
+  width: 100%;
+  padding: 5px 7px;
+  margin: 1px 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: #d1d1d6;
+  font-size: 12px;
+}
+
+.settings-menu-item:hover { background: rgba(255, 255, 255, 0.05); }
+.settings-menu-item[aria-current="page"] { background: rgba(10, 132, 255, 0.18); color: #fff; }
+
+.settings-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border-radius: 6px;
+  color: #fff;
+  background: #6b6b73;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.settings-icon.blue { background: #0a72dc; }
+.settings-icon.indigo { background: #5b59c7; }
+.settings-icon.cyan { background: #1b8099; }
+.settings-icon.green { background: #24883f; }
+.settings-icon.orange { background: #a85818; }
+.settings-icon.purple { background: #7746ad; }
+.settings-icon.red { background: #bf3839; }
+
+.settings-content {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.settings-panel {
+  overflow: auto;
+  scrollbar-width: thin;
+  padding: 13px 16px 16px;
+  min-height: 0;
+}
+
+.settings-title {
+  margin: 0 0 13px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 20px;
+}
+
+.settings-title .settings-icon { width: 30px; height: 30px; border-radius: 8px; font-size: 16px; }
+.settings-lead { margin: 0 0 10px; color: #c7c7cc; line-height: 1.55; }
+.settings-controls { border: 0; margin: 0; padding: 0; min-inline-size: 0; }
+.settings-controls h3 { margin: 13px 0 6px; color: var(--settings-dim); font-size: 10px; text-transform: uppercase; letter-spacing: .07em; }
+.settings-controls h3:first-child { margin-top: 0; }
+
+.settings-group {
+  background: var(--settings-panel);
+  border: 1px solid var(--settings-line);
+  border-radius: 10px;
+}
+
+.settings-row, .settings-module-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 41px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--settings-line);
+}
+
+.settings-row:last-child { border-bottom: 0; }
+.settings-label { display: grid; gap: 2px; min-width: 0; }
+.settings-label small, .settings-result small { font-size: 11px; color: var(--settings-dim); line-height: 1.4; }
+
+.settings-page .settings-switch {
+  appearance: none;
+  position: relative;
+  flex: none;
+  width: 35px;
+  height: 21px;
+  padding: 0;
+  margin: 1px;
+  border: 0;
+  border-radius: 12px;
+  background: #424247;
+  cursor: pointer;
+}
+
+.settings-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform .15s ease;
+}
+
+.settings-page .settings-switch:checked { background: #238541; }
+.settings-switch:checked::after { transform: translateX(14px); }
+.settings-switch:disabled { opacity: .55; cursor: default; }
+
+.settings-page .settings-select, .settings-button {
+  background: #2c2c2e;
+  border: 1px solid #414145;
+  color: inherit;
+  border-radius: 7px;
+  padding: 5px 8px;
+}
+
+.settings-button:not(:disabled):hover { background: #39393a; }
+.settings-button + .settings-button { margin-inline-start: 5px; }
+.settings-button:disabled { opacity: .43; cursor: default; }
+.settings-range { display: flex; align-items: center; justify-content: end; gap: 6px; flex: none; }
+.settings-range input { width: 100px; padding: 0; accent-color: var(--settings-accent); }
+.settings-range-value { min-width: 41px; text-align: end; font-variant-numeric: tabular-nums; }
+
+.settings-module-list { display: grid; gap: 4px; }
+.settings-module-row {
+  min-height: 36px;
+  padding: 5px 8px;
+  border: 1px solid var(--settings-line);
+  border-radius: 8px;
+  background: var(--settings-panel);
+}
+.settings-module-row.drag-target { outline: 2px solid var(--settings-accent); }
+.settings-module-name { margin-inline-end: auto; overflow-wrap: anywhere; }
+.settings-module-grip { color: var(--settings-dim); cursor: grab; font-size: 17px; }
+.settings-module-row .settings-button { width: 25px; padding: 3px 0; }
+.settings-module-row .settings-button + .settings-button { margin-inline-start: 0; }
+
+.settings-result {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: start;
+  gap: 7px;
+  width: 100%;
+  padding: 9px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--settings-line);
+  background: transparent;
+}
+.settings-result:last-child { border-bottom: 0; }
+.settings-result:hover { background: rgba(255, 255, 255, 0.05); }
+.settings-empty { margin: 0; padding: 10px; color: var(--settings-dim); }
+.settings-status { padding: 0 16px 8px; color: var(--settings-dim); overflow-wrap: anywhere; font-size: 11px; }
+.settings-status:empty { display: none; }
+
+.settings-page :focus-visible { outline: 2px solid var(--settings-accent); outline-offset: 1px; }
+
+@media (max-width: 540px) {
+  .settings-page { grid-template-columns: minmax(120px, 32%) minmax(0, 1fr); }
+  .settings-panel { padding-inline: 9px; }
+  .settings-row { flex-wrap: wrap; }
+  .settings-range input { width: 73px; }
+}

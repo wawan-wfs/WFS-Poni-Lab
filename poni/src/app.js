@@ -11,6 +11,9 @@ const expandedTasks = new Set();
 let queue = Promise.resolve();
 let panelSequence = 0;
 let closeTimer = null;
+let hoverTimer = null;
+let rememberTimer = null;
+let preferenceQueue = Promise.resolve();
 let mediaPending = false;
 let keyboardOpen = false;
 let weatherRequest = 0;
@@ -23,6 +26,15 @@ selectedDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), sel
 let displayedMonth = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
 let editingEvent = null;
 const modules = window.poniModules || {};
+const navigation = open.querySelector('header nav');
+const moduleTabs = new Map([...navigation.querySelectorAll('.tab')].map(tab => [tab.dataset.page, tab]));
+let preferences = {
+  clock_format: 'region', header_clock: true, open_on_hover: true,
+  hover_delay: 0, close_delay: 450, module_shortcuts: true,
+  module_order: [], hidden_modules: [], default_module: 'home',
+  remember_module: false, last_module: null,
+  mirror_enabled: true, mirror_shape: 'rounded'
+};
 const mountedModules = new Set();
 let activePage = 'home';
 const panelSession = crypto.randomUUID();
@@ -31,7 +43,14 @@ panelReady.catch(error => { status.textContent = String(error); });
 
 function setOpen(value) {
   if (closed.hidden === value) return;
-  if (!value) callModule('hide');
+  clearTimeout(hoverTimer);
+  if (value) {
+    const preferred = preferences.remember_module ? preferences.last_module : null;
+    if (!selectModule(preferred)) selectModule(preferences.default_module);
+  } else {
+    callModule('hide');
+    window.poniMirror?.hide();
+  }
   if (!value) keyboardOpen = false;
   closed.hidden = value;
   open.hidden = !value;
@@ -43,11 +62,43 @@ function setOpen(value) {
 }
 function updatePanelSize(isOpen, focus = false) {
   const tall = isOpen && isTallPage(activePage);
+  const settingsView = isOpen && activePage === 'settings';
   open.classList.toggle('tall', tall);
+  open.classList.toggle('settings-view', settingsView);
   const seq = ++panelSequence;
-  panelReady.then(() => invoke('set_panel_open', { session: panelSession, open: isOpen, tall, focus, seq }))
+  panelReady.then(() => invoke('set_panel_open', { session: panelSession, open: isOpen, tall, settingsView, focus, seq }))
     .catch(error => { status.textContent = String(error); });
 }
+
+function selectModule(id) {
+  const tab = moduleTabs.get(id);
+  if (!tab || tab.hidden) return false;
+  tab.click();
+  return true;
+}
+
+function applyPreferences(value) {
+  if (!value || !Array.isArray(value.module_order) || !Array.isArray(value.hidden_modules)) return;
+  preferences = { ...preferences, ...value };
+  const order = new Set([...preferences.module_order, ...moduleTabs.keys()]);
+  const hidden = new Set(preferences.hidden_modules);
+  for (const id of order) {
+    const tab = moduleTabs.get(id);
+    if (tab) {
+      tab.hidden = hidden.has(id);
+      navigation.append(tab);
+    }
+  }
+  if (moduleTabs.get(activePage)?.hidden) {
+    if (!selectModule(preferences.default_module)) navigation.querySelector('.tab:not([hidden])')?.click();
+  }
+  document.querySelector('#header-clock').hidden = !preferences.header_clock;
+  window.poniMirror?.configure({enabled:preferences.mirror_enabled, shape:preferences.mirror_shape});
+  updateClock();
+}
+
+window.poniMirror?.mount(document.querySelector('#mirror'));
+window.addEventListener('poni-settings-changed', event => applyPreferences(event.detail));
 
 function isTallPage(page) {
   return page === 'tasks' || page === 'dayprogress' || Object.hasOwn(modules, page);
@@ -69,14 +120,20 @@ function callModule(method) {
   }
 }
 closed.addEventListener('click', () => setOpen(true));
-closed.addEventListener('pointerenter', () => setOpen(true));
+closed.addEventListener('pointerenter', () => {
+  clearTimeout(hoverTimer);
+  if (!preferences.open_on_hover) return;
+  if (preferences.hover_delay) hoverTimer = setTimeout(() => setOpen(true), preferences.hover_delay);
+  else setOpen(true);
+});
+closed.addEventListener('pointerleave', () => clearTimeout(hoverTimer));
 document.querySelector('#close').addEventListener('click', () => setOpen(false));
 surface.addEventListener('pointerenter', () => clearTimeout(closeTimer));
 surface.addEventListener('pointerleave', () => {
   clearTimeout(closeTimer);
   closeTimer = setTimeout(() => {
-    if (!keyboardOpen && !surface.matches(':hover') && !document.activeElement.matches('input, textarea, select, [contenteditable="true"]')) setOpen(false);
-  }, 450);
+    if (!keyboardOpen && activePage !== 'settings' && !surface.matches(':hover') && !document.activeElement.matches('input, textarea, select, [contenteditable="true"]')) setOpen(false);
+  }, preferences.close_delay);
 });
 window.__TAURI__.event.listen('poni-toggle', () => {
   const shouldOpen = open.hidden;
@@ -89,9 +146,11 @@ invoke('shortcut_status').then(available => {
 document.addEventListener('keydown', event => {
   if (open.hidden) return;
   if (event.key === 'Escape') { setOpen(false); return; }
-  if (!keyboardOpen || event.target.matches('input, textarea, select') || event.target.isContentEditable) return;
+  if (!keyboardOpen || !preferences.module_shortcuts || activePage === 'settings' ||
+      event.target.matches('input, textarea, select') || event.target.isContentEditable) return;
   if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
-  const tabs = [...document.querySelectorAll('.tab')];
+  const tabs = [...navigation.querySelectorAll('.tab:not([hidden])')];
+  if (!tabs.length) return;
   const active = tabs.findIndex(tab => tab.classList.contains('active'));
   const direction = event.key === 'ArrowRight' ? 1 : -1;
   tabs[(active + direction + tabs.length) % tabs.length].click();
@@ -99,9 +158,11 @@ document.addEventListener('keydown', event => {
 });
 
 document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => {
+  if (tab.hidden) return;
   const previousPage = activePage;
   if (tab.dataset.page !== activePage) {
     if (!open.hidden) callModule('hide');
+    if (activePage === 'home') window.poniMirror?.hide();
     activePage = tab.dataset.page;
   }
   document.querySelectorAll('.tab').forEach(item => item.classList.toggle('active', item === tab));
@@ -109,8 +170,20 @@ document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', (
   tab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   open.querySelector('main').scrollTop = 0;
   if (!open.hidden && previousPage !== activePage) {
-    if (isTallPage(previousPage) !== isTallPage(activePage)) updatePanelSize(true);
+    if (previousPage === 'settings' || activePage === 'settings' || isTallPage(previousPage) !== isTallPage(activePage)) {
+      updatePanelSize(true, activePage === 'settings');
+    }
     callModule('show');
+    if (activePage !== 'settings' && preferences.remember_module) {
+      const selected = activePage;
+      preferences = { ...preferences, last_module: selected };
+      clearTimeout(rememberTimer);
+      rememberTimer = setTimeout(() => {
+        preferenceQueue = preferenceQueue
+          .then(() => invoke('remember_poni_module', {module:selected}))
+          .catch(error => { status.textContent = String(error); });
+      }, 150);
+    }
   }
   if (tab.dataset.page === 'system') void refreshSystem();
   if (tab.dataset.page === 'dayprogress') renderDayProgress();
@@ -251,7 +324,10 @@ document.querySelector('#day-schedule').addEventListener('submit', async event =
 
 function updateClock() {
   const now = new Date();
-  document.querySelectorAll('.clock').forEach(clock => { clock.textContent = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(now); });
+  const options = { hour: 'numeric', minute: '2-digit' };
+  if (preferences.clock_format !== 'region') options.hourCycle = preferences.clock_format === 'h24' ? 'h23' : 'h12';
+  const time = new Intl.DateTimeFormat(undefined, options).format(now);
+  document.querySelectorAll('.clock').forEach(clock => { clock.textContent = time; });
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   if (today !== calendarToday) { calendarToday = today; if (calendarDay == null || calendarDay < today) calendarDay = today; renderCalendar(); }
 }
@@ -670,4 +746,4 @@ document.querySelector('#weather-search').addEventListener('submit', async event
   }
 });
 
-queue = invoke('get_data').then(saved => { data = saved; render(); if (data.weather_location) void loadWeather(data.weather_location); }).catch(error => { status.textContent = String(error); });
+queue = invoke('get_data').then(saved => { data = saved; applyPreferences(data.settings); render(); if (data.weather_location) void loadWeather(data.weather_location); }).catch(error => { status.textContent = String(error); });

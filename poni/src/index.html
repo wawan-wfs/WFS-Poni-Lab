@@ -43,6 +43,10 @@
   <script src="notes.js" defer></script>
   <link rel="stylesheet" href="worldclock.css">
   <script src="worldclock.js" defer></script>
+  <link rel="stylesheet" href="mirror.css">
+  <script src="mirror.js" defer></script>
+  <link rel="stylesheet" href="settings.css">
+  <script src="settings.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -78,13 +82,15 @@
           <button class="tab" data-page="chat" title="Chat" aria-label="Chat">◫ <span>Chat</span></button>
           <button class="tab" data-page="currency" title="Currency" aria-label="Currency">¤ <span>Currency</span></button>
         </nav>
-        <time class="clock">--:--</time>
+        <time class="clock" id="header-clock">--:--</time>
+        <button class="tab settings-gear" type="button" id="settings-gear" data-page="settings" title="Settings" aria-label="Settings">⚙</button>
         <button class="close" id="close" aria-label="Close panel">×</button>
       </header>
       <main>
         <section id="page-home" class="page home">
           <div class="media"><div class="album" aria-hidden="true">♫</div><div class="media-info"><strong id="media-title">Nothing playing</strong><p id="media-artist">Play something in a media player</p><div class="media-progress" aria-hidden="true"><div id="media-progress-fill"></div></div><div class="media-controls"><button type="button" data-media="previous" aria-label="Previous track">◀◀</button><button type="button" data-media="toggle" aria-label="Play or pause">▶</button><button type="button" data-media="next" aria-label="Next track">▶▶</button></div></div></div>
           <div class="calendar"><strong id="month"></strong><div id="week" class="week" aria-label="Next seven days"></div><div id="home-events" class="calendar-empty"></div></div>
+          <div id="mirror"></div>
         </section>
         <section id="page-tasks" class="page" hidden>
           <form id="task-form">
@@ -144,6 +150,7 @@
         <section id="page-aiusage" class="page" hidden></section>
         <section id="page-bluetooth" class="page" hidden></section>
         <section id="page-chat" class="page" hidden></section>
+        <section id="page-settings" class="page" hidden></section>
       </main>
       <p id="status" role="status" aria-live="polite"></p>
     </div>

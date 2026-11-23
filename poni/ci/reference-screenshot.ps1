@@ -124,15 +124,24 @@ public static class PoniPointer {
                     )
                     $buttons = @($settings.FindAll([System.Windows.Automation.TreeScope]::Descendants, $clickable))
                     $details.observations += @{ stage = 'settings-controls'; buttons = @($buttons | ForEach-Object { $_.Current.Name }) }
+                    # WebView2 on the runner may omit HTML buttons from UI Automation.
+                    # These positions were observed in the 1024x768 General screenshot.
+                    $visibleSidebar = @{ Modules = 263; Media = 572; Calendar = 606 }
                     foreach ($section in $sections) {
                         $item = $buttons | Where-Object { $_.Current.Name.Trim() -eq $section } | Select-Object -First 1
                         $invoke = $null
                         if ($item -and $item.TryGetCurrentPattern([System.Windows.Automation.InvokePattern]::Pattern, [ref]$invoke)) {
                             $invoke.Invoke()
-                            Start-Sleep -Milliseconds 750
-                            $safeName = $section.ToLowerInvariant() -replace '[^a-z]+','-'
-                            Save-Desktop "settings-$safeName.png"
+                        } elseif ($visibleSidebar.ContainsKey($section)) {
+                            [PoniPointer]::SetCursorPos(144, $visibleSidebar[$section]) | Out-Null
+                            [PoniPointer]::mouse_event(2, 0, 0, 0, [UIntPtr]::Zero)
+                            [PoniPointer]::mouse_event(4, 0, 0, 0, [UIntPtr]::Zero)
+                        } else {
+                            continue
                         }
+                        Start-Sleep -Milliseconds 750
+                        $safeName = $section.ToLowerInvariant() -replace '[^a-z]+','-'
+                        Save-Desktop "settings-$safeName.png"
                     }
                 }
             }

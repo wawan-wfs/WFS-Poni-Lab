@@ -11,6 +11,7 @@ Inventaris mencakup 23 modul yang terdaftar melalui `N.register` di aset Poni 1.
 Angka 100% mengukur cakupan inventaris modul. Kesetaraan penuh menunggu perbandingan fitur, tampilan, penyimpanan, integrasi, dan penanganan kesalahan dengan aplikasi asli.
 
 [Daftar verifikasi kesetaraan](PARITY.md) memuat skenario dan bukti yang diperlukan untuk setiap modul serta fitur di luar inventaris.
+[Inventaris Settings](SETTINGS-PARITY.md) memuat tampilan General yang dibuka di Poni 1.8.1, serta daftar pengaturan standar dan khusus.
 
 ## Modul yang sudah dimulai
 
@@ -38,6 +39,6 @@ Angka 100% mengukur cakupan inventaris modul. Kesetaraan penuh menunggu perbandi
 - **Bluetooth** menampilkan perangkat klasik yang dipasangkan atau diingat Windows, serta perangkat Bluetooth LE yang sudah dipasangkan. Panel menampilkan status koneksi jika tersedia dan membuka Pengaturan Bluetooth Windows. Status baterai dan kontrol koneksi langsung belum tersedia. Pengujian perangkat fisik masih diperlukan.
 - **Chat** mengirim percakapan teks ke Ollama lokal dan menyimpan riwayat per percakapan. Pemakaian memerlukan model Ollama yang terpasang. Penyedia cloud, lampiran, dan tindakan aplikasi dari Chat belum tersedia.
 
-Di luar inventaris modul, sudah ada sebagian perilaku Home/notch, pemutaran media Windows, stopwatch, timer, statistik CPU/memori dan installer. Semuanya masih memerlukan perbandingan lebih lanjut. Pengingat OS telah diimplementasikan, tetapi tampilan notifikasi pada instalasi Windows belum diverifikasi. Belum dilakukan audit keamanan; audit menyeluruh direncanakan setelah kesetaraan fitur tercapai.
+Di luar inventaris modul, Rust menyediakan sebagian perilaku Home/notch, Mirror di Home, panel Settings dengan pengaturan dasar yang tersimpan, pemutaran media Windows, stopwatch, timer, statistik CPU/memori dan installer. Settings Rust tampil di panel yang diperbesar. Poni asli memakai jendela terpisah dengan lebih banyak bagian. Mirror perlu diuji dengan kamera fisik Windows. Tampilan pengingat OS pada instalasi Windows juga perlu diuji. Audit keamanan menyeluruh masih menunggu kesetaraan fitur.
 
 Pengujian browser menggunakan backend tiruan untuk memeriksa alur modul. Runner Windows menjalankan tes Rust, membuat build dan installer, serta memeriksa pembukaan panel melalui Alt+N dan perubahan tinggi panel saat berpindah modul. Fitur yang memerlukan perangkat, akses akun, atau layanan eksternal juga memerlukan pengujian pada kondisi tersebut.

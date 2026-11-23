@@ -23,6 +23,7 @@ mod pomodoro;
 mod prayer;
 mod radio;
 mod screentime;
+mod settings;
 mod support;
 mod teleprompter;
 mod translate;
@@ -267,6 +268,7 @@ impl Timer {
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 struct AppData {
+    settings: settings::PoniSettings,
     ai_usage: aiusage::AiUsage,
     chat: chat::ChatData,
     github_login: Option<String>,
@@ -1024,13 +1026,25 @@ fn stopwatch_action(store: State<'_, Mutex<Store>>, action: String) -> Result<Ap
         })
 }
 
-fn resize_panel(window: &tauri::WebviewWindow, open: bool, tall: bool) -> Result<(), String> {
-    let (width, height) = match (open, tall) {
-        (true, true) => (680.0, 420.0),
-        (true, false) => (680.0, 200.0),
-        (false, _) => (200.0, 32.0),
+fn resize_panel(
+    window: &tauri::WebviewWindow,
+    open: bool,
+    tall: bool,
+    settings_view: bool,
+) -> Result<(), String> {
+    let (mut width, mut height): (f64, f64) = match (open, tall, settings_view) {
+        (true, _, true) => (900.0, 640.0),
+        (true, true, _) => (680.0, 420.0),
+        (true, false, _) => (680.0, 200.0),
+        (false, _, _) => (200.0, 32.0),
     };
     let monitor = window.current_monitor().map_err(|e| e.to_string())?;
+    if let Some(monitor) = &monitor {
+        let scale = monitor.scale_factor();
+        let work = monitor.work_area();
+        width = width.min(f64::from(work.size.width) / scale);
+        height = height.min(f64::from(work.size.height) / scale);
+    }
     window
         .set_size(tauri::LogicalSize::new(width, height))
         .map_err(|e| e.to_string())?;
@@ -1052,7 +1066,7 @@ fn initialize_panel(
     session: Uuid,
 ) -> Result<(), String> {
     let mut state = sequence.lock().map_err(|_| "Window state unavailable")?;
-    resize_panel(&window, false, false)?;
+    resize_panel(&window, false, false, false)?;
     state.session = Some(session);
     state.last = 0;
     Ok(())
@@ -1065,6 +1079,7 @@ fn set_panel_open(
     session: Uuid,
     open: bool,
     tall: bool,
+    settings_view: Option<bool>,
     focus: bool,
     seq: u64,
 ) -> Result<(), String> {
@@ -1072,7 +1087,7 @@ fn set_panel_open(
     if state.session != Some(session) || seq <= state.last {
         return Ok(());
     }
-    resize_panel(&window, open, tall)?;
+    resize_panel(&window, open, tall, settings_view.unwrap_or_default())?;
     if open && focus {
         window.set_focus().map_err(|e| e.to_string())?;
     }
@@ -1130,6 +1145,9 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            settings::get_poni_settings,
+            settings::set_poni_settings,
+            settings::remember_poni_module,
             aiusage::ai_usage_state,
             aiusage::import_ai_usage,
             aiusage::clear_ai_usage,
