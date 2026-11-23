@@ -698,6 +698,10 @@ fn announce_timer_end(app: &tauri::AppHandle, finished: Option<bool>) {
         .show();
     if started_break {
         let _ = app.emit_to("main", "poni-pomodoro-timer-break", ());
+        let state = app.state::<Mutex<Store>>();
+        if let Ok(store) = state.lock() {
+            pomodoro::send_playback(app, &store.data.pomodoro);
+        };
     }
 }
 
@@ -1291,6 +1295,7 @@ fn main() {
             health::health_record,
             pomodoro::pomodoro_state,
             pomodoro::get_pomodoro_settings,
+            pomodoro::get_pomodoro_playback,
             pomodoro::pomodoro_action,
             pomodoro::pomodoro_settings,
             teleprompter::get_teleprompter,

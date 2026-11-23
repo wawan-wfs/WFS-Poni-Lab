@@ -28,6 +28,8 @@ Settings Screen Time kini menyediakan sakelar pelacakan, ambang idle 30–600 de
 
 Settings Pomodoro menambahkan pilihan **Start a break after the timer** dan membawa enam kontrol sesi dari tab Pomodoro ke Settings. Timer memakai pilihan **Remember the last duration** dan preset yang dapat ditambah atau dihapus. Preset masuk renderer kustom, sehingga tidak mengubah hitungan kontrol standar. Tersisa **170 dari 201 kontrol standar** tanpa padanan setelah tahap ini.
 
+Bagian **Background sound** menambahkan pilihan delapan suara, volume, dan opsi melanjutkan audio selama jeda. Sintesis audio dari referensi berjalan lokal di WebView dan mengikuti fase Pomodoro yang disimpan di Rust. Tersisa **167 dari 201 kontrol standar** tanpa padanan. Sakelar **Completion sound** masih belum tersedia.
+
 | Jenis kontrol | Deklarasi | Masuk katalog build |
 | --- | ---: | ---: |
 | Sakelar | 115 | 115 |

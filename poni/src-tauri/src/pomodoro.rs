@@ -24,6 +24,7 @@ impl Phase {
 }
 
 #[derive(Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub(super) struct Settings {
     focus_minutes: u16,
     short_minutes: u16,
@@ -31,6 +32,23 @@ pub(super) struct Settings {
     cycle_length: u16,
     auto_break: bool,
     auto_focus: bool,
+    focus_sound: FocusSound,
+    focus_sound_volume: u8,
+    focus_sound_breaks: bool,
+}
+
+#[derive(Clone, Copy, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+enum FocusSound {
+    Off,
+    White,
+    Pink,
+    Brown,
+    Rain,
+    Waves,
+    Wind,
+    Fire,
+    Cafe,
 }
 
 impl Default for Settings {
@@ -42,6 +60,9 @@ impl Default for Settings {
             cycle_length: 4,
             auto_break: true,
             auto_focus: false,
+            focus_sound: FocusSound::Off,
+            focus_sound_volume: 70,
+            focus_sound_breaks: false,
         }
     }
 }
@@ -54,6 +75,9 @@ impl Settings {
             || !(2..=8).contains(&self.cycle_length)
         {
             return Err("Choose valid focus, break, and cycle lengths".into());
+        }
+        if self.focus_sound_volume > 100 {
+            return Err("Choose a sound volume from 0 to 100".into());
         }
         Ok(())
     }
@@ -77,6 +101,9 @@ pub(super) struct SettingsPatch {
     cycle_length: Option<u16>,
     auto_break: Option<bool>,
     auto_focus: Option<bool>,
+    focus_sound: Option<FocusSound>,
+    focus_sound_volume: Option<u8>,
+    focus_sound_breaks: Option<bool>,
 }
 
 impl SettingsPatch {
@@ -87,6 +114,13 @@ impl SettingsPatch {
         settings.cycle_length = self.cycle_length.unwrap_or(settings.cycle_length);
         settings.auto_break = self.auto_break.unwrap_or(settings.auto_break);
         settings.auto_focus = self.auto_focus.unwrap_or(settings.auto_focus);
+        settings.focus_sound = self.focus_sound.unwrap_or(settings.focus_sound);
+        settings.focus_sound_volume = self
+            .focus_sound_volume
+            .unwrap_or(settings.focus_sound_volume);
+        settings.focus_sound_breaks = self
+            .focus_sound_breaks
+            .unwrap_or(settings.focus_sound_breaks);
         settings.validate()
     }
 }
@@ -250,12 +284,42 @@ fn notify(app: &AppHandle, phase: Option<Phase>) {
     }
 }
 
+#[derive(Serialize, Clone)]
+pub(super) struct Playback {
+    phase: Phase,
+    ends_at_ms: Option<u64>,
+    focus_sound: FocusSound,
+    focus_sound_volume: u8,
+    focus_sound_breaks: bool,
+}
+
+impl From<&Pomodoro> for Playback {
+    fn from(timer: &Pomodoro) -> Self {
+        Self {
+            phase: timer.phase,
+            ends_at_ms: timer.ends_at_ms,
+            focus_sound: timer.settings.focus_sound,
+            focus_sound_volume: timer.settings.focus_sound_volume,
+            focus_sound_breaks: timer.settings.focus_sound_breaks,
+        }
+    }
+}
+
+pub(super) fn send_playback(app: &AppHandle, timer: &Pomodoro) {
+    let _ = app.emit_to(
+        "main",
+        "poni-pomodoro-playback-changed",
+        Playback::from(timer),
+    );
+}
+
 pub(super) fn tick(app: &AppHandle, now: u64) {
     let state = app.state::<Mutex<Store>>();
-    let completed = state
-        .lock()
-        .ok()
-        .and_then(|mut store| settle_store(&mut store, now).ok().flatten());
+    let completed = state.lock().ok().and_then(|mut store| {
+        let completed = settle_store(&mut store, now).ok().flatten()?;
+        send_playback(app, &store.data.pomodoro);
+        Some(completed)
+    });
     notify(app, completed);
 }
 
@@ -268,6 +332,9 @@ pub(super) fn pomodoro_state(
     let completed = settle_store(&mut store, now_ms()?)?;
     let result = store.data.pomodoro.clone();
     drop(store);
+    if completed.is_some() {
+        send_playback(&app, &result);
+    }
     notify(&app, completed);
     Ok(result)
 }
@@ -287,6 +354,7 @@ pub(super) fn pomodoro_action(
         data.pomodoro.apply(action, phase, now)
     })?;
     drop(store);
+    send_playback(&app, &result.pomodoro);
     notify(&app, completed);
     Ok(result.pomodoro)
 }
@@ -295,6 +363,12 @@ pub(super) fn pomodoro_action(
 pub(super) fn get_pomodoro_settings(state: State<'_, Mutex<Store>>) -> Result<Settings, String> {
     let store = state.lock().map_err(|_| "Storage unavailable")?;
     Ok(store.data.pomodoro.settings.clone())
+}
+
+#[tauri::command]
+pub(super) fn get_pomodoro_playback(state: State<'_, Mutex<Store>>) -> Result<Playback, String> {
+    let store = state.lock().map_err(|_| "Storage unavailable")?;
+    Ok(Playback::from(&store.data.pomodoro))
 }
 
 #[tauri::command]
@@ -316,6 +390,7 @@ pub(super) fn pomodoro_settings(
         Ok(())
     })?;
     drop(store);
+    send_playback(&app, &result.pomodoro);
     notify(&app, completed);
     let _ = app.emit("poni-pomodoro-settings-changed", &result.pomodoro.settings);
     Ok(result.pomodoro)

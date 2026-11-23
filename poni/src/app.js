@@ -137,6 +137,7 @@ invoke('calendar_first_weekday').then(day => {
 }).catch(error => { status.textContent = String(error); });
 
 window.poniMirror?.mount(document.querySelector('#mirror'));
+window.poniFocusPlayback.listen().catch(error => { status.textContent = String(error); });
 window.__TAURI__.event.listen('poni-settings-changed', event => applyPreferences(event.payload))
   .catch(error => { status.textContent = String(error); });
 window.__TAURI__.event.listen('poni-settings-open-module', event => {

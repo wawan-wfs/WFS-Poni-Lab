@@ -24,6 +24,7 @@ FIXTURE = """
   };
   const readPomodoro = () => JSON.parse(localStorage.getItem('test-pomodoro')) || {
     focus_minutes:25, short_minutes:5, long_minutes:15, cycle_length:4, auto_break:false, auto_focus:false,
+    focus_sound:'off', focus_sound_volume:70, focus_sound_breaks:false,
   };
   const pomodoroState = settings => ({
     total_ms:settings.focus_minutes * 60000, remaining_ms:settings.focus_minutes * 60000,
@@ -202,6 +203,12 @@ def test_settings(page):
     expect(settings.get_by_role('status')).to_have_text('Saved')
     settings.locator('#settings-pomo-auto-break').check()
     expect(settings.get_by_role('status')).to_have_text('Saved')
+    settings.locator('#settings-pomo-sound').select_option('rain')
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    settings.locator('#settings-pomo-volume').fill('65')
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    settings.locator('#settings-pomo-break-sound').check()
+    expect(settings.get_by_role('status')).to_have_text('Saved')
 
     preset = settings.locator('#settings-timer-preset')
     for value in ('45', '10', '20'):
@@ -222,6 +229,7 @@ def test_settings(page):
     expect(page.locator('#timer-display')).to_have_text('45:00')
     page.locator('.tab[data-page="pomodoro"]').click()
     expect(page.locator('[data-pomo-time]')).to_have_text('55:00')
+    expect(page.locator('[data-pomo-sound]')).to_have_value('rain')
 
     popup.close()
     page.reload()
@@ -251,6 +259,9 @@ def test_settings(page):
     settings.get_by_role('button', name='Pomodoro', exact=True).click()
     expect(settings.locator('#settings-pomo-focus')).to_have_value('55')
     expect(settings.locator('#settings-pomo-auto-break')).to_be_checked()
+    expect(settings.locator('#settings-pomo-sound')).to_have_value('rain')
+    expect(settings.locator('#settings-pomo-volume')).to_have_value('65')
+    expect(settings.locator('#settings-pomo-break-sound')).to_be_checked()
     expect(settings.locator('#settings-timer-remember')).not_to_be_checked()
     expect(settings.locator('#settings-timer-then-break')).to_be_checked()
 

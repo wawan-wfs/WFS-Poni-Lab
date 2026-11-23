@@ -188,13 +188,21 @@ try {
         Find-Setting 'start a break after the timer'
         [System.Windows.Forms.SendKeys]::SendWait(' ')
         Start-Sleep -Seconds 2
+        Find-Setting 'pomodoro background audio noise'
+        [System.Windows.Forms.SendKeys]::SendWait('{DOWN}')
+        Start-Sleep -Seconds 2
+        Find-Setting 'keep playing in breaks'
+        [System.Windows.Forms.SendKeys]::SendWait(' ')
+        Start-Sleep -Seconds 2
         Save-Screen 'settings-pomodoro.png'
 
         $profile = Get-Content -Raw -LiteralPath $dataPath | ConvertFrom-Json
         if ($profile.pomodoro.settings.cycle_length -ne 8 -or
             @($profile.settings.timer_presets) -notcontains 35 -or
-            !$profile.settings.timer_then_break) {
-            throw 'Pomodoro and Timer did not save the cycle length, preset and short break option.'
+            !$profile.settings.timer_then_break -or
+            $profile.pomodoro.settings.focus_sound -ne 'white' -or
+            !$profile.pomodoro.settings.focus_sound_breaks) {
+            throw 'Pomodoro and Timer settings were not saved in the application profile.'
         }
         $pomodoroChecked = $true
     }

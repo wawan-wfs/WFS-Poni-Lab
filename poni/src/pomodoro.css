@@ -18,6 +18,8 @@
 .pomo-face span, .pomo-summary, [data-pomo-cycle] { color: #aaa; font-size: 11px; }
 .pomo-main { display: grid; gap: 5px; }
 .pomo-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+.pomo-controls label { font-size: 12px; }
+#page-pomodoro [data-pomo-sound] { background: #27272b; color: #eee; padding: 3px; }
 #page-pomodoro button { border: 0; border-radius: 7px; background: #27272b; padding: 4px 8px; color: #eee; font-size: 12px; }
 #page-pomodoro button[aria-pressed="true"], #page-pomodoro [data-pomo-toggle] { background: #723725; }
 #page-pomodoro button:disabled { opacity: .55; }

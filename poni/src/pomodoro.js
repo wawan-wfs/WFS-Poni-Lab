@@ -33,6 +33,7 @@
           <div class="pomo-controls">
             <button type="button" data-pomo-view="countdown">Timer</button>
             <button type="button" data-pomo-view="stopwatch">Stopwatch</button>
+            <label>Background sound <select data-pomo-sound aria-label="Background sound"></select></label>
             <button type="button" data-pomo-options aria-expanded="false">Settings</button>
           </div>
         </div>
@@ -60,12 +61,19 @@
       cycle: find('[data-pomo-cycle]'),
       today: find('[data-pomo-today]'),
       next: find('[data-pomo-next]'),
+      sound: find('[data-pomo-sound]'),
       error: find('[data-pomo-error]'),
       phaseButtons: [...page.querySelectorAll('[data-phase]')],
     };
     const options = find('[data-pomo-options]');
     const submit = form.querySelector('[type="submit"]');
-    context.controls = [context.toggle, ...context.phaseButtons, ...page.querySelectorAll('[data-pomo-action]'), submit];
+    context.controls = [context.toggle, context.sound, ...context.phaseButtons, ...page.querySelectorAll('[data-pomo-action]'), submit];
+    for (const [value, label] of window.poniFocusPlayback.options) {
+      context.sound.add(new Option(label, value));
+    }
+    context.sound.addEventListener('change', () => {
+      void run('pomodoro_settings', { settings: { focus_sound: context.sound.value } }, true, true);
+    });
     context.toggle.addEventListener('click', () => run('pomodoro_action', { action: 'toggle' }));
     for (const button of context.phaseButtons) {
       button.addEventListener('click', () => run('pomodoro_action', { action: 'phase', phase: button.dataset.phase }));
@@ -102,6 +110,7 @@
   }
 
   function syncSettings() {
+    context.sound.value = state.settings.focus_sound || 'off';
     for (const input of context.form.querySelectorAll('input')) {
       const value = state.settings[input.name];
       if (input.type === 'checkbox') input.checked = value;
@@ -109,7 +118,7 @@
     }
   }
 
-  async function run(command, args, sync = false) {
+  async function run(command, args, sync = false, preview = false) {
     if (busy) return;
     busy = true;
     render();
@@ -118,6 +127,7 @@
       state = await window.__TAURI__.core.invoke(command, args);
       context.error.textContent = '';
       if (first || sync) syncSettings();
+      if (preview) window.poniFocusPlayback.previewSettings(state);
     } catch (error) {
       context.error.textContent = String(error);
     } finally {

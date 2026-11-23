@@ -76,6 +76,9 @@
     ['pomodoro', 'Focus sessions before a long break', 'pomodoro cycle', 'pomo-cycle'],
     ['pomodoro', 'Start breaks automatically', 'pomodoro auto break', 'pomo-auto-break'],
     ['pomodoro', 'Start focus automatically after a break', 'pomodoro auto focus', 'pomo-auto-focus'],
+    ['pomodoro', 'Sound while you focus', 'pomodoro background audio noise suara', 'pomo-sound'],
+    ['pomodoro', 'Volume', 'pomodoro background sound audio suara', 'pomo-volume'],
+    ['pomodoro', 'Keep playing in breaks', 'pomodoro background sound audio', 'pomo-break-sound'],
     ['pomodoro', 'Timer presets', 'add remove countdown minutes', 'timer-preset'],
     ['pomodoro', 'Remember the last duration', 'timer countdown last length', 'timer-remember'],
     ['pomodoro', 'Start a break after the timer', 'countdown pomodoro short break', 'timer-then-break'],
@@ -125,6 +128,9 @@
       } else if (source === 'pomodoro') {
         const timer = await window.__TAURI__.core.invoke('pomodoro_settings', { settings: patch });
         pomo = timer.settings;
+        if ('focus_sound' in patch || 'focus_sound_volume' in patch) {
+          window.poniFocusPlayback.previewSettings(timer);
+        }
       } else {
         settings = await window.__TAURI__.core.invoke('set_poni_settings', { patch });
         broadcast();
@@ -182,13 +188,13 @@
     row(container, title, description, input);
   }
 
-  function select(container, id, title, description, key, options, disabled = false) {
+  function select(container, id, title, description, key, options, disabled = false, source) {
     const input = create('select', 'settings-select');
     input.id = 'settings-' + id;
     input.disabled = disabled;
     for (const [value, label] of options) input.append(option(label, value));
-    input.value = settings[key];
-    input.addEventListener('change', () => void change({ [key]: input.value }, id));
+    input.value = values(source)[key];
+    input.addEventListener('change', () => void change({ [key]: input.value }, id, source));
     row(container, title, description, input);
   }
 
@@ -291,6 +297,13 @@
       { min: 2, max: 8, step: 1, source: 'pomodoro' });
     toggle(durations, 'pomo-auto-break', 'Start breaks automatically', null, 'auto_break', 'pomodoro');
     toggle(durations, 'pomo-auto-focus', 'Start focus automatically after a break', null, 'auto_focus', 'pomodoro');
+
+    const audio = group(content, 'Background sound');
+    select(audio, 'pomo-sound', 'Sound while you focus', 'Fades in when a focus session runs.',
+      'focus_sound', window.poniFocusPlayback.options, false, 'pomodoro');
+    range(audio, 'pomo-volume', 'Volume', 'focus_sound_volume',
+      { min: 0, max: 100, step: 5, unit: '%', spokenUnit: 'percent', source: 'pomodoro' });
+    toggle(audio, 'pomo-break-sound', 'Keep playing in breaks', null, 'focus_sound_breaks', 'pomodoro');
 
     const timer = group(content, 'Timer');
     const presets = settings.timer_presets;

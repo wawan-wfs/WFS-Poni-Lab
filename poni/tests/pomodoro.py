@@ -34,8 +34,8 @@ with ThreadingHTTPServer(('127.0.0.1', 0), handler) as server:
               };
               const now = Date.now();
               if (command === 'pomodoro_settings') {
-                timer.settings = args.settings;
-                timer.total_ms = timer.remaining_ms = args.settings.focus_minutes * 60000;
+                Object.assign(timer.settings, args.settings);
+                timer.total_ms = timer.remaining_ms = timer.settings.focus_minutes * 60000;
               }
               if (command === 'pomodoro_action' && args.action === 'toggle') {
                 if (timer.ends_at_ms == null) timer.ends_at_ms = now + timer.remaining_ms;
@@ -58,6 +58,24 @@ with ThreadingHTTPServer(('127.0.0.1', 0), handler) as server:
         """)
         page.clock.install(time=1_800_000_000_000)
         page.goto(f'http://127.0.0.1:{server.server_port}/index.html')
+        rendered = page.evaluate("""
+          async () => {
+            const { build, kinds } = window.poniFocusSound;
+            const result = [];
+            for (const kind of kinds) {
+              const context = new OfflineAudioContext(2, 44100, 44100);
+              build(context, context.destination, kind, 173);
+              const buffer = await context.startRendering();
+              const samples = buffer.getChannelData(0);
+              const audible = samples.every(Number.isFinite) && samples.some(sample => Math.abs(sample) > 0.0001);
+              result.push([kind, audible]);
+            }
+            return result;
+          }
+        """)
+        assert dict(rendered) == dict.fromkeys(
+            ('white', 'pink', 'brown', 'rain', 'waves', 'wind', 'fire', 'cafe'), True
+        ), rendered
         page.evaluate('window.poniTestShortcut()')
         page.locator('[data-page="pomodoro"]').click()
         expect(page.locator('[data-pomo-time]')).to_have_text('25:00')
