@@ -3,6 +3,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from shutil import which
 from threading import Thread
+from time import monotonic
 
 from playwright.sync_api import expect, sync_playwright
 
@@ -20,6 +21,14 @@ class MirrorFixture(SimpleHTTPRequestHandler):
         self.send_header('Content-Length', str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+
+def wait_until(page, condition, seconds=5):
+    deadline = monotonic() + seconds
+    while not page.evaluate(condition):
+        if monotonic() >= deadline:
+            raise AssertionError(f'Mirror did not satisfy: {condition}')
+        page.wait_for_timeout(25)
 
 
 def verify_mirror(page):
@@ -57,14 +66,14 @@ def verify_mirror(page):
     }
     page.evaluate('allowCamera(0)')
     expect(tile).to_have_attribute('aria-pressed', 'true')
-    page.wait_for_function("document.querySelector('#mirror video').videoWidth === 32")
+    wait_until(page, "document.querySelector('#mirror video').videoWidth === 32")
     tile.click()
     assert page.evaluate("tracks[0].readyState === 'ended' && document.querySelector('#mirror video').srcObject === null")
 
     tile.click()
     page.evaluate('window.poniMirror.hide()')
     page.evaluate('allowCamera(1)')
-    page.wait_for_function("tracks[1].readyState === 'ended'")
+    wait_until(page, "tracks[1].readyState === 'ended'")
     expect(tile).to_have_attribute('aria-pressed', 'false')
 
     tile.click()
@@ -75,7 +84,7 @@ def verify_mirror(page):
     expect(tile).to_have_attribute('aria-pressed', 'true')
     page.evaluate("window.poniMirror.configure({enabled:false, shape:'circle'})")
     expect(tile).not_to_be_visible()
-    page.wait_for_function("tracks[2].readyState === 'ended'")
+    wait_until(page, "tracks[2].readyState === 'ended'")
     page.evaluate("window.poniMirror.configure({enabled:true})")
     expect(tile).to_be_visible()
     expect(tile).to_have_class('mirror-tile mirror-circle')
