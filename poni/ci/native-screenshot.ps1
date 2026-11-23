@@ -149,6 +149,7 @@ try {
     }
     $settingsWidth = $settingsRect.Right - $settingsRect.Left
     $screenTimeChecked = $false
+    $pomodoroChecked = $false
     if ($bounds.Width -eq 1024 -and $bounds.Height -eq 768) {
         function Find-Setting([string]$text) {
             Click-Point ($settingsRect.Left + 102) ($settingsRect.Top + 98)
@@ -177,13 +178,32 @@ try {
             throw 'Screen Time did not save the idle limit and excluded executable.'
         }
         $screenTimeChecked = $true
+
+        Find-Setting 'focus sessions before a long break'
+        [System.Windows.Forms.SendKeys]::SendWait('{END}')
+        Start-Sleep -Seconds 2
+        Find-Setting 'add remove countdown'
+        [System.Windows.Forms.SendKeys]::SendWait('35{ENTER}')
+        Start-Sleep -Seconds 2
+        Find-Setting 'start a break after the timer'
+        [System.Windows.Forms.SendKeys]::SendWait(' ')
+        Start-Sleep -Seconds 2
+        Save-Screen 'settings-pomodoro.png'
+
+        $profile = Get-Content -Raw -LiteralPath $dataPath | ConvertFrom-Json
+        if ($profile.pomodoro.settings.cycle_length -ne 8 -or
+            @($profile.settings.timer_presets) -notcontains 35 -or
+            !$profile.settings.timer_then_break) {
+            throw 'Pomodoro and Timer did not save the cycle length, preset and short break option.'
+        }
+        $pomodoroChecked = $true
     }
     [CursorPosition]::PostMessage($settingsHandle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
     Start-Sleep -Seconds 2
     if ($process.HasExited -or [CursorPosition]::FindWindowByTitle('Poni Settings') -ne [IntPtr]::Zero) {
         throw 'Closing Settings did not leave the notch running independently.'
     }
-    @{ process_id = $process.Id; main_window_handle = $mainHandle.ToInt64(); screenshot = 'desktop.png'; width_after_shortcut = $windowWidth; module_height = $moduleHeight; settings_width = $settingsWidth; settings_window_handle = $settingsHandle.ToInt64(); settings_closed_independently = $true; screen_time_saved = $screenTimeChecked; weather_attempted = ($bounds.Width -eq 1024 -and $bounds.Height -eq 768) } |
+    @{ process_id = $process.Id; main_window_handle = $mainHandle.ToInt64(); screenshot = 'desktop.png'; width_after_shortcut = $windowWidth; module_height = $moduleHeight; settings_width = $settingsWidth; settings_window_handle = $settingsHandle.ToInt64(); settings_closed_independently = $true; screen_time_saved = $screenTimeChecked; pomodoro_saved = $pomodoroChecked; weather_attempted = ($bounds.Width -eq 1024 -and $bounds.Height -eq 768) } |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'observation.json') -Encoding UTF8
 } finally {
     if (!$process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }

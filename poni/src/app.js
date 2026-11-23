@@ -34,7 +34,8 @@ let preferences = {
   hover_delay: 0, close_delay: 450, module_shortcuts: true,
   module_order: [], hidden_modules: [], default_module: 'home',
   remember_module: false, last_module: null,
-  mirror_enabled: true, mirror_shape: 'rounded', calendar_enabled: true, week_start: 'windows'
+  mirror_enabled: true, mirror_shape: 'rounded', calendar_enabled: true, week_start: 'windows',
+  timer_presets: [], timer_remember: true,
 };
 const mountedModules = new Set();
 let activePage = 'home';
@@ -81,7 +82,13 @@ function selectModule(id) {
 
 function applyPreferences(value) {
   if (!value || !Array.isArray(value.module_order) || !Array.isArray(value.hidden_modules)) return;
+  const previous = preferences;
   preferences = { ...preferences, ...value };
+  if (previous.timer_remember !== preferences.timer_remember ||
+      previous.timer_presets.join(',') !== preferences.timer_presets.join(',')) {
+    if (!timerActive(data.timer)) chooseTimerMinutes(startingTimerMinutes());
+    renderTimerPresets();
+  }
   const order = new Set([...preferences.module_order, ...moduleTabs.keys()]);
   const hidden = new Set(preferences.hidden_modules);
   for (const id of order) {
@@ -664,15 +671,55 @@ document.querySelector('#calendar-form').addEventListener('submit', async event 
   if (await mutate('save_calendar_event', args)) { const date = new Date(startMs); selectedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate()); displayedMonth = new Date(date.getFullYear(), date.getMonth(), 1); resetEventForm(); renderMonthCalendar(); }
 });
 
+function timerActive(timer) {
+  return timer.ends_at_ms == null
+    ? timer.remaining_ms > 0 && timer.remaining_ms < timer.total_ms
+    : timer.ends_at_ms > Date.now();
+}
+
+function startingTimerMinutes() {
+  const timer = data.timer;
+  const legacyMinutes = timer.total_ms === 1_500_000 ? null : timer.total_ms / 60_000;
+  const last = preferences.timer_remember ? timer.last_started_minutes ?? legacyMinutes : null;
+  return last || preferences.timer_presets[0] || 25;
+}
+
+function chooseTimerMinutes(minutes) {
+  document.querySelector('#timer-minutes').value = minutes;
+}
+
+function renderTimerPresets() {
+  const presets = document.querySelector('#timer-presets');
+  presets.replaceChildren(...preferences.timer_presets.map(minutes => {
+    const button = action(`${minutes} min`, () => {
+      chooseTimerMinutes(minutes);
+      renderTimer();
+    });
+    button.dataset.minutes = minutes;
+    return button;
+  }));
+  renderTimer();
+}
+
+let wasTimerActive = false;
 function renderTimer() {
   const timer = data.timer;
-  const remaining = timer.ends_at_ms == null ? timer.remaining_ms : Math.max(0, timer.ends_at_ms - Date.now());
+  const active = timerActive(timer);
+  if (wasTimerActive && !active) chooseTimerMinutes(startingTimerMinutes());
+  wasTimerActive = active;
+  const input = document.querySelector('#timer-minutes');
+  const remaining = active
+    ? timer.ends_at_ms == null ? timer.remaining_ms : Math.max(0, timer.ends_at_ms - Date.now())
+    : (input.validity.valid ? input.valueAsNumber : 0) * 60_000;
   const seconds = Math.ceil(remaining / 1000);
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor(seconds % 3600 / 60);
   const format = value => String(value).padStart(2, '0');
   document.querySelector('#timer-display').textContent = `${hours ? `${hours}:` : ''}${format(minutes)}:${format(seconds % 60)}`;
-  document.querySelector('#timer-start').textContent = timer.ends_at_ms != null && remaining > 0 ? 'Pause' : 'Start';
+  document.querySelector('#timer-start').textContent = active && timer.ends_at_ms != null ? 'Pause' : 'Start';
+  for (const button of document.querySelectorAll('#timer-presets button')) {
+    button.setAttribute('aria-pressed', String(Number(button.dataset.minutes) === input.valueAsNumber));
+  }
 }
 
 setInterval(renderTimer, 1000);
@@ -745,7 +792,13 @@ document.querySelector('#timer-form').addEventListener('submit', event => {
   const changed = minutes * 60000 !== timer.total_ms;
   mutate('timer_action', { action: running ? 'pause' : 'start', minutes: running || (!changed && timer.remaining_ms < timer.total_ms) ? null : minutes });
 });
-document.querySelector('#timer-reset').addEventListener('click', () => mutate('timer_action', { action: 'reset', minutes: null }));
+document.querySelector('#timer-minutes').addEventListener('input', renderTimer);
+document.querySelector('#timer-reset').addEventListener('click', async () => {
+  if (await mutate('timer_action', { action: 'reset', minutes: null })) {
+    chooseTimerMinutes(startingTimerMinutes());
+    renderTimer();
+  }
+});
 document.querySelectorAll('[data-timer-mode]').forEach(button => button.addEventListener('click', () => {
   document.querySelectorAll('[data-timer-mode]').forEach(item => item.classList.toggle('active', item === button));
   document.querySelector('#timer-countdown').hidden = button.dataset.timerMode !== 'countdown';
@@ -815,5 +868,11 @@ document.querySelector('#weather-search').addEventListener('submit', async event
   }
 });
 
-queue = invoke('get_data').then(saved => { data = saved; applyPreferences(data.settings); render(); if (data.weather_location) void loadWeather(data.weather_location); }).catch(error => { status.textContent = String(error); });
+queue = invoke('get_data').then(saved => {
+  data = saved;
+  applyPreferences(data.settings);
+  chooseTimerMinutes(timerActive(data.timer) ? data.timer.total_ms / 60_000 : startingTimerMinutes());
+  render();
+  if (data.weather_location) void loadWeather(data.weather_location);
+}).catch(error => { status.textContent = String(error); });
 window.poniIcsImport?.mount(document.getElementById('calendar-import'), importCalendarFile);

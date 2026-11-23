@@ -70,6 +70,15 @@
     ['screentime', 'Track screen time', 'activity tracking waktu layar', 'screen-time-enabled'],
     ['screentime', 'Stop counting after idle', 'activity threshold inactive ambang diam', 'screen-time-idle'],
     ['screentime', 'Excluded apps', 'ignore executable abaikan kecualikan aplikasi', 'screen-time-excluded'],
+    ['pomodoro', 'Focus', 'pomodoro duration minutes fokus', 'pomo-focus'],
+    ['pomodoro', 'Short break', 'pomodoro duration minutes jeda pendek', 'pomo-short'],
+    ['pomodoro', 'Long break', 'pomodoro duration minutes jeda panjang', 'pomo-long'],
+    ['pomodoro', 'Focus sessions before a long break', 'pomodoro cycle', 'pomo-cycle'],
+    ['pomodoro', 'Start breaks automatically', 'pomodoro auto break', 'pomo-auto-break'],
+    ['pomodoro', 'Start focus automatically after a break', 'pomodoro auto focus', 'pomo-auto-focus'],
+    ['pomodoro', 'Timer presets', 'add remove countdown minutes', 'timer-preset'],
+    ['pomodoro', 'Remember the last duration', 'timer countdown last length', 'timer-remember'],
+    ['pomodoro', 'Start a break after the timer', 'countdown pomodoro short break', 'timer-then-break'],
   ];
 
   const option = (label, value) => {
@@ -88,6 +97,7 @@
   let root, search, menu, panel, banner;
   let settings = null;
   let screenTime = null;
+  let pomo = null;
   let active = 'general';
   let busy = false;
   let loading = false;
@@ -104,15 +114,17 @@
     window.dispatchEvent(new CustomEvent('poni-settings-changed', { detail: settings }));
   }
 
-  async function change(patch, focusId) {
+  async function change(patch, focusId, source = active === 'screentime' ? 'screenTime' : 'settings') {
     if (busy || !settings) return;
-    const isScreenTime = active === 'screentime';
     busy = true;
     banner.textContent = 'Saving…';
     updateBusy();
     try {
-      if (isScreenTime) {
+      if (source === 'screenTime') {
         screenTime = await window.__TAURI__.core.invoke('set_screentime_preferences', { patch });
+      } else if (source === 'pomodoro') {
+        const timer = await window.__TAURI__.core.invoke('pomodoro_settings', { settings: patch });
+        pomo = timer.settings;
       } else {
         settings = await window.__TAURI__.core.invoke('set_poni_settings', { patch });
         broadcast();
@@ -156,12 +168,17 @@
     container.append(node);
   }
 
-  function toggle(container, id, title, description, key) {
+  function values(source) {
+    if (source === 'pomodoro') return pomo;
+    return active === 'screentime' ? screenTime : settings;
+  }
+
+  function toggle(container, id, title, description, key, source) {
     const input = create('input', 'settings-switch');
     input.id = 'settings-' + id;
     input.type = 'checkbox';
-    input.checked = (active === 'screentime' ? screenTime : settings)[key];
-    input.addEventListener('change', () => void change({ [key]: input.checked }, id));
+    input.checked = values(source)[key];
+    input.addEventListener('change', () => void change({ [key]: input.checked }, id, source));
     row(container, title, description, input);
   }
 
@@ -175,7 +192,7 @@
     row(container, title, description, input);
   }
 
-  function range(container, id, title, key, { min = 0, max, step, disabled = false, unit, spokenUnit, description }) {
+  function range(container, id, title, key, { min = 0, max, step, disabled = false, unit, spokenUnit, description, source }) {
     const box = create('span', 'settings-range');
     const input = create('input');
     const output = create('span', 'settings-range-value');
@@ -185,15 +202,15 @@
     input.min = min;
     input.max = max;
     input.step = step;
-    input.value = (active === 'screentime' ? screenTime : settings)[key];
+    input.value = values(source)[key];
     input.disabled = disabled;
     const showValue = () => {
-      output.textContent = input.value + ' ' + unit;
-      input.setAttribute('aria-valuetext', input.value + ' ' + spokenUnit);
+      output.textContent = unit ? input.value + ' ' + unit : input.value;
+      if (spokenUnit) input.setAttribute('aria-valuetext', input.value + ' ' + spokenUnit);
     };
     showValue();
     input.addEventListener('input', showValue);
-    input.addEventListener('change', () => void change({ [key]: Number(input.value) }, id));
+    input.addEventListener('change', () => void change({ [key]: Number(input.value) }, id, source));
     box.append(input, output);
     row(container, title, description, box);
   }
@@ -262,6 +279,57 @@
 
     const hidden = settings.hidden_modules.includes('screentime');
     content.append(button(hidden ? 'Show Screen Time in Modules' : 'Open Screen Time', () => void openLink('screentime')));
+  }
+
+  function pomodoroControls(content) {
+    const durations = group(content);
+    const minutes = { unit: 'min', spokenUnit: 'minutes', source: 'pomodoro' };
+    range(durations, 'pomo-focus', 'Focus', 'focus_minutes', { ...minutes, min: 5, max: 90, step: 5 });
+    range(durations, 'pomo-short', 'Short break', 'short_minutes', { ...minutes, min: 1, max: 30, step: 1 });
+    range(durations, 'pomo-long', 'Long break', 'long_minutes', { ...minutes, min: 5, max: 60, step: 5 });
+    range(durations, 'pomo-cycle', 'Focus sessions before a long break', 'cycle_length',
+      { min: 2, max: 8, step: 1, source: 'pomodoro' });
+    toggle(durations, 'pomo-auto-break', 'Start breaks automatically', null, 'auto_break', 'pomodoro');
+    toggle(durations, 'pomo-auto-focus', 'Start focus automatically after a break', null, 'auto_focus', 'pomodoro');
+
+    const timer = group(content, 'Timer');
+    const presets = settings.timer_presets;
+    const form = create('form', 'settings-row settings-preset-form');
+    const label = create('label', 'settings-label');
+    label.htmlFor = 'settings-timer-preset';
+    label.append(create('span', null, 'Presets'), create('small', null, 'Up to eight durations, 1–600 minutes each.'));
+    const input = create('input', 'settings-text');
+    Object.assign(input, {
+      id: label.htmlFor, type: 'number', min: 1, max: 600, step: 1, required: true, disabled: presets.length === 8,
+    });
+    const add = create('button', 'settings-button', 'Add');
+    add.type = 'submit';
+    add.disabled = input.disabled;
+    form.append(label, input, add);
+    form.addEventListener('submit', event => {
+      event.preventDefault();
+      if (presets.includes(input.valueAsNumber)) {
+        banner.textContent = 'This preset already exists.';
+        return;
+      }
+      void change({ timer_presets: [...presets, input.valueAsNumber] }, 'timer-preset');
+    });
+    timer.append(form);
+    if (presets.length) {
+      const list = create('div', 'settings-presets');
+      for (const minutes of presets) {
+        const remove = button(`${minutes} min ×`, () => {
+          void change({ timer_presets: presets.filter(preset => preset !== minutes) }, 'timer-preset');
+        });
+        remove.setAttribute('aria-label', `Remove ${minutes} minute preset`);
+        list.append(remove);
+      }
+      timer.append(list);
+    }
+    toggle(timer, 'timer-remember', 'Remember the last duration', 'Otherwise start at the first preset.',
+      'timer_remember');
+    toggle(timer, 'timer-then-break', 'Start a break after the timer',
+      'Start Pomodoro’s short break when the Timer ends and no Pomodoro is running.', 'timer_then_break');
   }
 
   function move(id, target, after = false, focusId = null) {
@@ -425,6 +493,7 @@
         else if (active === 'mirror') mirror(controls);
         else if (active === 'calendar') calendar(controls);
         else if (active === 'screentime' && screenTime) screenTimeControls(controls);
+        else if (active === 'pomodoro' && pomo) pomodoroControls(controls);
         else feature(controls, current);
       }
     }
@@ -439,8 +508,8 @@
     updateBusy();
     try {
       const invoke = window.__TAURI__.core.invoke;
-      [settings, screenTime] = await Promise.all([
-        invoke('get_poni_settings'), invoke('get_screentime_preferences'),
+      [settings, screenTime, pomo] = await Promise.all([
+        invoke('get_poni_settings'), invoke('get_screentime_preferences'), invoke('get_pomodoro_settings'),
       ]);
       broadcast();
     } catch (error) {
@@ -489,6 +558,10 @@
       screenTime = event.payload;
       const toggle = document.getElementById('settings-screen-time-enabled');
       if (toggle) toggle.checked = screenTime.enabled;
+    }).catch(error => { banner.textContent = String(error); });
+    window.__TAURI__.event.listen('poni-pomodoro-settings-changed', event => {
+      pomo = event.payload;
+      if (active === 'pomodoro' && !busy && !loading) render(true);
     }).catch(error => { banner.textContent = String(error); });
     render(false);
   }

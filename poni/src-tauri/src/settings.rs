@@ -69,6 +69,9 @@ pub(super) struct PoniSettings {
     pub(super) calendar_enabled: bool,
     pub(super) meeting_reminder_minutes: u16,
     pub(super) week_start: WeekStart,
+    pub(super) timer_presets: Vec<u16>,
+    pub(super) timer_remember: bool,
+    pub(super) timer_then_break: bool,
     module_order: Vec<String>,
     hidden_modules: Vec<String>,
     default_module: String,
@@ -90,6 +93,9 @@ impl Default for PoniSettings {
             calendar_enabled: true,
             meeting_reminder_minutes: 5,
             week_start: WeekStart::Windows,
+            timer_presets: Vec::new(),
+            timer_remember: true,
+            timer_then_break: false,
             module_order: MODULES.iter().map(|id| (*id).to_string()).collect(),
             hidden_modules: Vec::new(),
             default_module: "home".into(),
@@ -113,6 +119,9 @@ pub(super) struct SettingsPatch {
     calendar_enabled: Option<bool>,
     meeting_reminder_minutes: Option<u16>,
     week_start: Option<WeekStart>,
+    timer_presets: Option<Vec<u16>>,
+    timer_remember: Option<bool>,
+    timer_then_break: Option<bool>,
     module_order: Option<Vec<String>>,
     hidden_modules: Option<Vec<String>>,
     default_module: Option<String>,
@@ -138,6 +147,11 @@ impl PoniSettings {
         self.hover_delay = self.hover_delay.min(800);
         self.close_delay = self.close_delay.min(1500);
         self.meeting_reminder_minutes = self.meeting_reminder_minutes.min(30);
+        self.timer_presets
+            .retain(|minutes| (1..=600).contains(minutes));
+        self.timer_presets.sort_unstable();
+        self.timer_presets.dedup();
+        self.timer_presets.truncate(8);
         normalize_list(&mut self.module_order);
         normalize_list(&mut self.hidden_modules);
         for id in MODULES {
@@ -182,6 +196,12 @@ impl PoniSettings {
         {
             return Err("Choose a meeting reminder between 0 and 30 minutes".into());
         }
+        if let Some(presets) = patch.timer_presets {
+            if presets.len() > 8 || presets.iter().any(|minutes| !(1..=600).contains(minutes)) {
+                return Err("Choose up to eight timer presets from 1 to 600 minutes".into());
+            }
+            self.timer_presets = presets;
+        }
         if patch
             .module_order
             .as_ref()
@@ -225,6 +245,8 @@ impl PoniSettings {
             .meeting_reminder_minutes
             .unwrap_or(self.meeting_reminder_minutes);
         self.week_start = patch.week_start.unwrap_or(self.week_start);
+        self.timer_remember = patch.timer_remember.unwrap_or(self.timer_remember);
+        self.timer_then_break = patch.timer_then_break.unwrap_or(self.timer_then_break);
         self.remember_module = patch.remember_module.unwrap_or(self.remember_module);
         self.normalize();
         Ok(())
@@ -278,6 +300,25 @@ pub(super) fn remember_poni_module(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn timer_presets_sort_deduplicate_and_validate() {
+        let mut settings = PoniSettings::default();
+        let patch = serde_json::from_str(
+            r#"{"timer_presets":[45,10,45],"timer_remember":false,"timer_then_break":true}"#,
+        )
+        .unwrap();
+        settings.apply(patch).unwrap();
+        assert_eq!(settings.timer_presets, [10, 45]);
+        assert!(!settings.timer_remember && settings.timer_then_break);
+        assert!(settings
+            .apply(SettingsPatch {
+                timer_presets: Some(vec![601]),
+                ..SettingsPatch::default()
+            })
+            .is_err());
+        assert_eq!(settings.timer_presets, [10, 45]);
+    }
 
     #[test]
     fn older_settings_fill_in_modules_and_choose_a_visible_default() {

@@ -2,7 +2,7 @@ use super::Store;
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_notification::NotificationExt;
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
@@ -40,7 +40,7 @@ impl Default for Settings {
             short_minutes: 5,
             long_minutes: 15,
             cycle_length: 4,
-            auto_break: false,
+            auto_break: true,
             auto_focus: false,
         }
     }
@@ -65,6 +65,29 @@ impl Settings {
             Phase::LongBreak => self.long_minutes,
         };
         u64::from(minutes) * 60_000
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct SettingsPatch {
+    focus_minutes: Option<u16>,
+    short_minutes: Option<u16>,
+    long_minutes: Option<u16>,
+    cycle_length: Option<u16>,
+    auto_break: Option<bool>,
+    auto_focus: Option<bool>,
+}
+
+impl SettingsPatch {
+    fn apply(self, settings: &mut Settings) -> Result<(), String> {
+        settings.focus_minutes = self.focus_minutes.unwrap_or(settings.focus_minutes);
+        settings.short_minutes = self.short_minutes.unwrap_or(settings.short_minutes);
+        settings.long_minutes = self.long_minutes.unwrap_or(settings.long_minutes);
+        settings.cycle_length = self.cycle_length.unwrap_or(settings.cycle_length);
+        settings.auto_break = self.auto_break.unwrap_or(settings.auto_break);
+        settings.auto_focus = self.auto_focus.unwrap_or(settings.auto_focus);
+        settings.validate()
     }
 }
 
@@ -103,6 +126,15 @@ impl Default for Pomodoro {
 }
 
 impl Pomodoro {
+    pub(super) fn start_timer_break(&mut self, now: u64) -> bool {
+        if self.ends_at_ms.is_some() {
+            return false;
+        }
+        self.reset(Phase::ShortBreak);
+        self.ends_at_ms = Some(now.saturating_add(self.total_ms));
+        true
+    }
+
     fn reset(&mut self, phase: Phase) {
         self.phase = phase;
         self.total_ms = self.settings.duration(phase);
@@ -260,19 +292,24 @@ pub(super) fn pomodoro_action(
 }
 
 #[tauri::command]
+pub(super) fn get_pomodoro_settings(state: State<'_, Mutex<Store>>) -> Result<Settings, String> {
+    let store = state.lock().map_err(|_| "Storage unavailable")?;
+    Ok(store.data.pomodoro.settings.clone())
+}
+
+#[tauri::command]
 pub(super) fn pomodoro_settings(
     app: AppHandle,
     state: State<'_, Mutex<Store>>,
-    settings: Settings,
+    settings: SettingsPatch,
 ) -> Result<Pomodoro, String> {
-    settings.validate()?;
     let mut store = state.lock().map_err(|_| "Storage unavailable")?;
     let now = now_ms()?;
     let mut completed = None;
     let result = store.update(|data| {
         let timer = &mut data.pomodoro;
         completed = timer.settle(now);
-        timer.settings = settings;
+        settings.apply(&mut timer.settings)?;
         if timer.ends_at_ms.is_none() && timer.remaining_ms == timer.total_ms {
             timer.reset(timer.phase);
         }
@@ -280,12 +317,28 @@ pub(super) fn pomodoro_settings(
     })?;
     drop(store);
     notify(&app, completed);
+    let _ = app.emit("poni-pomodoro-settings-changed", &result.pomodoro.settings);
     Ok(result.pomodoro)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn preferences_update_one_field_without_replacing_the_others() {
+        let mut settings = Settings {
+            short_minutes: 8,
+            ..Settings::default()
+        };
+        let patch: SettingsPatch =
+            serde_json::from_str(r#"{"focus_minutes":45,"auto_break":true}"#).unwrap();
+        patch.apply(&mut settings).unwrap();
+        assert_eq!(settings.focus_minutes, 45);
+        assert_eq!(settings.short_minutes, 8);
+        assert!(settings.auto_break);
+        assert!(!settings.auto_focus);
+    }
 
     #[test]
     fn preserves_paused_time_and_counts_one_completion_per_focus_session() {

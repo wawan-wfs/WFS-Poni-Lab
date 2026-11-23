@@ -186,6 +186,10 @@
   width: min(45%, 260px);
   min-width: 0;
 }
+.settings-preset-form > label { margin-inline-end: auto; }
+.settings-preset-form .settings-text { width: 70px; }
+.settings-presets { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 10px; }
+.settings-presets .settings-button { margin: 0; }
 
 .settings-button:not(:disabled):hover { background: #39393a; }
 .settings-button + .settings-button { margin-inline-start: 5px; }

@@ -26,6 +26,8 @@ Putaran Calendar memindahkan Settings Rust ke jendela terpisah dan menambahkan `
 
 Settings Screen Time kini menyediakan sakelar pelacakan, ambang idle 30–600 detik dengan langkah 30 detik, dan daftar nama executable yang dikecualikan dari pencatatan berikutnya. `screenTimeExcluded` memiliki padanan baru dan dua kontrol lain memperluas padanan sebagian. Tersisa **171 dari 201 kontrol standar** tanpa padanan dengan metode hitung yang sama. Build Rust memakai ambang awal yang sama, 120 detik, dan menyimpan data selama 35 hari. Pelacakan di Rust dimulai setelah sakelar diaktifkan pengguna. Pengelompokan berdasarkan judul tab masih perlu dikerjakan.
 
+Settings Pomodoro menambahkan pilihan **Start a break after the timer** dan membawa enam kontrol sesi dari tab Pomodoro ke Settings. Timer memakai pilihan **Remember the last duration** dan preset yang dapat ditambah atau dihapus. Preset masuk renderer kustom, sehingga tidak mengubah hitungan kontrol standar. Tersisa **170 dari 201 kontrol standar** tanpa padanan setelah tahap ini.
+
 | Jenis kontrol | Deklarasi | Masuk katalog build |
 | --- | ---: | ---: |
 | Sakelar | 115 | 115 |

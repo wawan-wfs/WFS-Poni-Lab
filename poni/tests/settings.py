@@ -11,16 +11,24 @@ FIXTURE = """
 (() => {
   const defaults = {
     clock_format:'region', header_clock:true, open_on_hover:true, hover_delay:0, close_delay:450,
-    module_shortcuts:true, module_order:['home','tasks','notes','calendar','timer','weather','worldclock','screentime'],
+    module_shortcuts:true, module_order:['home','tasks','notes','calendar','timer','weather','worldclock','screentime','pomodoro'],
     hidden_modules:[], default_module:'home', remember_module:false, last_module:null,
     mirror_enabled:true, mirror_shape:'rounded',
     calendar_enabled:true, meeting_reminder_minutes:5, week_start:'windows',
+    timer_presets:[], timer_remember:true, timer_then_break:false,
   };
   const read = () => JSON.parse(localStorage.getItem('test-settings')) || structuredClone(defaults);
   const save = value => localStorage.setItem('test-settings', JSON.stringify(value));
   const readScreenTime = () => JSON.parse(localStorage.getItem('test-screen-time')) || {
     enabled:false, idle_seconds:120, excluded_apps:[],
   };
+  const readPomodoro = () => JSON.parse(localStorage.getItem('test-pomodoro')) || {
+    focus_minutes:25, short_minutes:5, long_minutes:15, cycle_length:4, auto_break:false, auto_focus:false,
+  };
+  const pomodoroState = settings => ({
+    total_ms:settings.focus_minutes * 60000, remaining_ms:settings.focus_minutes * 60000,
+    ends_at_ms:null, completed:[], cycle:0, phase:'focus', settings,
+  });
   const bus = new BroadcastChannel('poni-settings-test');
   const listeners = new Map();
   bus.onmessage = ({data}) => {
@@ -46,6 +54,14 @@ FIXTURE = """
         return;
       }
       if (command === 'get_poni_settings') return settings;
+      if (command === 'get_pomodoro_settings') return readPomodoro();
+      if (command === 'pomodoro_state') return pomodoroState(readPomodoro());
+      if (command === 'pomodoro_settings') {
+        const pomodoro = { ...readPomodoro(), ...args.settings };
+        localStorage.setItem('test-pomodoro', JSON.stringify(pomodoro));
+        bus.postMessage({name:'poni-pomodoro-settings-changed',payload:pomodoro});
+        return pomodoroState(pomodoro);
+      }
       if (command === 'get_screentime_preferences') return readScreenTime();
       if (command === 'set_screentime_preferences' || command === 'set_screentime_enabled') {
         const screenTime = readScreenTime();
@@ -63,6 +79,7 @@ FIXTURE = """
       };
       if (command === 'set_poni_settings') {
         Object.assign(settings, args.patch);
+        settings.timer_presets.sort((a,b) => a-b);
         if (settings.hidden_modules.includes(settings.default_module)) {
           settings.default_module = settings.module_order.find(id => !settings.hidden_modules.includes(id));
         }
@@ -178,6 +195,34 @@ def test_settings(page):
     panel_tracking.uncheck()
     expect(tracking).not_to_be_checked()
 
+    search.fill('pomodoro cycle')
+    settings.get_by_role('button', name='Focus sessions before a long break', exact=False).click()
+    expect(settings.locator('#settings-pomo-cycle')).to_be_focused()
+    settings.locator('#settings-pomo-focus').fill('55')
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    settings.locator('#settings-pomo-auto-break').check()
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+
+    preset = settings.locator('#settings-timer-preset')
+    for value in ('45', '10', '20'):
+        preset.fill(value)
+        preset.press('Enter')
+        expect(settings.get_by_role('button', name=f'Remove {value} minute preset')).to_be_visible()
+    settings.get_by_role('button', name='Remove 20 minute preset').click()
+    expect(settings.get_by_role('button', name='Remove 20 minute preset')).to_have_count(0)
+    settings.locator('#settings-timer-remember').uncheck()
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    settings.locator('#settings-timer-then-break').check()
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+
+    page.locator('.tab[data-page="timer"]').click()
+    expect(page.locator('#timer-presets button')).to_have_text(['10 min', '45 min'])
+    expect(page.locator('#timer-minutes')).to_have_value('10')
+    page.get_by_role('button', name='45 min', exact=True).click()
+    expect(page.locator('#timer-display')).to_have_text('45:00')
+    page.locator('.tab[data-page="pomodoro"]').click()
+    expect(page.locator('[data-pomo-time]')).to_have_text('55:00')
+
     popup.close()
     page.reload()
     closed = page.locator('#closed')
@@ -203,6 +248,11 @@ def test_settings(page):
     expect(settings.locator('#settings-screen-time-idle')).to_have_value('300')
     expect(settings.locator('#settings-screen-time-excluded')).to_have_value('steam.exe, keepass.exe')
     expect(settings.locator('#settings-screen-time-enabled')).not_to_be_checked()
+    settings.get_by_role('button', name='Pomodoro', exact=True).click()
+    expect(settings.locator('#settings-pomo-focus')).to_have_value('55')
+    expect(settings.locator('#settings-pomo-auto-break')).to_be_checked()
+    expect(settings.locator('#settings-timer-remember')).not_to_be_checked()
+    expect(settings.locator('#settings-timer-then-break')).to_be_checked()
 
     settings.get_by_role('button', name='Modules', exact=True).click()
     settings.locator('#settings-remember-module').check()

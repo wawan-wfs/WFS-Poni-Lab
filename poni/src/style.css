@@ -133,3 +133,6 @@ textarea { resize: vertical; min-height: 55px; }
 #timer-minutes { width: 75px; }
 .done { text-decoration: line-through; color: #999; }
 #status { position: absolute; bottom: 0; left: 20px; right: 20px; color: #ff9e9e; font-size: 11px; margin: 0; }
+.timer-presets { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 8px; }
+.timer-presets:empty { display: none; }
+.timer-presets button[aria-pressed="true"] { border-color: var(--accent, #4da3ff); }

@@ -93,6 +93,11 @@
       }
       run('pomodoro_settings', { settings }, true);
     });
+    for (const name of ['poni-pomodoro-settings-changed', 'poni-pomodoro-timer-break']) {
+      window.__TAURI__.event.listen(name, () => {
+        if (timer) void run('pomodoro_state', undefined, true);
+      }).catch(error => { context.error.textContent = String(error); });
+    }
     render();
   }
 
