@@ -8,7 +8,10 @@ use tauri_plugin_notification::NotificationExt;
 use tempfile::NamedTempFile;
 use uuid::Uuid;
 
+mod aiusage;
+mod bluetooth;
 mod bookmarks;
+mod chat;
 mod control;
 mod currency;
 mod dashboard;
@@ -28,6 +31,8 @@ struct Task {
     id: Uuid,
     text: String,
     done: bool,
+    #[serde(default)]
+    done_at_ms: Option<u64>,
     #[serde(default)]
     description: String,
     #[serde(default)]
@@ -206,6 +211,8 @@ impl Timer {
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 struct AppData {
+    ai_usage: aiusage::AiUsage,
+    chat: chat::ChatData,
     github_login: Option<String>,
     notifications: Vec<notifs::Notification>,
     prayer_settings: Option<prayer::PrayerSettings>,
@@ -483,6 +490,7 @@ fn add_task(
                 id: Uuid::new_v4(),
                 text,
                 done: false,
+                done_at_ms: None,
                 description: String::new(),
                 due_at_ms,
                 notified_due_at_ms: None,
@@ -598,6 +606,14 @@ fn toggle_task(store: State<'_, Mutex<Store>>, id: Uuid) -> Result<AppData, Stri
                 .find(|task| task.id == id)
                 .ok_or("Task not found")?;
             task.done = !task.done;
+            task.done_at_ms = if task.done {
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .ok()
+                    .map(|elapsed| elapsed.as_millis() as u64)
+            } else {
+                None
+            };
             Ok(())
         })
 }
@@ -1008,6 +1024,15 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            aiusage::ai_usage_state,
+            aiusage::import_ai_usage,
+            aiusage::clear_ai_usage,
+            bluetooth::bluetooth_devices,
+            chat::chat_state,
+            chat::chat_model,
+            chat::chat_select,
+            chat::chat_delete,
+            chat::chat_send,
             control::control_snapshot,
             control::set_keep_awake,
             control::set_control_volume,
@@ -1128,6 +1153,7 @@ mod tests {
                     id: Uuid::new_v4(),
                     text: "First".into(),
                     done: false,
+                    done_at_ms: None,
                     description: String::new(),
                     due_at_ms: None,
                     notified_due_at_ms: None,
@@ -1201,6 +1227,7 @@ mod tests {
             id: Uuid::new_v4(),
             text: "Meeting".into(),
             done: false,
+            done_at_ms: None,
             description: String::new(),
             due_at_ms: Some(1000),
             notified_due_at_ms: None,

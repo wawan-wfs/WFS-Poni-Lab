@@ -43,11 +43,15 @@ function setOpen(value) {
   if (value) void refreshSystem();
 }
 function updatePanelSize(isOpen, focus = false) {
-  const tall = isOpen && Object.hasOwn(modules, activePage);
+  const tall = isOpen && isTallPage(activePage);
   open.classList.toggle('tall', tall);
   const seq = ++panelSequence;
   panelReady.then(() => invoke('set_panel_open', { session: panelSession, open: isOpen, tall, focus, seq }))
     .catch(error => { status.textContent = String(error); });
+}
+
+function isTallPage(page) {
+  return page === 'dayprogress' || Object.hasOwn(modules, page);
 }
 
 function callModule(method) {
@@ -106,13 +110,20 @@ document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', (
   tab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   open.querySelector('main').scrollTop = 0;
   if (!open.hidden && previousPage !== activePage) {
-    if (Object.hasOwn(modules, previousPage) !== Object.hasOwn(modules, activePage)) updatePanelSize(true);
+    if (isTallPage(previousPage) !== isTallPage(activePage)) updatePanelSize(true);
     callModule('show');
   }
   if (tab.dataset.page === 'system') void refreshSystem();
   if (tab.dataset.page === 'dayprogress') renderDayProgress();
   if (tab.dataset.page === 'calendar') renderMonthCalendar();
 }));
+open.querySelector('nav').addEventListener('wheel', event => {
+  const nav = event.currentTarget;
+  if (Math.abs(event.deltaX) >= Math.abs(event.deltaY) || nav.scrollWidth <= nav.clientWidth) return;
+  const scale = event.deltaMode === 1 ? 30 : event.deltaMode === 2 ? nav.clientWidth : 1;
+  nav.scrollLeft += event.deltaY * scale;
+  event.preventDefault();
+}, { passive: false });
 document.querySelectorAll('[data-media]').forEach(button => button.addEventListener('click', () => {
   invoke('media_control', { action: button.dataset.media }).then(() => setTimeout(refreshMedia, 500)).catch(error => { status.textContent = String(error); });
 }));
@@ -156,7 +167,10 @@ function renderDayProgress(now = new Date()) {
   const wakeMinute = data.wake_minute ?? 420, bedMinute = data.bed_minute ?? 1380;
   const wake = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, wakeMinute);
   const bed = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, bedMinute);
-  if (bed <= wake) bed.setDate(bed.getDate() + 1);
+  if (bedMinute <= wakeMinute) {
+    if (now < bed) wake.setDate(wake.getDate() - 1);
+    else bed.setDate(bed.getDate() + 1);
+  }
   const displayTime = value => `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`;
   document.querySelector('#day-wake-label').textContent = displayTime(wakeMinute);
   document.querySelector('#day-bed-label').textContent = displayTime(bedMinute);
@@ -166,6 +180,7 @@ function renderDayProgress(now = new Date()) {
   document.querySelector('#day-percent').textContent = `${Math.round(day * 100)}%`;
   document.querySelector('#day-fill').style.width = `${day * 100}%`;
   document.querySelector('#day-remaining').textContent = left ? `of your day · ${Math.floor(left / 3600000)}h ${Math.floor(left % 3600000 / 60000)}m until bedtime` : 'of your day · past bedtime';
+  renderDayAgenda(wake, bed);
   const week = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   week.setDate(week.getDate() - (week.getDay() + 6) % 7);
   const weekEnd = new Date(week); weekEnd.setDate(weekEnd.getDate() + 7);
@@ -180,6 +195,51 @@ function renderDayProgress(now = new Date()) {
     number.textContent = `${Math.round(clamp((now - start) / (end - start)) * 100)}%`;
     card.append(document.createTextNode(label), number); container.append(card);
   });
+}
+
+function renderDayAgenda(wake, bed) {
+  const marks = document.querySelector('#day-markers');
+  const agenda = document.querySelector('#day-agenda');
+  const time = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
+  const firstDay = new Date(wake.getFullYear(), wake.getMonth(), wake.getDate());
+  const lastDay = new Date(bed.getFullYear(), bed.getMonth(), bed.getDate());
+  const days = +firstDay === +lastDay ? [firstDay] : [firstDay, lastDay];
+  const entries = new Map();
+  for (const date of days) {
+    for (const {event, start} of occurrencesOnDay(date)) {
+      const end = start + event.duration_minutes * 60000;
+      if (start < bed && end > wake) entries.set(`${event.id}:${start}`, {heading: event.title, start, end});
+    }
+  }
+  for (const task of data.tasks) {
+    if (task.done && task.done_at_ms != null && task.done_at_ms >= wake && task.done_at_ms < bed) {
+      entries.set(task.id, {heading: task.text, start: task.done_at_ms});
+    }
+  }
+  const sorted = [...entries.values()].sort((a, b) => a.start - b.start);
+  marks.replaceChildren();
+  agenda.replaceChildren();
+  const percentage = timestamp => 100 * (Math.min(+bed, Math.max(+wake, timestamp)) - wake) / (bed - wake);
+  for (const entry of sorted) {
+    const marker = document.createElement('span');
+    const start = percentage(entry.start);
+    marker.style.left = `${start}%`;
+    const item = document.createElement('li');
+    if (entry.end === undefined) {
+      marker.className = 'finished';
+      item.textContent = `${time.format(entry.start)} · Completed: ${entry.heading}`;
+    } else {
+      marker.style.width = `${Math.max(0.5, percentage(entry.end) - start)}%`;
+      item.textContent = `${time.format(entry.start)}–${time.format(entry.end)} · ${entry.heading}`;
+    }
+    marks.append(marker);
+    agenda.append(item);
+  }
+  if (!sorted.length) {
+    const empty = document.createElement('li');
+    empty.textContent = 'No events or completed tasks in this schedule.';
+    agenda.append(empty);
+  }
 }
 setInterval(() => { if (!document.querySelector('#page-dayprogress').hidden) renderDayProgress(); }, 30000);
 document.querySelector('#day-schedule').addEventListener('submit', async event => {

@@ -74,8 +74,16 @@ try {
     $homeHeight = $rect.Bottom - $rect.Top
     Save-Screen 'currency.png'
     if ($moduleHeight -lt $homeHeight + 100) { throw "Module did not expand the panel; heights were $homeHeight/$moduleHeight pixels." }
-    [CursorPosition]::keybd_event(0x27, 0, 0, [UIntPtr]::Zero)
-    [CursorPosition]::keybd_event(0x27, 0, 2, [UIntPtr]::Zero)
+    foreach ($module in @('chat', 'bluetooth', 'ai-usage')) {
+        [CursorPosition]::keybd_event(0x25, 0, 0, [UIntPtr]::Zero)
+        [CursorPosition]::keybd_event(0x25, 0, 2, [UIntPtr]::Zero)
+        Start-Sleep -Seconds 2
+        Save-Screen "$module.png"
+    }
+    for ($i = 0; $i -lt 4; $i++) {
+        [CursorPosition]::keybd_event(0x27, 0, 0, [UIntPtr]::Zero)
+        [CursorPosition]::keybd_event(0x27, 0, 2, [UIntPtr]::Zero)
+    }
     Start-Sleep -Seconds 2
     $homeRect = [CursorPosition+Rect]::new()
     if (![CursorPosition]::GetWindowRect($process.MainWindowHandle, [ref]$homeRect) -or ($homeRect.Bottom - $homeRect.Top) -ne $homeHeight) {

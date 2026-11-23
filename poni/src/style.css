@@ -99,8 +99,13 @@ textarea { resize: vertical; min-height: 55px; }
 .day-head { display:flex; align-items:baseline; gap:10px; padding-top:8px; }
 .day-head strong { font-size:26px; }
 .day-head span, .day-hours { color:#aaa; font-size:12px; }
-.day-track { height:8px; border-radius:5px; background:#303034; overflow:hidden; margin:8px 0 3px; }
-.day-track div { height:100%; width:0; background:#fa3350; }
+.day-track { position:relative; height:10px; border-radius:5px; background:#303034; overflow:hidden; margin:8px 0 3px; }
+#day-fill { height:100%; width:0; background:#fa3350; }
+#day-markers { position:absolute; inset:0; pointer-events:none; }
+#day-markers span { position:absolute; height:100%; background:#78acff; }
+#day-markers .finished { width:3px; background:#62d48c; z-index:1; }
+#day-agenda { margin:8px 0; padding:0; list-style:none; color:#bbb; font-size:12px; }
+#day-agenda li { padding:4px 0; border-bottom:1px solid #222; overflow-wrap:anywhere; }
 .day-hours { display:flex; justify-content:space-between; }
 .day-periods { display:flex; gap:8px; margin-top:8px; }
 .day-periods div { flex:1; background:#202023; border-radius:8px; padding:6px 8px; font-size:12px; }

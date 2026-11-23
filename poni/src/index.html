@@ -33,6 +33,12 @@
   <script src="support.js" defer></script>
   <link rel="stylesheet" href="translate.css">
   <script src="translate.js" defer></script>
+  <link rel="stylesheet" href="aiusage.css">
+  <script src="aiusage.js" defer></script>
+  <link rel="stylesheet" href="bluetooth.css">
+  <script src="bluetooth.js" defer></script>
+  <link rel="stylesheet" href="chat.css">
+  <script src="chat.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -63,6 +69,9 @@
           <button class="tab" data-page="screentime" title="Screen Time" aria-label="Screen Time">◴ <span>Screen Time</span></button>
           <button class="tab" data-page="support" title="Support" aria-label="Support">♥ <span>Support</span></button>
           <button class="tab" data-page="translate" title="Translate" aria-label="Translate">文 <span>Translate</span></button>
+          <button class="tab" data-page="aiusage" title="AI Usage" aria-label="AI Usage">◕ <span>AI Usage</span></button>
+          <button class="tab" data-page="bluetooth" title="Bluetooth" aria-label="Bluetooth">ᛒ <span>Bluetooth</span></button>
+          <button class="tab" data-page="chat" title="Chat" aria-label="Chat">◫ <span>Chat</span></button>
           <button class="tab" data-page="currency" title="Currency" aria-label="Currency">¤ <span>Currency</span></button>
         </nav>
         <time class="clock">--:--</time>
@@ -111,9 +120,10 @@
         </section>
         <section id="page-dayprogress" class="page" hidden>
           <div class="day-head"><strong id="day-percent">0%</strong><span id="day-remaining"></span></div>
-          <div class="day-track"><div id="day-fill"></div></div>
+          <div class="day-track"><div id="day-fill"></div><div id="day-markers" aria-hidden="true"></div></div>
           <div class="day-hours"><span id="day-wake-label">07:00</span><span id="day-bed-label">23:00</span></div>
           <div class="day-periods" id="day-periods"></div>
+          <ul id="day-agenda" aria-label="Today's agenda"></ul>
           <form id="day-schedule" class="entry"><label for="day-wake">Wake</label><input type="time" id="day-wake" required><label for="day-bed">Bed</label><input type="time" id="day-bed" required><button type="submit">Save</button></form>
         </section>
         <section id="page-bookmarks" class="page" hidden></section>
@@ -130,6 +140,9 @@
         <section id="page-screentime" class="page" hidden></section>
         <section id="page-support" class="page" hidden></section>
         <section id="page-translate" class="page" hidden></section>
+        <section id="page-aiusage" class="page" hidden></section>
+        <section id="page-bluetooth" class="page" hidden></section>
+        <section id="page-chat" class="page" hidden></section>
       </main>
       <p id="status" role="status" aria-live="polite"></p>
     </div>

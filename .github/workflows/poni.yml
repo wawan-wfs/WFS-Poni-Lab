@@ -27,6 +27,8 @@ jobs:
       - run: python poni/tests/health.py
       - run: python poni/tests/github_panel.py
       - run: python poni/tests/notifs.py
+      - run: python poni/tests/bluetooth.py
+      - run: python poni/tests/aiusage.py
   windows:
     runs-on: windows-2022
     timeout-minutes: 60

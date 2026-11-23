@@ -1,0 +1,12 @@
+#page-bluetooth { padding: 4px 0; }
+.bluetooth-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+.bluetooth-toolbar strong { font-size:14px; }
+.bluetooth-summary { flex:1; color:#b5b5bc; font-size:12px; }
+.bluetooth-toolbar button { background:#2b2b31; border:0; border-radius:7px; color:#eee; padding:6px 9px; font-size:12px; }
+.bluetooth-toolbar button:disabled { opacity:.5; cursor:default; }
+.bluetooth-status { font-size:12px; color:#b5b5bc; margin:7px 0; }
+.bluetooth-devices { margin:0; padding:0; display:grid; grid-template-columns:repeat(auto-fill, minmax(166px, 1fr)); gap:6px; list-style:none; }
+.bluetooth-devices li { min-width:0; background:#232327; border:1px solid #33333b; border-radius:8px; padding:8px; display:grid; gap:4px; }
+.bluetooth-devices strong { font-size:13px; overflow-wrap:anywhere; }
+.bluetooth-detail, .bluetooth-state { font-size:11px; color:#bbb; }
+.bluetooth-state.connected { color:#86d9ac; }

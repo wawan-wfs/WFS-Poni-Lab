@@ -5,6 +5,7 @@ from shutil import which
 from threading import Thread
 from playwright.sync_api import expect, sync_playwright
 from currency import test_currency
+from chat import test_chat
 from dashboard import test_dashboard
 from translate import test_translate
 from next_modules import test_next_modules
@@ -37,7 +38,7 @@ with sync_playwright() as pw:
         if (command === 'media_control') localStorage.setItem('last-media-action', args.action);
         if (command === 'add_task') data.tasks.push({id: crypto.randomUUID(), text: args.text, done: false, description:'', due_at_ms:args.dueAtMs});
         if (command === 'update_task') { const t = data.tasks.find(t => t.id === args.id); t.text = args.text; t.description = args.description; t.due_at_ms = args.dueAtMs; }
-        if (command === 'toggle_task') { const t = data.tasks.find(t => t.id === args.id); t.done = !t.done; }
+        if (command === 'toggle_task') { const t = data.tasks.find(t => t.id === args.id); t.done = !t.done; t.done_at_ms = t.done ? Date.now() : null; }
         if (command === 'remove_task') data.tasks = data.tasks.filter(t => t.id !== args.id);
         if (command === 'save_note') { const n = data.notes.find(n => n.id === args.id); if (n) n.text = args.text; else data.notes.push({id: crypto.randomUUID(), text: args.text}); }
         if (command === 'remove_note') data.notes = data.notes.filter(n => n.id !== args.id);
@@ -206,6 +207,17 @@ with sync_playwright() as pw:
     expect(page.locator('#day-percent')).to_have_text('50%')
     expect(page.locator('#day-remaining')).to_contain_text('8h 0m')
     expect(page.locator('#day-periods')).to_contain_text('Year')
+    page.evaluate('''() => {
+      data.calendar_events = [{id:'night', title:'Overnight event', start_ms:new Date(2026,0,1,22,30).getTime(), duration_minutes:180, repeat:'none'}];
+      data.tasks = [{id:'task', text:'Checklist', done:true, done_at_ms:new Date(2026,0,2,0,30).getTime()}];
+      data.wake_minute = 22 * 60;
+      data.bed_minute = 2 * 60;
+      renderDayProgress(new Date(2026,0,2,1));
+    }''')
+    expect(page.locator('#day-percent')).to_have_text('75%')
+    expect(page.locator('#day-agenda')).to_contain_text('Completed: Checklist')
+    expect(page.get_by_text('Overnight event')).to_have_count(1)
+    page.evaluate('data.wake_minute = 420; data.bed_minute = 1380;')
     page.evaluate("renderDayProgress(new Date(2026, 0, 1, 23, 30))")
     expect(page.locator('#day-percent')).to_have_text('100%')
     expect(page.locator('#day-remaining')).to_contain_text('past bedtime')
@@ -237,6 +249,7 @@ with sync_playwright() as pw:
     test_currency(page)
     test_translate(page)
     test_next_modules(page)
+    test_chat(page)
     assert not errors, errors
     browser.close()
 server.shutdown()

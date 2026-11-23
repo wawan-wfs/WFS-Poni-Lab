@@ -1,0 +1,30 @@
+.aiu-panel { padding: 8px 2px; font-size: 13px; }
+.aiu-toolbar, .aiu-limit-details {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.aiu-toolbar { flex-wrap: wrap; }
+.aiu-toolbar select, .aiu-toolbar button {
+  color: inherit;
+  background: #25252b;
+  border: 1px solid #383840;
+  border-radius: 6px;
+  padding: 5px 8px;
+}
+.aiu-file-label { display: flex; align-items: center; gap: 5px; }
+.aiu-file-label input { max-width: 210px; font-size: 11px; color: #bdbdc5; }
+.aiu-file-label input::file-selector-button { margin-right: 6px; }
+.aiu-summary, #aiu-status, .aiu-help { color: #bdbdc5; font-size: 12px; }
+.aiu-list { list-style: none; padding: 0; margin: 0; }
+.aiu-limit { background: #1c1c21; border-radius: 8px; padding: 8px 10px; margin-bottom: 5px; }
+.aiu-meter { position: relative; height: 7px; background: #36363e; border-radius: 4px; margin: 6px 0; }
+.aiu-fill { display: block; height: 100%; border-radius: inherit; background: #67c697; }
+.aiu-warning .aiu-fill { background: #ffad57; }
+.aiu-high .aiu-fill { background: #f65467; }
+.aiu-tick { position: absolute; height: 100%; top: 0; width: 2px; background: #fff; }
+.aiu-expired .aiu-fill { background: #787883; }
+.aiu-sub { color: #bdbdc5; font-size: 11px; }
+.aiu-help summary { cursor: pointer; }
+.aiu-help li { margin-block: 4px; }
