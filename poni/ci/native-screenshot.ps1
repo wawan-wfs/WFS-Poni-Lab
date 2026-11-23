@@ -9,7 +9,8 @@ public static class CursorPosition {
     [DllImport("user32.dll")] public static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
     [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(System.IntPtr window, out Rect rect);
-    [DllImport("user32.dll", EntryPoint="FindWindowW", CharSet=CharSet.Unicode)] public static extern System.IntPtr FindWindow(string className, string title);
+    [DllImport("user32.dll", EntryPoint="FindWindowW", CharSet=CharSet.Unicode, ExactSpelling=true)] private static extern IntPtr FindWindow(string className, string title);
+    public static IntPtr FindWindowByTitle(string title) => FindWindow(null, title);
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr window, out uint processId);
     [DllImport("user32.dll", EntryPoint="PostMessageW")] public static extern bool PostMessage(System.IntPtr window, uint message, System.IntPtr wParam, System.IntPtr lParam);
     [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left, Top, Right, Bottom; }
@@ -133,7 +134,7 @@ try {
     $settingsHandle = [IntPtr]::Zero
     for ($attempt = 0; $attempt -lt 8 -and $settingsHandle -eq [IntPtr]::Zero; $attempt++) {
         Start-Sleep -Milliseconds 750
-        $settingsHandle = [CursorPosition]::FindWindow($null, 'Poni Settings')
+        $settingsHandle = [CursorPosition]::FindWindowByTitle('Poni Settings')
     }
     Save-Screen 'settings.png'
     if ($settingsHandle -eq [IntPtr]::Zero -or $settingsHandle -eq $mainHandle) {
@@ -149,7 +150,7 @@ try {
     $settingsWidth = $settingsRect.Right - $settingsRect.Left
     [CursorPosition]::PostMessage($settingsHandle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
     Start-Sleep -Seconds 2
-    if ($process.HasExited -or [CursorPosition]::FindWindow($null, 'Poni Settings') -ne [IntPtr]::Zero) {
+    if ($process.HasExited -or [CursorPosition]::FindWindowByTitle('Poni Settings') -ne [IntPtr]::Zero) {
         throw 'Closing Settings did not leave the notch running independently.'
     }
     @{ process_id = $process.Id; main_window_handle = $mainHandle.ToInt64(); screenshot = 'desktop.png'; width_after_shortcut = $windowWidth; module_height = $moduleHeight; settings_width = $settingsWidth; settings_window_handle = $settingsHandle.ToInt64(); settings_closed_independently = $true; weather_attempted = ($bounds.Width -eq 1024 -and $bounds.Height -eq 768) } |
