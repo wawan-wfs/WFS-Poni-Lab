@@ -96,10 +96,14 @@
     page.querySelector('.st-clear').addEventListener('click', () => {
       if (window.confirm('Clear all Screen Time history?')) void update('clear_screentime');
     });
+    window.__TAURI__.event.listen('poni-screentime-changed', () => {
+      if (interval && !busy) void refresh();
+    }).catch(error => report(String(error)));
   }
 
   function hide() {
     clearInterval(interval);
+    interval = undefined;
     generation++;
   }
 

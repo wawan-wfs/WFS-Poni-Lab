@@ -1242,6 +1242,8 @@ fn main() {
             radio::find_radio_stations,
             screentime::screentime_summary,
             screentime::set_screentime_enabled,
+            screentime::get_screentime_preferences,
+            screentime::set_screentime_preferences,
             screentime::clear_screentime,
             support::open_support_link,
             translate::translate_text,

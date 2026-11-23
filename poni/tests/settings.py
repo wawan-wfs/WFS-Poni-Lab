@@ -11,13 +11,16 @@ FIXTURE = """
 (() => {
   const defaults = {
     clock_format:'region', header_clock:true, open_on_hover:true, hover_delay:0, close_delay:450,
-    module_shortcuts:true, module_order:['home','tasks','notes','calendar','timer','weather','worldclock'],
+    module_shortcuts:true, module_order:['home','tasks','notes','calendar','timer','weather','worldclock','screentime'],
     hidden_modules:[], default_module:'home', remember_module:false, last_module:null,
     mirror_enabled:true, mirror_shape:'rounded',
     calendar_enabled:true, meeting_reminder_minutes:5, week_start:'windows',
   };
   const read = () => JSON.parse(localStorage.getItem('test-settings')) || structuredClone(defaults);
   const save = value => localStorage.setItem('test-settings', JSON.stringify(value));
+  const readScreenTime = () => JSON.parse(localStorage.getItem('test-screen-time')) || {
+    enabled:false, idle_seconds:120, excluded_apps:[],
+  };
   const bus = new BroadcastChannel('poni-settings-test');
   const listeners = new Map();
   bus.onmessage = ({data}) => {
@@ -43,6 +46,21 @@ FIXTURE = """
         return;
       }
       if (command === 'get_poni_settings') return settings;
+      if (command === 'get_screentime_preferences') return readScreenTime();
+      if (command === 'set_screentime_preferences' || command === 'set_screentime_enabled') {
+        const screenTime = readScreenTime();
+        const patch = command === 'set_screentime_enabled' ? {enabled:args.enabled} : {...args.patch};
+        if (patch.excluded_apps) {
+          patch.excluded_apps = [...new Set(patch.excluded_apps.map(name => name.trim().toLowerCase()).filter(Boolean))];
+        }
+        Object.assign(screenTime, patch);
+        localStorage.setItem('test-screen-time', JSON.stringify(screenTime));
+        bus.postMessage({name:'poni-screentime-changed',payload:screenTime});
+        return screenTime;
+      }
+      if (command === 'screentime_summary') return {
+        available:true, enabled:readScreenTime().enabled, apps:[], hours:Array(24).fill(0), total:0, switches:0,
+      };
       if (command === 'set_poni_settings') {
         Object.assign(settings, args.patch);
         if (settings.hidden_modules.includes(settings.default_module)) {
@@ -139,6 +157,27 @@ def test_settings(page):
     expect(page.locator('#page-calendar')).to_be_visible()
     expect(page.locator('#calendar-grid > span').first).to_have_text('Mon')
 
+    search.fill('excluded apps')
+    settings.get_by_role('button', name='Excluded apps', exact=False).click()
+    excluded = settings.locator('#settings-screen-time-excluded')
+    expect(excluded).to_be_focused()
+    excluded.fill(' Steam.exe, keepass.exe, STEAM.exe')
+    excluded.press('Enter')
+    expect(excluded).to_have_value('steam.exe, keepass.exe')
+    idle = settings.locator('#settings-screen-time-idle')
+    expect(idle).to_have_value('120')
+    expect(idle).to_have_attribute('min', '30')
+    idle.fill('300')
+    expect(idle).to_have_attribute('aria-valuetext', '300 seconds')
+    tracking = settings.locator('#settings-screen-time-enabled')
+    tracking.check()
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    settings.get_by_role('button', name='Open Screen Time', exact=True).click()
+    panel_tracking = page.locator('#page-screentime .st-toggle')
+    expect(panel_tracking).to_be_checked()
+    panel_tracking.uncheck()
+    expect(tracking).not_to_be_checked()
+
     popup.close()
     page.reload()
     closed = page.locator('#closed')
@@ -160,6 +199,10 @@ def test_settings(page):
     expect(settings.locator('#settings-calendar-enabled')).not_to_be_checked()
     expect(settings.locator('#settings-week-start')).to_have_value('monday')
     expect(settings.locator('#settings-meeting-reminder')).to_have_value('0')
+    settings.get_by_role('button', name='Screen Time', exact=True).click()
+    expect(settings.locator('#settings-screen-time-idle')).to_have_value('300')
+    expect(settings.locator('#settings-screen-time-excluded')).to_have_value('steam.exe, keepass.exe')
+    expect(settings.locator('#settings-screen-time-enabled')).not_to_be_checked()
 
     settings.get_by_role('button', name='Modules', exact=True).click()
     settings.locator('#settings-remember-module').check()

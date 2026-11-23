@@ -30,7 +30,7 @@
       { id: 'dayprogress', title: 'Day Progress', icon: '◴', color: 'blue', link: 'dayprogress',
         hint: 'Choose when your day begins and ends.' },
       { id: 'screentime', title: 'Screen Time', icon: '⌛', color: 'indigo', link: 'screentime',
-        hint: 'Turn activity tracking on or off and clear stored history.' },
+        hint: 'Tracking, idle time, and excluded apps.' },
     ] },
     { group: 'Poni & system', pages: [
       { id: 'notifications', title: 'Notifications', icon: '♧', color: 'red', link: 'notifs',
@@ -67,6 +67,9 @@
     ['calendar', 'Show calendar', 'calendar visibility home kalender', 'calendar-enabled'],
     ['calendar', 'Meeting reminder', 'calendar notification event minutes pertemuan pengingat', 'meeting-reminder'],
     ['calendar', 'Week starts on', 'calendar first day monday sunday minggu senin awal pekan', 'week-start'],
+    ['screentime', 'Track screen time', 'activity tracking waktu layar', 'screen-time-enabled'],
+    ['screentime', 'Stop counting after idle', 'activity threshold inactive ambang diam', 'screen-time-idle'],
+    ['screentime', 'Excluded apps', 'ignore executable abaikan kecualikan aplikasi', 'screen-time-excluded'],
   ];
 
   const option = (label, value) => {
@@ -84,6 +87,7 @@
 
   let root, search, menu, panel, banner;
   let settings = null;
+  let screenTime = null;
   let active = 'general';
   let busy = false;
   let loading = false;
@@ -102,12 +106,17 @@
 
   async function change(patch, focusId) {
     if (busy || !settings) return;
+    const isScreenTime = active === 'screentime';
     busy = true;
     banner.textContent = 'Saving…';
     updateBusy();
     try {
-      settings = await window.__TAURI__.core.invoke('set_poni_settings', { patch });
-      broadcast();
+      if (isScreenTime) {
+        screenTime = await window.__TAURI__.core.invoke('set_screentime_preferences', { patch });
+      } else {
+        settings = await window.__TAURI__.core.invoke('set_poni_settings', { patch });
+        broadcast();
+      }
       banner.textContent = 'Saved';
     } catch (error) {
       banner.textContent = String(error);
@@ -151,7 +160,7 @@
     const input = create('input', 'settings-switch');
     input.id = 'settings-' + id;
     input.type = 'checkbox';
-    input.checked = settings[key];
+    input.checked = (active === 'screentime' ? screenTime : settings)[key];
     input.addEventListener('change', () => void change({ [key]: input.checked }, id));
     row(container, title, description, input);
   }
@@ -166,17 +175,17 @@
     row(container, title, description, input);
   }
 
-  function range(container, id, title, key, { max, step, disabled = false, unit, spokenUnit, description }) {
+  function range(container, id, title, key, { min = 0, max, step, disabled = false, unit, spokenUnit, description }) {
     const box = create('span', 'settings-range');
     const input = create('input');
     const output = create('span', 'settings-range-value');
     output.setAttribute('aria-hidden', 'true');
     input.id = 'settings-' + id;
     input.type = 'range';
-    input.min = '0';
+    input.min = min;
     input.max = max;
     input.step = step;
-    input.value = settings[key];
+    input.value = (active === 'screentime' ? screenTime : settings)[key];
     input.disabled = disabled;
     const showValue = () => {
       output.textContent = input.value + ' ' + unit;
@@ -229,6 +238,30 @@
       'week_start', [['windows', 'As in Windows'], ['monday', 'Monday'], ['sunday', 'Sunday']]);
     const hidden = settings.hidden_modules.includes('calendar');
     content.append(button(hidden ? 'Show Calendar in Modules' : 'Open Calendar', () => void openLink('calendar')));
+  }
+
+  function screenTimeControls(content) {
+    const controls = group(content);
+    toggle(controls, 'screen-time-enabled', 'Track screen time', null, 'enabled');
+    range(controls, 'screen-time-idle', 'Stop counting after idle', 'idle_seconds', {
+      min: 30, max: 600, step: 30, unit: 's', spokenUnit: 'seconds',
+    });
+
+    const input = create('input', 'settings-text');
+    input.id = 'settings-screen-time-excluded';
+    input.type = 'text';
+    input.value = screenTime.excluded_apps.join(', ');
+    input.spellcheck = false;
+    input.addEventListener('change', () => {
+      void change({ excluded_apps: input.value.split(',') }, 'screen-time-excluded');
+    });
+    input.addEventListener('keydown', event => {
+      if (event.key === 'Enter') input.blur();
+    });
+    row(controls, 'Excluded apps', 'Comma-separated .exe names, e.g. keepass.exe, steam.exe', input);
+
+    const hidden = settings.hidden_modules.includes('screentime');
+    content.append(button(hidden ? 'Show Screen Time in Modules' : 'Open Screen Time', () => void openLink('screentime')));
   }
 
   function move(id, target, after = false, focusId = null) {
@@ -391,6 +424,7 @@
         else if (active === 'modules') modules(controls);
         else if (active === 'mirror') mirror(controls);
         else if (active === 'calendar') calendar(controls);
+        else if (active === 'screentime' && screenTime) screenTimeControls(controls);
         else feature(controls, current);
       }
     }
@@ -404,7 +438,10 @@
     banner.textContent = '';
     updateBusy();
     try {
-      settings = await window.__TAURI__.core.invoke('get_poni_settings');
+      const invoke = window.__TAURI__.core.invoke;
+      [settings, screenTime] = await Promise.all([
+        invoke('get_poni_settings'), invoke('get_screentime_preferences'),
+      ]);
       broadcast();
     } catch (error) {
       banner.textContent = String(error);
@@ -448,6 +485,11 @@
     banner.setAttribute('role', 'status');
     content.append(panel, banner);
     root.append(sidebar, content);
+    window.__TAURI__.event.listen('poni-screentime-changed', event => {
+      screenTime = event.payload;
+      const toggle = document.getElementById('settings-screen-time-enabled');
+      if (toggle) toggle.checked = screenTime.enabled;
+    }).catch(error => { banner.textContent = String(error); });
     render(false);
   }
 

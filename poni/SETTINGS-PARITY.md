@@ -22,6 +22,8 @@ Baseline memiliki 25 kontrol standar dengan padanan sebagian dan 176 tanpa padan
 
 Putaran Calendar memindahkan Settings Rust ke jendela terpisah dan menambahkan `meetingReminderMinutes`, serta memperluas padanan untuk `calendarEnabled` dan `weekStart`. Dengan metode hitung yang sama, **172 dari 201 kontrol standar** masih belum memiliki padanan. Pengaturan minggu berlaku untuk Calendar, pemilih hari pengulangan di Todo, dan Day Progress. Impor ICS lokal tersedia untuk acara berjam yang didukung. Langganan URL belum dibuat.
 
+Settings Screen Time kini menyediakan sakelar pelacakan, ambang idle 30–600 detik dengan langkah 30 detik, dan daftar nama executable yang dikecualikan dari pencatatan berikutnya. `screenTimeExcluded` memiliki padanan baru; dua kontrol lain memperluas padanan sebagian. Tersisa **171 dari 201 kontrol standar** tanpa padanan dengan metode hitung yang sama. Ambang awal build Rust tetap 120 detik untuk menjaga perilaku profil lama.
+
 | Jenis kontrol | Deklarasi | Masuk katalog build |
 | --- | ---: | ---: |
 | Sakelar | 115 | 115 |

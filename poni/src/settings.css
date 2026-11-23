@@ -174,12 +174,17 @@
 .settings-switch:checked::after { transform: translateX(14px); }
 .settings-switch:disabled { opacity: .55; cursor: default; }
 
-.settings-page .settings-select, .settings-button {
+.settings-page .settings-select, .settings-text, .settings-button {
   background: #2c2c2e;
   border: 1px solid #414145;
   color: inherit;
   border-radius: 7px;
   padding: 5px 8px;
+}
+
+.settings-text {
+  width: min(45%, 260px);
+  min-width: 0;
 }
 
 .settings-button:not(:disabled):hover { background: #39393a; }
