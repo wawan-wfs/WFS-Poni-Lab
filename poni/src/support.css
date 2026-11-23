@@ -1,0 +1,4 @@
+.poni-support { display: flex; gap: 12px; align-items: center; padding: 7px 0; }
+.poni-support p { margin: 5px 0; font-size: 12px; color: #bdbdc5; }
+.poni-support-links { display: flex; gap: 6px; }
+.poni-support-links button { padding: 5px 9px; background: #29292e; border: 0; border-radius: 7px; font-size: 12px; }

@@ -1,0 +1,18 @@
+.radio-layout { display: grid; grid-template-columns: 185px minmax(0, 1fr); gap: 12px; padding: 4px 0; }
+.radio-controls { align-self: start; padding: 7px; min-width: 0; background: #202024; border-radius: 8px; }
+.radio-now { display: block; overflow-wrap: anywhere; font-size: 13px; }
+.radio-actions, .radio-modes, .radio-search, .radio-station { display: flex; align-items: center; gap: 5px; }
+.radio-actions { margin-top: 6px; }
+.radio-actions label, .radio-search label { display: flex; align-items: center; gap: 3px; font-size: 10px; }
+.radio-actions input { width: 65px; padding: 0; }
+.radio-layout button { background: #29292e; border: 0; border-radius: 6px; white-space: nowrap; font-size: 11px; padding: 4px 7px; }
+.radio-layout button[aria-pressed="true"] { background: #483352; color: #fdddff; }
+.radio-status, .radio-list { color: #b9b9bd; font-size: 11px; }
+.radio-status { margin: 5px 0 0; }
+.radio-search { margin: 4px 0; }
+.radio-search input { padding: 4px; font-size: 11px; min-width: 0; }
+.radio-search input[type="text"] { width: 32px; }
+.radio-search input[type="checkbox"] { width: auto; }
+.radio-list { max-height: 76px; overflow: auto; }
+.radio-station + .radio-station { margin-top: 3px; }
+.radio-station .radio-select { flex: 1; min-width: 0; text-overflow: ellipsis; overflow: hidden; text-align: left; }

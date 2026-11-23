@@ -1,0 +1,41 @@
+#page-notifs {
+  padding: 2px 0;
+}
+.nh-header, .nh-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.nh-header {
+  justify-content: space-between;
+  margin: 0 0 7px;
+}
+.nh-header strong {
+  font-size: 13px;
+}
+#page-notifs button {
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 4px 7px;
+  background: #2c2c30;
+  color: #eee;
+  font-size: 11px;
+}
+#page-notifs button:hover { background: #38383e; }
+#page-notifs button:disabled { opacity: .48; cursor: default; }
+#page-notifs .nh-danger { background: #64332e; }
+.nh-actions, .nh-retention, .nh-day, .nh-meta { color: #aaa; font-size: 11px; }
+.nh-body { display: grid; grid-template-columns: minmax(90px, 125px) 1fr; gap: 8px; }
+.nh-filters, .nh-list { max-height: 152px; overflow: auto; min-width: 0; }
+.nh-filters { display: grid; align-content: start; gap: 3px; }
+#page-notifs .nh-filters button { text-align: left; }
+#page-notifs .nh-filters button[aria-pressed="true"] { background: #464651; }
+.nh-day { margin: 4px 0; }
+.nh-empty { color: #aaa; font-size: 12px; }
+.nh-row { display: flex; align-items: start; gap: 3px; margin-bottom: 4px; }
+#page-notifs .nh-notice { flex: 1; min-width: 0; display: grid; gap: 2px; text-align: left; }
+#page-notifs .nh-row.unread .nh-notice { border-left: 2px solid #64a5ff; }
+.nh-message { overflow-wrap: anywhere; white-space: pre-wrap; color: #bbb; }
+.nh-retention { display: block; margin-top: 5px; }
+.nh-error { color: #f88; font-size: 11px; margin: 0; }

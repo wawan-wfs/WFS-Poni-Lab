@@ -1,0 +1,73 @@
+#page-prayer {
+  padding: 6px 0;
+  font-size: 12px;
+}
+.prayer-header, .prayer-headline, .prayer-feedback {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.prayer-header {
+  color: #aaa;
+}
+.prayer-headline {
+  justify-content: flex-start;
+  margin-top: 4px;
+}
+#prayer-hijri {
+  margin-left: auto;
+  color: #aaa;
+}
+#prayer-countdown {
+  color: #6de1aa;
+  font-variant-numeric: tabular-nums;
+}
+.prayer-times {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 4px;
+  margin-top: 6px;
+}
+.prayer-times div {
+  background: #202023;
+  border-radius: 8px;
+  text-align: center;
+  padding: 4px;
+}
+.prayer-times .prayer-next {
+  background: #1e3e32;
+}
+.prayer-times strong {
+  display: block;
+  font-variant-numeric: tabular-nums;
+}
+#prayer-extras {
+  margin: 5px 0 0;
+  color: #bbb;
+}
+.prayer-results, .prayer-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  margin: 5px 0;
+}
+#page-prayer button, .prayer-form select {
+  border: 0;
+  border-radius: 6px;
+  background: #29292e;
+  color: inherit;
+  padding: 4px 7px;
+}
+.prayer-form select {
+  max-width: 240px;
+}
+#prayer-save:disabled {
+  opacity: .55;
+}
+.prayer-feedback {
+  justify-content: flex-start;
+  color: #ccc;
+  margin-top: 3px;
+}

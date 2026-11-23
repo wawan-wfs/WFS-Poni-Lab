@@ -201,6 +201,14 @@ fn settle_store(store: &mut Store, now: u64) -> Result<Option<Phase>, String> {
 
 fn notify(app: &AppHandle, phase: Option<Phase>) {
     if let Some(phase) = phase {
+        if let Err(error) = super::notifs::record_for_app(
+            app,
+            super::notifs::Source::Pomodoro,
+            "Pomodoro",
+            phase.completed_message(),
+        ) {
+            eprintln!("Could not save Pomodoro notification: {error}");
+        }
         let _ = app
             .notification()
             .builder()

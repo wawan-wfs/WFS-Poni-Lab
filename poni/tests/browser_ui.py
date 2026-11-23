@@ -6,6 +6,8 @@ from threading import Thread
 from playwright.sync_api import expect, sync_playwright
 from currency import test_currency
 from dashboard import test_dashboard
+from translate import test_translate
+from next_modules import test_next_modules
 
 root = Path(__file__).resolve().parents[1]
 server = ThreadingHTTPServer(('127.0.0.1', 0), partial(SimpleHTTPRequestHandler, directory=str(root / 'src')))
@@ -233,6 +235,8 @@ with sync_playwright() as pw:
     expect(page.locator('#calendar-items')).to_contain_text('Home event')
     test_dashboard(page)
     test_currency(page)
+    test_translate(page)
+    test_next_modules(page)
     assert not errors, errors
     browser.close()
 server.shutdown()

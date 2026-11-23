@@ -9,11 +9,19 @@ use tempfile::NamedTempFile;
 use uuid::Uuid;
 
 mod bookmarks;
+mod control;
 mod currency;
 mod dashboard;
+mod github;
 mod health;
+mod notifs;
 mod pomodoro;
+mod prayer;
+mod radio;
+mod screentime;
+mod support;
 mod teleprompter;
+mod translate;
 
 #[derive(Clone, Serialize, Deserialize)]
 struct Task {
@@ -198,6 +206,11 @@ impl Timer {
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 struct AppData {
+    github_login: Option<String>,
+    notifications: Vec<notifs::Notification>,
+    prayer_settings: Option<prayer::PrayerSettings>,
+    radio: radio::RadioData,
+    screen_time: screentime::ScreenTime,
     bookmarks: bookmarks::BookmarkData,
     currency: currency::CurrencyData,
     dashboard_widgets: dashboard::DashboardWidgets,
@@ -540,6 +553,7 @@ fn notify_due(app: &tauri::AppHandle, now: u64) {
                     .find(|task| task.id == id && task.due_at_ms == Some(due))
                 {
                     task.notified_due_at_ms = Some(due);
+                    notifs::record(data, notifs::Source::Todo, "Task due", &title, now);
                 }
                 Ok(())
             }) {
@@ -562,6 +576,7 @@ fn notify_due(app: &tauri::AppHandle, now: u64) {
             if let Err(error) = store.update(|data| {
                 if data.timer.ends_at_ms == Some(end) {
                     data.timer.notified_end_ms = Some(end);
+                    notifs::record(data, notifs::Source::Timer, "Timer", "Time is up", now);
                 }
                 Ok(())
             }) {
@@ -959,6 +974,8 @@ fn main() {
             let path = app.path().app_data_dir()?.join("data.json");
             let store = Store::open(path).map_err(std::io::Error::other)?;
             app.manage(Mutex::new(store));
+            app.manage(Mutex::new(control::ControlState::default()));
+            app.manage(Mutex::new(screentime::Tracker::default()));
             let mut system = sysinfo::System::new();
             system.refresh_cpu_usage();
             app.manage(Mutex::new(SystemMonitor {
@@ -976,6 +993,7 @@ fn main() {
                     let now_ms = now.as_millis() as u64;
                     notify_due(&handle, now_ms);
                     pomodoro::tick(&handle, now_ms);
+                    screentime::sample(&handle);
                 }
                 std::thread::sleep(std::time::Duration::from_secs(15));
             });
@@ -990,6 +1008,28 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            control::control_snapshot,
+            control::set_keep_awake,
+            control::set_control_volume,
+            control::set_control_mute,
+            control::open_control_settings,
+            github::github_login,
+            github::save_github_login,
+            github::refresh_github_inbox,
+            github::open_github_pull_request,
+            notifs::notification_history,
+            notifs::update_notification_history,
+            prayer::set_prayer_settings,
+            prayer::prayer_day,
+            radio::get_radio,
+            radio::set_radio_preferences,
+            radio::update_radio_stations,
+            radio::find_radio_stations,
+            screentime::screentime_summary,
+            screentime::set_screentime_enabled,
+            screentime::clear_screentime,
+            support::open_support_link,
+            translate::translate_text,
             bookmarks::list_bookmarks,
             bookmarks::save_bookmark,
             bookmarks::remove_bookmark,

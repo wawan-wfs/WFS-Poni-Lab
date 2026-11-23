@@ -4,11 +4,11 @@ Inventaris mencakup 23 modul yang terdaftar melalui `N.register` di aset Poni 1.
 
 | Status | Jumlah | Persentase dari 23 modul |
 | --- | ---: | ---: |
-| Memiliki fungsi yang bisa dipakai, implementasi masih sebagian | 12 | 52,2% |
-| Belum diimplementasikan sebagai modul | 11 | 47,8% |
+| Memiliki fungsi yang bisa dipakai, implementasi masih sebagian | 20 | 87,0% |
+| Belum diimplementasikan sebagai modul | 3 | 13,0% |
 | Terbukti setara penuh | 0 | 0% |
 
-Angka 52,2% mengukur cakupan modul yang sudah mulai berfungsi. Kesetaraan penuh menunggu perbandingan fitur, tampilan, penyimpanan, integrasi, dan penanganan kesalahan dengan aplikasi asli.
+Angka 87,0% mengukur cakupan modul yang sudah mulai berfungsi. Kesetaraan penuh menunggu perbandingan fitur, tampilan, penyimpanan, integrasi, dan penanganan kesalahan dengan aplikasi asli.
 
 ## Modul yang sudah dimulai
 
@@ -24,11 +24,19 @@ Angka 52,2% mengukur cakupan modul yang sudah mulai berfungsi. Kesetaraan penuh 
 - **Dashboard** menyimpan empat slot pilihan, dengan widget jam, progres hari, agenda, tugas, jam dunia, sistem, cuaca, media, timer, Pomodoro, dan kutipan. Kontrol cepat Windows, peluncur, dan pilihan widget Poni lainnya masih belum tersedia.
 - **Health** menyimpan hitungan air, peregangan, pernapasan, dan hari aktif. Istirahat mata berjalan di dalam panel, dengan target tetap dan tanpa jadwal pengingat.
 - **Currency** mengonversi mata uang, menyimpan pasangan favorit, dan memakai kurs referensi Frankfurter dengan salinan kurs lokal. Jangkauan mata uang dan jadwal pembaruan mengikuti penyedia tersebut.
+- **Control** menyediakan Keep Awake, volume keluaran, mute keluaran dan mikrofon, serta akses ke halaman Pengaturan Windows. Pengelolaan Wi-Fi, Bluetooth, dan pengaturan tampilan dari dalam panel masih belum tersedia.
+- **GitHub** menampilkan PR publik yang dibuat pengguna dan permintaan review publik. PR privat memerlukan integrasi akun. Akses langsung ke API GitHub masih perlu diuji pada Windows.
+- **Notifications** menyimpan riwayat pengingat Todo, Timer dan Pomodoro, dengan filter, penandaan dibaca, dan penghapusan. Pembacaan notifikasi aplikasi Windows lain belum tersedia.
+- **Prayer** memakai jadwal AlAdhan untuk kota dan metode yang dipilih, serta menampilkan waktu salat berikutnya dan arah kiblat. Jadwal resmi per kabupaten, azan dan pengingat latar belum tersedia.
+- **Radio** mencari stasiun lewat Radio Browser, memutar stream audio HTTPS, dan menyimpan stasiun favorit dan riwayat. Pemutaran bergantung pada ketersediaan dan format stream masing-masing stasiun.
+- **Screen Time** dapat mencatat durasi aplikasi aktif setelah diaktifkan pengguna, mengabaikan waktu menganggur, dan menampilkan ringkasan hari ini serta tujuh hari. Pencatatan mengambil sampel berkala dan hanya menyimpan nama aplikasi, tanpa judul jendela. Kategori aplikasi dan ikon belum tersedia.
+- **Support** membuka tautan PayPal dan GitHub resmi untuk Poni asli. Panel publik belum menyertakan gambar QRIS.
+- **Translate** mengirim teks saat tombol Translate ditekan dan menggunakan MyMemory. Arah terjemahan dipilih manual, dengan batas 500 byte UTF-8 dari penyedia. Penyedia LLM milik aplikasi asli belum diintegrasikan.
 
 ## Modul yang belum diimplementasikan
 
-AI usage, Bluetooth, Chat, Control, GitHub, Notifications, Prayer, Radio, Screen time, Support, dan Translate.
+AI usage, Bluetooth, dan Chat.
 
 Di luar inventaris modul, sudah ada sebagian perilaku Home/notch, pemutaran media Windows, stopwatch, timer, statistik CPU/memori dan installer. Semuanya masih memerlukan perbandingan lebih lanjut. Pengingat OS telah diimplementasikan, tetapi tampilan notifikasi pada instalasi Windows belum diverifikasi. Belum dilakukan audit keamanan; audit menyeluruh direncanakan setelah kesetaraan fitur tercapai.
 
-Pengujian browser menggunakan backend tiruan untuk memeriksa alur utama keenam modul baru. Runner Windows menjalankan tes Rust, membuat build dan installer, serta memeriksa pembukaan panel melalui Alt+N dan perubahan tinggi panel saat berpindah modul.
+Pengujian browser menggunakan backend tiruan untuk memeriksa alur modul. Runner Windows menjalankan tes Rust, membuat build dan installer, serta memeriksa pembukaan panel melalui Alt+N dan perubahan tinggi panel saat berpindah modul. Fitur yang memerlukan perangkat, akses akun, atau layanan eksternal juga memerlukan pengujian pada kondisi tersebut.

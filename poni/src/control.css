@@ -1,0 +1,49 @@
+.control-page {
+  padding-block: 7px;
+}
+.control-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.control-tiles button {
+  border: 0;
+  border-radius: 8px;
+  background: #29292d;
+  padding: 7px 10px;
+  font-size: 12px;
+}
+.control-tiles button[aria-pressed="true"] {
+  background: #327fe9;
+}
+.control-tiles button:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+.control-level {
+  display: grid;
+  grid-template-columns: max-content minmax(70px, 1fr) 76px;
+  align-items: center;
+  gap: 8px;
+  margin-block: 8px;
+  font-size: 12px;
+}
+.control-level input {
+  padding: 0;
+  accent-color: #327fe9;
+}
+.control-level output {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.control-page h3 {
+  margin: 6px 0;
+  font-size: 12px;
+}
+.control-status {
+  color: #ff9e9e;
+  font-size: 11px;
+}
+.control-status:empty {
+  display: none;
+}

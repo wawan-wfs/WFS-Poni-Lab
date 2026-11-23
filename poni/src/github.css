@@ -1,0 +1,21 @@
+#github-account input { min-width: 0; }
+#github-status, #github-pr-list p { color: #aaa; font-size: 12px; margin: 4px 0; }
+#github-pr-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+#github-pr-list h3 { font-size: 13px; margin: 4px 0; }
+.github-pr {
+  display: block;
+  width: 100%;
+  padding: 6px;
+  margin-bottom: 4px;
+  border: 0;
+  border-radius: 8px;
+  background: #202023;
+  text-align: left;
+}
+.github-pr strong, .github-pr small {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.github-pr small { color: #aaa; font-size: 11px; }

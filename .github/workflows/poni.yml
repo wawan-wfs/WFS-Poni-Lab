@@ -25,6 +25,8 @@ jobs:
       - run: python poni/tests/pomodoro.py
       - run: python poni/tests/teleprompter.py
       - run: python poni/tests/health.py
+      - run: python poni/tests/github_panel.py
+      - run: python poni/tests/notifs.py
   windows:
     runs-on: windows-2022
     timeout-minutes: 60

@@ -266,7 +266,7 @@ pub(crate) fn open_bookmark(store: State<'_, Mutex<Store>>, id: Uuid) -> Result<
 }
 
 #[cfg(windows)]
-fn open_in_default_browser(url: Url) -> Result<(), String> {
+pub(crate) fn open_in_default_browser(url: Url) -> Result<(), String> {
     use std::ptr;
     use windows_sys::Win32::UI::Shell::ShellExecuteW;
     use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
@@ -291,7 +291,7 @@ fn open_in_default_browser(url: Url) -> Result<(), String> {
 }
 
 #[cfg(not(windows))]
-fn open_in_default_browser(url: Url) -> Result<(), String> {
+pub(crate) fn open_in_default_browser(url: Url) -> Result<(), String> {
     let binary = if cfg!(target_os = "macos") {
         "open"
     } else {
