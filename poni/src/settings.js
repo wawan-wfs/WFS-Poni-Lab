@@ -379,9 +379,9 @@
       'When you plug in or unplug the charger.', 'charging_activity', 'battery');
     range(controls, 'battery-threshold', 'Low battery warning at', 'low_threshold',
       { min: 5, max: 50, step: 1, unit: '%', spokenUnit: 'percent', source: 'battery' });
-    const details = create('p', 'settings-lead');
+    const details = create('p', 'settings-battery-state');
     details.id = 'battery-details';
-    content.append(details);
+    controls.append(details);
     paintBattery();
   }
 
@@ -389,7 +389,7 @@
     const details = document.querySelector('#battery-details');
     if (!details) return;
     if (typeof batteryStatus?.charging !== 'boolean') {
-      details.textContent = 'No battery detected. The battery indicator stays hidden.';
+      details.textContent = 'No battery detected (desktop PC). The battery indicator stays hidden.';
       return;
     }
     const level = batteryStatus.percent == null ? 'Battery level unavailable' : `Battery: ${batteryStatus.percent}%`;

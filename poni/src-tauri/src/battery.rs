@@ -22,7 +22,7 @@ impl Default for Preferences {
     fn default() -> Self {
         Self {
             enabled: true,
-            show_percentage: false,
+            show_percentage: true,
             icon: Icon::Bar,
             charging_activity: true,
             low_threshold: 20,

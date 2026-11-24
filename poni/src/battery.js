@@ -6,7 +6,7 @@
   const activity = document.querySelector('#battery-activity');
   const indicators = [...document.querySelectorAll('.battery-indicator')];
   const defaults = {
-    enabled: true, show_percentage: false, icon: 'bar', charging_activity: true, low_threshold: 20,
+    enabled: true, show_percentage: true, icon: 'bar', charging_activity: true, low_threshold: 20,
   };
   let settings = defaults;
   let power = null;

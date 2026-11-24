@@ -354,7 +354,7 @@ try {
         Save-Screen 'settings-battery.png'
         $battery = (Get-Content -Raw -LiteralPath $dataPath | ConvertFrom-Json).settings.battery
         $battery | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'battery-settings.json') -Encoding UTF8
-        if ($battery.low_threshold -ne 50 -or !$battery.show_percentage) {
+        if ($battery.low_threshold -ne 50 -or $battery.show_percentage -ne $false) {
             throw ('Unexpected Battery settings after native input: ' + ($battery | ConvertTo-Json -Compress))
         }
         Find-Setting 'rotate between activities'

@@ -56,6 +56,8 @@ Tangkapan Todo dan Day Progress dari kedua aplikasi memperlihatkan selisih pada 
 
 Tujuh kontrol **Health** lain telah terhubung ke pelacakan aktivitas serta pengingat jeda, air, dan mata. Pengingat air menghitung waktu saat PC aktif, berhenti ketika target harian tercapai, dan dapat mencatat segelas langsung dari notch. Overlay mata memakai jendela per monitor. Lima kontrol **Battery** membaca status daya Windows dan mengatur visibilitas, persentase, ikon, animasi pengisi daya, dan ambang peringatan. Kini **68 dari 201 kontrol standar (33,8%)** memiliki padanan setidaknya sebagian. Tersisa **133** tanpa padanan.
 
+Tangkapan Battery asli pada profil baru mengonfirmasi ikon Bar, ambang 20%, serta sakelar tampilan baterai, persentase, dan animasi pengisian yang aktif. Baterai fisik tidak terdeteksi di runner. [Tangkapan Settings Battery asli](https://github.com/wawan-wfs/WFS-Poni-Lab/actions/runs/45431216995/artifacts/14939870109)
+
 Lima kontrol **Live Activities** mengaktifkan aktivitas notch, rotasi enam detik, serta sumber Pomodoro/Timer/stopwatch, Calendar, dan Todo. Calendar menampilkan acara dalam 15 menit, sedangkan Todo menampilkan tenggat berikutnya dalam satu jam. Pengingat tugas jatuh tempo tetap terpisah. Musik, ringkasan sistem, Bluetooth, dan tampilan daftar beberapa tugas di notch masih perlu disamakan. Kini **73 dari 201 kontrol standar (36,3%)** memiliki padanan setidaknya sebagian. Tersisa **128** tanpa padanan.
 
 | Jenis kontrol | Deklarasi | Masuk katalog build |

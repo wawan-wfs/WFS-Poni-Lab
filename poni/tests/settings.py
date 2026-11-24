@@ -20,7 +20,7 @@ FIXTURE = """
     todo: {late_minutes:0, snooze_minutes:10, trash_days:7},
     health: {water_goal:8, break_goal:6, mindful_goal:5, eye_duration:20, enabled:true,
       break_reminders:true, break_interval:50, water_reminders:false, water_interval:60, eye_breaks:false, eye_interval:20},
-    battery:{enabled:true,show_percentage:false,icon:'bar',charging_activity:true,low_threshold:20},
+    battery:{enabled:true,show_percentage:true,icon:'bar',charging_activity:true,low_threshold:20},
     live:{enabled:true,rotate:true,timers:true,calendar:true,todo:true},
     bedtime_reminder:false, bedtime_chime_dnd:false,
     panel:{ direction:'auto', top_gap:0, position:50, width:200, height:32, opacity:100,
@@ -391,7 +391,7 @@ def test_settings(page):
     expect(settings.locator('#battery-details')).to_contain_text('No battery detected')
     settings.locator('#settings-battery-icon').select_option('ring')
     expect(settings.get_by_role('status')).to_have_text('Saved')
-    settings.locator('#settings-battery-percentage').check()
+    settings.locator('#settings-battery-percentage').uncheck()
     expect(settings.get_by_role('status')).to_have_text('Saved')
     settings.locator('#settings-battery-threshold').fill('27')
     expect(settings.get_by_role('status')).to_have_text('Saved')
@@ -450,7 +450,7 @@ def test_settings(page):
     expect(settings.locator('#settings-health-enabled')).not_to_be_checked()
     settings.get_by_role('button', name='Battery', exact=True).click()
     expect(settings.locator('#settings-battery-icon')).to_have_value('ring')
-    expect(settings.locator('#settings-battery-percentage')).to_be_checked()
+    expect(settings.locator('#settings-battery-percentage')).not_to_be_checked()
     expect(settings.locator('#settings-battery-threshold')).to_have_value('27')
     settings.get_by_role('button', name='Live Activities', exact=True).click()
     expect(settings.locator('#settings-live-rotate')).not_to_be_checked()
