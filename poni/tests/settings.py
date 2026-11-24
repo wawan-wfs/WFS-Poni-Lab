@@ -17,6 +17,7 @@ FIXTURE = """
     mirror_enabled:true, mirror_shape:'rounded',
     calendar_enabled:true, meeting_reminder_minutes:5, week_start:'windows',
     timer_presets:[], timer_remember:true, timer_then_break:false,
+    todo: {late_minutes:0, snooze_minutes:10, trash_days:7},
     panel:{ direction:'auto', top_gap:0, position:50, width:200, height:32, opacity:100,
       expanded_width:680, expanded_height:196, tall_height:268, show_in_screenshots:true,
       warm_night:false, warmth:60 },
@@ -93,9 +94,10 @@ FIXTURE = """
         available:true, enabled:readScreenTime().enabled, apps:[], hours:Array(24).fill(0), total:0, switches:0,
       };
       if (command === 'set_poni_settings') {
-        const { panel, ...patch } = args.patch;
+        const { panel, todo, ...patch } = args.patch;
         Object.assign(settings, patch);
         if (panel) Object.assign(settings.panel, panel);
+        if (todo) Object.assign(settings.todo, todo);
         settings.timer_presets.sort((a,b) => a-b);
         if (settings.hidden_modules.includes(settings.default_module)) {
           settings.default_module = settings.module_order.find(id => !settings.hidden_modules.includes(id));
@@ -140,6 +142,15 @@ def test_settings(page):
     popup, settings = open_settings(page)
 
     search = settings.get_by_role('searchbox', name='Search settings')
+    search.fill('mark late tasks')
+    search.press('Enter')
+    expect(settings.locator('#settings-todo-late')).to_be_focused()
+    settings.locator('#settings-todo-late').select_option('3')
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    settings.locator('#settings-todo-snooze').select_option('15')
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    settings.locator('#settings-todo-trash-days').fill('12')
+    expect(settings.get_by_role('status')).to_have_text('Saved')
     search.fill('closed notch width')
     search.press('Enter')
     width = settings.locator('#settings-notch-width')
@@ -197,8 +208,6 @@ def test_settings(page):
     expect(settings.locator('#settings-launch-at-login')).to_be_checked()
     settings.locator('#settings-launch-at-login').uncheck()
     expect(settings.get_by_role('status')).to_have_text('Saved')
-    expect(settings.get_by_role('status')).to_have_text('Saved')
-
     settings.locator('#settings-clock-format').select_option('h24')
     expect(settings.locator('#settings-clock-format')).to_have_value('h24')
     settings.locator('#settings-header-clock').uncheck()
@@ -310,6 +319,10 @@ def test_settings(page):
     expect(page.locator('#header-clock')).to_be_hidden()
 
     popup, settings = open_settings(page)
+    settings.locator('[data-section="todo"]').click()
+    expect(settings.locator('#settings-todo-late')).to_have_value('3')
+    expect(settings.locator('#settings-todo-snooze')).to_have_value('15')
+    expect(settings.locator('#settings-todo-trash-days')).to_have_value('12')
     settings.get_by_role('button', name='General', exact=True).click()
     expect(settings.locator('#settings-open-on-hover')).not_to_be_checked()
     expect(settings.locator('#settings-clock-format')).to_have_value('h24')

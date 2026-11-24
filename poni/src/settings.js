@@ -19,6 +19,8 @@
     { group: 'Features', pages: [
       { id: 'dashboard', title: 'Dashboard', icon: '⊞', color: 'blue', link: 'dashboard',
         hint: 'Choose and reorder your Dashboard widgets.' },
+      { id: 'todo', title: 'Todo', icon: '☑', color: 'orange', link: 'tasks',
+        hint: 'Late completion, snooze, and Trash retention.' },
       { id: 'calendar', title: 'Calendar', icon: '▤', color: 'red', link: 'calendar',
         hint: 'Calendar display, meeting reminders, and the first day of the week.' },
       { id: 'weather', title: 'Weather', icon: '☀', color: 'cyan', link: 'weather',
@@ -54,6 +56,9 @@
   ];
   const pages = categories.flatMap(section => section.pages);
   const indexedFields = [
+    ['todo', 'Mark late tasks as done', 'automatic overdue tasks selesai terlambat', 'todo-late'],
+    ['todo', 'Snooze a due task for', 'postpone due reminder tunda tugas', 'todo-snooze'],
+    ['todo', 'Keep deleted tasks in Trash for', 'retention days deleted task hapus sampah', 'todo-trash-days'],
     ['general', 'Clock format', '12 hour 24 hour region time', 'clock-format'],
     ['general', 'Time at the top of the open Poni', 'header clock', 'header-clock'],
     ['general', 'Open on hover', 'mouse click to open', 'open-on-hover'],
@@ -149,7 +154,7 @@
           window.poniFocusPlayback.previewSettings(timer);
         }
       } else {
-        const update = source === 'panel' ? { panel: patch } : patch;
+        const update = source === 'panel' || source === 'todo' ? { [source]: patch } : patch;
         settings = await window.__TAURI__.core.invoke('set_poni_settings', { patch: update });
         broadcast();
       }
@@ -194,7 +199,7 @@
 
   function values(source) {
     if (source === 'pomodoro') return pomo;
-    if (source === 'panel') return settings.panel;
+    if (source === 'panel' || source === 'todo') return settings[source];
     if (source === 'startup') return { launch_at_login: launchAtLogin };
     return active === 'screentime' ? screenTime : settings;
   }
@@ -215,7 +220,10 @@
     input.disabled = disabled;
     for (const [value, label] of options) input.append(option(label, value));
     input.value = values(source)[key];
-    input.addEventListener('change', () => void change({ [key]: input.value }, id, source));
+    input.addEventListener('change', () => {
+      const value = typeof options[0]?.[0] === 'number' ? Number(input.value) : input.value;
+      void change({ [key]: value }, id, source);
+    });
     row(container, title, description, input);
   }
 
@@ -314,6 +322,20 @@
       'Open the Mirror from Home to preview your camera.', 'mirror_enabled');
     select(controls, 'mirror-shape', 'Mirror shape', null, 'mirror_shape',
       [['rounded', 'Rounded'], ['circle', 'Circle']], !settings.mirror_enabled);
+  }
+
+  function todo(content) {
+    const controls = group(content);
+    const minutes = value => value === 60 ? '1 hour' : `${value} minute${value === 1 ? '' : 's'}`;
+    select(controls, 'todo-late', 'Mark late tasks as done',
+      'Each task can override this choice in its own deadline settings.', 'late_minutes',
+      [[0, 'Off'], ...[1, 3, 5, 10, 30, 60].map(value => [value, `${minutes(value)} after their time`])],
+      false, 'todo');
+    select(controls, 'todo-snooze', 'Snooze a due task for',
+      'Move a due task this far ahead. A repeating task keeps its schedule.', 'snooze_minutes',
+      [5, 10, 15, 30, 60].map(value => [value, minutes(value)]), false, 'todo');
+    range(controls, 'todo-trash-days', 'Keep deleted tasks in Trash for', 'trash_days',
+      { min: 1, max: 30, step: 1, unit: 'days', spokenUnit: 'days', source: 'todo' });
   }
 
   function calendar(content) {
@@ -570,6 +592,7 @@
         panel.append(controls);
         if (active === 'general') general(controls);
         else if (active === 'modules') modules(controls);
+        else if (active === 'todo') todo(controls);
         else if (active === 'mirror') mirror(controls);
         else if (active === 'calendar') calendar(controls);
         else if (active === 'screentime' && screenTime) screenTimeControls(controls);

@@ -261,6 +261,11 @@ try {
         }
         $screenTimeChecked = $true
 
+        Find-Setting 'keep deleted tasks in trash'
+        [System.Windows.Forms.SendKeys]::SendWait('{END}')
+        Start-Sleep -Seconds 2
+        Save-Screen 'settings-todo.png'
+
         Find-Setting 'focus sessions before a long break'
         [System.Windows.Forms.SendKeys]::SendWait('{END}')
         Start-Sleep -Seconds 2
@@ -293,6 +298,7 @@ try {
             $observed.focus_sound -ne 'white' -or !$observed.focus_sound_breaks) {
             throw ('Unexpected Pomodoro settings after native input: ' + ($observed | ConvertTo-Json -Compress))
         }
+        if ($profile.settings.todo.trash_days -ne 30) { throw 'Todo Trash retention did not save from Settings.' }
         $pomodoroChecked = $true
     }
     [CursorPosition]::PostMessage($settingsHandle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
@@ -300,7 +306,64 @@ try {
     if ($process.HasExited -or [CursorPosition]::FindWindowByTitle('Poni Settings') -ne [IntPtr]::Zero) {
         throw 'Closing Settings did not leave the notch running independently.'
     }
-    @{ process_id = $process.Id; main_window_handle = $mainHandle.ToInt64(); screenshot = 'desktop.png'; width_after_shortcut = $windowWidth; module_height = $moduleHeight; settings_width = $settingsWidth; settings_window_handle = $settingsHandle.ToInt64(); settings_closed_independently = $true; geometry_checked = $geometryChecked; screen_time_saved = $screenTimeChecked; pomodoro_saved = $pomodoroChecked; weather_attempted = ($bounds.Width -eq 1024 -and $bounds.Height -eq 768) } |
+    $observedPid = $process.Id
+    $todoChecked = $false
+    if ($bounds.Width -eq 1024 -and $bounds.Height -eq 768) {
+        # Reopen the fixture profile with an eligible overdue task, a due task that
+        # overrides auto-completion, and an expired Trash entry.
+        Stop-Process -Id $process.Id -Force
+        if (!$process.WaitForExit(5000)) { throw 'Could not close the application before the Todo restart.' }
+        $seed = Get-Content -Raw -LiteralPath $dataPath | ConvertFrom-Json -AsHashtable
+        $seed.settings.panel.top_gap = 0
+        $seed.settings.panel.position = 50
+        $seed.settings.panel.width = 200
+        $seed.settings.todo.late_minutes = 3
+        $seed.settings.todo.snooze_minutes = 15
+        $now = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        $snoozeId = [Guid]::NewGuid().ToString()
+        $lateId = [Guid]::NewGuid().ToString()
+        $seed.tasks = @(
+            @{ id = $snoozeId; text = 'Snooze this task'; done = $false; due_at_ms = $now - 60000; late_minutes = 0 }
+            @{ id = $lateId; text = 'Late task'; done = $false; due_at_ms = $now - 600000 }
+        )
+        $seed.trashed_tasks = @(
+            @{ deleted_at_ms = $now - 3456000000; task = @{ id = [Guid]::NewGuid().ToString(); text = 'Expired'; done = $false } }
+        )
+        $seed | ConvertTo-Json -Depth 80 | Set-Content -LiteralPath $dataPath -Encoding utf8
+        [CursorPosition]::SetCursorPos(10, 740) | Out-Null
+        $process = Start-Process -FilePath $exe -PassThru
+        Start-Sleep -Seconds 15
+        $process.Refresh()
+        $todoWindow = $process.MainWindowHandle
+        $todoClient = [CursorPosition+Rect]::new()
+        $todoOrigin = [CursorPosition+Point]::new()
+        if (![CursorPosition]::GetClientRect($todoWindow, [ref]$todoClient) -or
+            ![CursorPosition]::ClientToScreen($todoWindow, [ref]$todoOrigin) -or $todoClient.Bottom -lt 76) {
+            throw 'Todo reminder did not expand the closed notch.'
+        }
+        Save-Screen 'todo-due.png'
+        Click-Point ($todoOrigin.X + $todoClient.Right - 30) ($todoOrigin.Y + 54)
+        Start-Sleep -Seconds 3
+        Save-Screen 'todo-snoozed.png'
+        $updated = Get-Content -Raw -LiteralPath $dataPath | ConvertFrom-Json
+        $lateTask = $updated.tasks | Where-Object id -eq $lateId
+        $snoozed = $updated.tasks | Where-Object id -eq $snoozeId
+        $remaining = [int64]$snoozed.due_at_ms - [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        $todoResult = @{
+            auto_completed = [bool]($lateTask.done -and $lateTask.auto_done)
+            override_preserved = [bool](!$snoozed.done -and $snoozed.late_minutes -eq 0)
+            snoozed_for_fifteen_minutes = [bool]($remaining -gt 885000 -and $remaining -le 900000)
+            expired_trash_removed = @($updated.trashed_tasks).Count -eq 0
+            retention_days_saved = $updated.settings.todo.trash_days
+        }
+        $todoResult | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'todo-observation.json') -Encoding UTF8
+        if (!$todoResult.auto_completed -or !$todoResult.override_preserved -or
+            !$todoResult.snoozed_for_fifteen_minutes -or !$todoResult.expired_trash_removed) {
+            throw ('Unexpected Todo state after restart: ' + ($todoResult | ConvertTo-Json -Compress))
+        }
+        $todoChecked = $true
+    }
+    @{ process_id = $observedPid; main_window_handle = $mainHandle.ToInt64(); screenshot = 'desktop.png'; width_after_shortcut = $windowWidth; module_height = $moduleHeight; settings_width = $settingsWidth; settings_window_handle = $settingsHandle.ToInt64(); settings_closed_independently = $true; geometry_checked = $geometryChecked; screen_time_saved = $screenTimeChecked; pomodoro_saved = $pomodoroChecked; todo_checked = $todoChecked; weather_attempted = ($bounds.Width -eq 1024 -and $bounds.Height -eq 768) } |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'observation.json') -Encoding UTF8
 } finally {
     if (!$process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }

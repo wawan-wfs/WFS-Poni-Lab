@@ -15,7 +15,7 @@ Angka 100% mengukur cakupan inventaris modul. Kesetaraan penuh menunggu perbandi
 
 ## Modul yang sudah dimulai
 
-- **Todo:** tugas dapat memiliki daftar langkah, tanggal jatuh tempo, dan jadwal berulang pada hari serta waktu pilihan. Menyelesaikan tugas berulang menyimpan riwayat dan membuat tugas berikutnya dengan langkah yang belum dicentang. Pemrosesan bahasa alami, tempat sampah, dan pilihan tindak lanjut ketika tugas terlambat belum tersedia.
+- **Todo:** tugas dapat memiliki daftar langkah, tenggat, jadwal berulang, dan aturan penyelesaian saat terlambat. Settings mengatur aturan bawaan, durasi snooze, dan retensi Trash. Tab Todo memisahkan Active, Done, dan Trash. Pengingat pada notch tertutup bisa diselesaikan atau ditunda tanpa membuka panel. Pemrosesan bahasa alami, tautan catatan, dan tindakan daya belum tersedia.
 - **Notes:** daftar catatan dengan judul dari baris pertama, pencarian, penyimpanan otomatis, serta mode Cards dengan dek, pengacakan, pengulangan, dan skor. Tautan dari Todo, pengeditan melalui AI, dan beberapa pintasan serta animasi belum tersedia.
 - **Weather:** pencarian kota, cuaca saat ini dan prakiraan tujuh hari. Belum diverifikasi seluruh pengaturan dan tampilan asli.
 - **World clock:** pencarian kota dan zona waktu, pengurutan, pita jam siang dan malam, serta perencanaan per 15 menit dengan keyboard atau pointer. Katalog kota serta pengaturan format jam dan penempatan di notch belum sepenuhnya setara.

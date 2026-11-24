@@ -54,6 +54,11 @@
 <body>
   <div class="surface" id="surface">
     <button class="closed" id="closed" aria-expanded="false" aria-controls="open"><time class="clock">--:--</time></button>
+    <div id="todo-reminder" class="todo-reminder" aria-label="Due task" hidden>
+      <span id="todo-reminder-text" role="status"></span>
+      <button type="button" id="todo-reminder-complete">Done</button>
+      <button type="button" id="todo-reminder-snooze">Snooze</button>
+    </div>
     <div class="open" id="open" hidden>
       <header>
         <nav aria-label="Modules">
@@ -99,7 +104,16 @@
             <div class="entry"><input id="task-input" aria-label="Task" maxlength="500" placeholder="Add a task" required><input id="task-due" type="datetime-local" aria-label="Due date"><button id="task-submit" type="submit">Add</button><button type="button" id="task-cancel" hidden>Cancel</button></div>
             <textarea id="task-description" maxlength="10000" aria-label="Task description" placeholder="Details" hidden></textarea>
             <details id="task-repeat"><summary>Repeat</summary><div id="task-repeat-days"></div><label>Repeat time <input id="task-repeat-time" type="time"></label></details>
+            <label class="task-late">Done if late
+              <select id="task-late" aria-label="Done if late"><option value="">Follow Settings</option><option value="0">Never</option><option value="1">1 min</option><option value="3">3 min</option><option value="5">5 min</option><option value="10">10 min</option><option value="30">30 min</option><option value="60">1 hour</option></select>
+            </label>
           </form>
+          <div class="task-views" aria-label="Todo views">
+            <button type="button" data-task-view="active" aria-pressed="true">Active</button>
+            <button type="button" data-task-view="done" aria-pressed="false">Done</button>
+            <button type="button" data-task-view="trash" aria-pressed="false">Trash</button>
+            <button type="button" id="task-clear" hidden></button>
+          </div>
           <div class="items" id="tasks"></div>
         </section>
         <section id="page-notes" class="page" hidden></section>

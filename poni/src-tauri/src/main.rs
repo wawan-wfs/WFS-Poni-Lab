@@ -30,6 +30,7 @@ mod settings;
 mod startup;
 mod support;
 mod teleprompter;
+mod todo;
 mod translate;
 mod warmth;
 
@@ -47,6 +48,10 @@ struct Task {
     #[serde(default)]
     notified_due_at_ms: Option<u64>,
     #[serde(default)]
+    late_minutes: Option<u16>,
+    #[serde(default)]
+    auto_done: bool,
+    #[serde(default)]
     repeat: Option<TaskRepeat>,
     #[serde(default)]
     repeated: bool,
@@ -54,7 +59,7 @@ struct Task {
     steps: Vec<TaskStep>,
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 struct TaskRepeat {
     days: Vec<u8>,
     minute: u16,
@@ -291,6 +296,7 @@ struct AppData {
     pomodoro: pomodoro::Pomodoro,
     teleprompter: teleprompter::TeleprompterData,
     tasks: Vec<Task>,
+    trashed_tasks: Vec<todo::TrashedTask>,
     notes: Vec<notes::Note>,
     timer: Timer,
     stopwatch: Stopwatch,
@@ -550,8 +556,10 @@ fn add_task(
     text: String,
     due_at_ms: Option<u64>,
     repeat: Option<TaskRepeat>,
+    late_minutes: Option<u16>,
 ) -> Result<AppData, String> {
     let text = valid_text(text, 500)?;
+    todo::validate_late(late_minutes)?;
     let due_at_ms = task_due(due_at_ms, repeat.as_ref())?;
     store
         .lock()
@@ -565,6 +573,8 @@ fn add_task(
                 description: String::new(),
                 due_at_ms,
                 notified_due_at_ms: None,
+                late_minutes,
+                auto_done: false,
                 repeat,
                 repeated: false,
                 steps: Vec::new(),
@@ -581,9 +591,11 @@ fn update_task(
     description: String,
     due_at_ms: Option<u64>,
     repeat: Option<TaskRepeat>,
+    late_minutes: Option<u16>,
 ) -> Result<AppData, String> {
     let text = valid_text(text, 500)?;
-    let due_at_ms = task_due(due_at_ms, repeat.as_ref())?;
+    todo::validate_late(late_minutes)?;
+    valid_due(due_at_ms)?;
     if description.chars().count() > 10_000 {
         return Err("Description is too long".into());
     }
@@ -596,11 +608,18 @@ fn update_task(
                 .iter_mut()
                 .find(|task| task.id == id)
                 .ok_or("Task not found")?;
+            let due_at_ms = if repeat.is_some() && repeat == task.repeat && task.due_at_ms.is_some()
+            {
+                task.due_at_ms
+            } else {
+                task_due(due_at_ms, repeat.as_ref())?
+            };
             if task.due_at_ms != due_at_ms {
                 task.notified_due_at_ms = None;
             }
             task.text = text;
             task.description = description;
+            task.late_minutes = late_minutes;
             task.due_at_ms = due_at_ms;
             if task.done && repeat.is_some() {
                 return Err("Reopen the task before setting a repeat".into());
@@ -732,12 +751,10 @@ fn toggle_task(store: State<'_, Mutex<Store>>, id: Uuid) -> Result<AppData, Stri
 }
 
 fn complete_or_reopen_task(task: &mut Task, now: u64) -> Result<Option<Task>, String> {
-    if task.repeated {
-        return Err("The next occurrence is already in the task list".into());
-    }
     let next = task
         .repeat
         .as_ref()
+        .filter(|_| !task.done && !task.repeated)
         .map(|schedule| {
             let mut copy = task.clone();
             copy.due_at_ms = Some(schedule.next_due(now.max(task.due_at_ms.unwrap_or(now)))?);
@@ -745,6 +762,7 @@ fn complete_or_reopen_task(task: &mut Task, now: u64) -> Result<Option<Task>, St
             copy.done = false;
             copy.done_at_ms = None;
             copy.notified_due_at_ms = None;
+            copy.auto_done = false;
             for step in &mut copy.steps {
                 step.done = false;
             }
@@ -753,6 +771,7 @@ fn complete_or_reopen_task(task: &mut Task, now: u64) -> Result<Option<Task>, St
         .transpose()?;
     task.done = !task.done;
     task.done_at_ms = task.done.then_some(now);
+    task.auto_done = false;
     if next.is_some() {
         task.repeated = true;
         task.repeat = None;
@@ -808,6 +827,7 @@ fn update_task_step(
 
 #[tauri::command]
 fn remove_task(store: State<'_, Mutex<Store>>, id: Uuid) -> Result<AppData, String> {
+    let now = now_ms()?;
     store
         .lock()
         .map_err(|_| "Storage unavailable")?
@@ -817,7 +837,7 @@ fn remove_task(store: State<'_, Mutex<Store>>, id: Uuid) -> Result<AppData, Stri
                 .iter()
                 .position(|task| task.id == id)
                 .ok_or("Task not found")?;
-            data.tasks.remove(position);
+            todo::trash(data, position, now);
             Ok(())
         })
 }
@@ -1075,6 +1095,7 @@ fn apply_panel_preferences(
     preferences: &panel::Preferences,
     open: bool,
     tall: bool,
+    task_alert: bool,
 ) -> Result<(), String> {
     let protect = !preferences.show_in_screenshots;
     if protect != state.capture_protected {
@@ -1084,7 +1105,7 @@ fn apply_panel_preferences(
             .map_err(|error| error.to_string())?;
         state.capture_protected = protect;
     }
-    preferences.apply_layout(window, open, tall)
+    preferences.apply_layout(window, open, tall, task_alert)
 }
 
 #[tauri::command]
@@ -1105,7 +1126,7 @@ fn initialize_panel(
         .settings
         .panel
         .clone();
-    apply_panel_preferences(&window, &mut state, &preferences, false, false)?;
+    apply_panel_preferences(&window, &mut state, &preferences, false, false, false)?;
     state.session = Some(session);
     state.last = 0;
     Ok(())
@@ -1119,6 +1140,7 @@ fn set_panel_open(
     session: Uuid,
     open: bool,
     tall: bool,
+    task_alert: Option<bool>,
     focus: bool,
     seq: u64,
 ) -> Result<(), String> {
@@ -1136,7 +1158,14 @@ fn set_panel_open(
         .settings
         .panel
         .clone();
-    apply_panel_preferences(&window, &mut state, &preferences, open, tall)?;
+    apply_panel_preferences(
+        &window,
+        &mut state,
+        &preferences,
+        open,
+        tall,
+        task_alert.unwrap_or(false),
+    )?;
     if open && focus {
         window.set_focus().map_err(|e| e.to_string())?;
     }
@@ -1232,6 +1261,7 @@ fn main() {
                     &store.data.settings.panel,
                     false,
                     false,
+                    false,
                 )
                 .map_err(std::io::Error::other)?;
             }
@@ -1254,6 +1284,7 @@ fn main() {
                 {
                     let now_ms = now.as_millis() as u64;
                     notify_due(&handle, now_ms);
+                    todo::tick(&handle, now_ms);
                     pomodoro::tick(&handle, now_ms);
                     calendar_reminders::tick(&handle, now_ms);
                     screentime::sample(&handle);
@@ -1341,6 +1372,9 @@ fn main() {
             toggle_task,
             update_task_step,
             remove_task,
+            todo::change_task_trash,
+            todo::snooze_task,
+            todo::get_todo_state,
             notes::notes_get,
             notes::notes_save,
             notes::notes_delete,
@@ -1380,6 +1414,8 @@ mod tests {
             description: "Bring notes".into(),
             due_at_ms: Some(first_due),
             notified_due_at_ms: Some(first_due),
+            late_minutes: None,
+            auto_done: false,
             repeat: Some(schedule),
             repeated: false,
             steps: vec![TaskStep {
@@ -1402,7 +1438,11 @@ mod tests {
             .with_timezone(&Local);
         assert_eq!(local.weekday().num_days_from_sunday(), 1);
         assert_eq!((local.hour(), local.minute()), (9, 30));
-        assert!(complete_or_reopen_task(&mut task, now).is_err());
+        assert!(complete_or_reopen_task(&mut task, now).unwrap().is_none());
+        assert!(
+            !task.done,
+            "Reopening history does not create a second repeat"
+        );
     }
 
     #[test]
@@ -1458,6 +1498,8 @@ mod tests {
                     description: String::new(),
                     due_at_ms: None,
                     notified_due_at_ms: None,
+                    late_minutes: None,
+                    auto_done: false,
                     repeat: None,
                     repeated: false,
                     steps: Vec::new(),
@@ -1561,6 +1603,8 @@ mod tests {
             description: String::new(),
             due_at_ms: Some(1000),
             notified_due_at_ms: None,
+            late_minutes: None,
+            auto_done: false,
             repeat: None,
             repeated: false,
             steps: Vec::new(),

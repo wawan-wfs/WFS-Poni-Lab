@@ -38,8 +38,9 @@ with sync_playwright() as pw:
         if (command === 'save_calendar_event') { const e = {id:args.id || crypto.randomUUID(), title:args.title.trim(), start_ms:args.startMs, duration_minutes:args.durationMinutes, location:args.location, repeat:args.repeat}; const i = data.calendar_events.findIndex(item => item.id === args.id); if (i < 0) data.calendar_events.push(e); else data.calendar_events[i] = e; }
         if (command === 'remove_calendar_event') data.calendar_events = data.calendar_events.filter(e => e.id !== args.id);
         if (command === 'media_control') localStorage.setItem('last-media-action', args.action);
-        if (command === 'add_task') data.tasks.push({id: crypto.randomUUID(), text: args.text, done: false, description:'', due_at_ms:args.dueAtMs, repeat:args.repeat, steps:[]});
-        if (command === 'update_task') { const t = data.tasks.find(t => t.id === args.id); t.text = args.text; t.description = args.description; t.due_at_ms = args.dueAtMs; t.repeat = args.repeat; }
+        data.trashed_tasks ||= [];
+        if (command === 'add_task') data.tasks.push({id: crypto.randomUUID(), text: args.text, done: false, description:'', due_at_ms:args.dueAtMs, repeat:args.repeat, late_minutes:args.lateMinutes, steps:[]});
+        if (command === 'update_task') { const t = data.tasks.find(t => t.id === args.id); t.text = args.text; t.description = args.description; t.due_at_ms = args.dueAtMs; t.repeat = args.repeat; t.late_minutes = args.lateMinutes; }
         if (command === 'toggle_task') {
           const task = data.tasks.find(t => t.id === args.id);
           task.done = !task.done;
@@ -56,7 +57,23 @@ with sync_playwright() as pw:
           if (args.action === 'toggle') { const step = task.steps.find(s => s.id === args.stepId); step.done = !step.done; }
           if (args.action === 'remove') task.steps = task.steps.filter(s => s.id !== args.stepId);
         }
-        if (command === 'remove_task') data.tasks = data.tasks.filter(t => t.id !== args.id);
+        if (command === 'remove_task') {
+          const [task] = data.tasks.splice(data.tasks.findIndex(t => t.id === args.id), 1);
+          data.trashed_tasks.push({task, deleted_at_ms:Date.now()});
+        }
+        if (command === 'change_task_trash') {
+          if (args.action === 'restore') {
+            const [entry] = data.trashed_tasks.splice(data.trashed_tasks.findIndex(t => t.task.id === args.id), 1);
+            data.tasks.push(entry.task);
+          }
+          if (args.action === 'delete') data.trashed_tasks = data.trashed_tasks.filter(t => t.task.id !== args.id);
+        }
+        if (command === 'snooze_task') {
+          const task = data.tasks.find(t => t.id === args.id);
+          if (task.due_at_ms !== args.dueAtMs || task.done) throw new Error('Stale deadline');
+          task.due_at_ms = Date.now() + 600000;
+          task.notified_due_at_ms = null;
+        }
         if (command === 'timer_action') {
           if (args.action === 'start') { if (args.minutes) data.timer.total_ms = data.timer.remaining_ms = args.minutes * 60000; data.timer.ends_at_ms = Date.now() + data.timer.remaining_ms; }
           if (args.action === 'pause') { data.timer.remaining_ms = Math.max(0, data.timer.ends_at_ms - Date.now()); data.timer.ends_at_ms = null; }
@@ -154,12 +171,23 @@ with sync_playwright() as pw:
       return feb === 0 && march === 1 && nextDay === 1;
     }''')
     page.locator('[data-page="tasks"]').click()
-    page.get_by_role('checkbox', name='Complete Prepare meeting').check()
+    completed = page.get_by_role('checkbox', name='Complete Prepare meeting')
+    completed.click()
+    expect(completed).to_have_count(0)
     page.reload()
     page.locator('#closed').dispatch_event('pointerenter')
     page.locator('[data-page="tasks"]').click()
+    page.locator('[data-task-view="done"]').click()
     expect(page.get_by_role('checkbox', name='Complete Prepare meeting')).to_be_checked()
     expect(page.get_by_text('Bring notes')).to_be_visible()
+    page.get_by_role('button', name='Delete Prepare meeting', exact=True).click()
+    expect(page.get_by_text('Prepare meeting')).to_have_count(0)
+    page.locator('[data-task-view="trash"]').click()
+    page.get_by_role('button', name='Restore Prepare meeting', exact=True).click()
+    expect(page.get_by_text('Trash is empty', exact=False)).to_be_visible()
+    page.locator('[data-task-view="done"]').click()
+    expect(page.get_by_role('checkbox', name='Complete Prepare meeting')).to_be_checked()
+    page.locator('[data-task-view="active"]').click()
     page.locator('#task-input').fill('Weekly review')
     page.locator('#task-repeat summary').click()
     page.get_by_role('checkbox', name='Mon', exact=True).check()
@@ -173,10 +201,28 @@ with sync_playwright() as pw:
     task_done = page.get_by_role('checkbox', name='Complete Weekly review')
     expect(task_done).not_to_be_checked()
     task_done.click()
-    expect(task_done).to_have_count(2)
-    expect(task_done.last).to_be_disabled()
+    expect(task_done).to_have_count(1)
+    expect(task_done).not_to_be_checked()
     page.get_by_role('button', name='Steps for Weekly review').first.click()
     expect(page.get_by_role('checkbox', name='Complete step Check notes').first).not_to_be_checked()
+    page.locator('[data-task-view="done"]').click()
+    expect(task_done).to_be_checked()
+    page.locator('[data-task-view="active"]').click()
+    page.locator('#task-input').fill('Due reminder fixture')
+    due = page.evaluate("new Date(Date.now() - 60000).toISOString().slice(0, 16)")
+    page.locator('#task-due').fill(due)
+    page.locator('#task-late').select_option('0')
+    page.locator('#task-submit').click()
+    expect(page.get_by_role('button', name='Snooze Due reminder fixture')).to_be_visible()
+    page.locator('#close').click()
+    expect(page.locator('#todo-reminder-text')).to_have_text('Due: Due reminder fixture')
+    page.locator('#todo-reminder-snooze').click()
+    expect(page.locator('#todo-reminder')).to_be_hidden()
+    assert page.evaluate("""() => {
+      const item = data.tasks.find(t => t.text === 'Due reminder fixture');
+      return item.late_minutes === 0 && item.due_at_ms > Date.now() + 590000;
+    }""")
+    page.evaluate('window.poniTestShortcut()')
     test_notes(page)
     page.locator('[data-page="timer"]').click()
     page.locator('#timer-minutes').fill('5')

@@ -40,6 +40,8 @@ Dua kontrol tambahan, **Warmer colors at night** dan **Night warmth**, mengubah 
 
 Runner Windows memeriksa lebar notch 320 px, perubahan jarak 120 px, dan perataan konten ke tepi kanan layar pada posisi 100%. Nilai perlindungan tangkapan layar berubah ke 17 lalu kembali ke 0. Runner juga memeriksa bahwa sakelar startup menulis jalur executable dan menghapus entri tersebut saat dinonaktifkan. Pengujian belum mencakup logout dan login ulang. Tangkapan pratinjau warna malam memperlihatkan latar amber saat slider diubah. [Bukti tes native General](https://github.com/wawan-wfs/WFS-Poni-Lab/actions/runs/45333111536/artifacts/14892618553)
 
+Ketiga kontrol Todo yang aktif di Poni 1.8.1 kini punya padanan. Pengaturan menentukan kapan tugas terlambat berpindah ke Done, berapa lama snooze memindahkan tenggat, dan berapa hari Trash menyimpan tugas. Tugas dapat menimpa aturan keterlambatan, dan snooze tersedia di tab Todo serta pengingat notch tertutup. Trash memisahkan tugas terhapus dari agenda dan daftar aktif serta memungkinkan pemulihan. Tersisa **152 dari 201 kontrol standar** tanpa padanan.
+
 | Jenis kontrol | Deklarasi | Masuk katalog build |
 | --- | ---: | ---: |
 | Sakelar | 115 | 115 |

@@ -1,4 +1,4 @@
-use crate::{panel, Store};
+use crate::{panel, todo, Store};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, sync::Mutex};
 use tauri::{AppHandle, Emitter, State};
@@ -73,6 +73,7 @@ pub(super) struct PoniSettings {
     pub(super) timer_remember: bool,
     pub(super) timer_then_break: bool,
     pub(super) panel: panel::Preferences,
+    pub(super) todo: todo::Preferences,
     module_order: Vec<String>,
     hidden_modules: Vec<String>,
     default_module: String,
@@ -98,6 +99,7 @@ impl Default for PoniSettings {
             timer_remember: true,
             timer_then_break: false,
             panel: panel::Preferences::default(),
+            todo: todo::Preferences::default(),
             module_order: MODULES.iter().map(|id| (*id).to_string()).collect(),
             hidden_modules: Vec::new(),
             default_module: "home".into(),
@@ -125,6 +127,7 @@ pub(super) struct SettingsPatch {
     timer_remember: Option<bool>,
     timer_then_break: Option<bool>,
     panel: Option<panel::Patch>,
+    todo: Option<todo::Patch>,
     module_order: Option<Vec<String>>,
     hidden_modules: Option<Vec<String>>,
     default_module: Option<String>,
@@ -237,6 +240,9 @@ impl PoniSettings {
         }
         if let Some(panel) = patch.panel {
             self.panel.apply(panel)?;
+        }
+        if let Some(todo) = patch.todo {
+            self.todo.apply(todo)?;
         }
         self.clock_format = patch.clock_format.unwrap_or(self.clock_format);
         self.header_clock = patch.header_clock.unwrap_or(self.header_clock);

@@ -5,8 +5,13 @@ const surface = document.querySelector('#surface');
 const closed = document.querySelector('#closed');
 const open = document.querySelector('#open');
 const status = document.querySelector('#status');
+const todoReminder = document.querySelector('#todo-reminder');
 let data = { tasks: [], notes: [], timer: { total_ms: 1500000, remaining_ms: 1500000, ends_at_ms: null }, stopwatch: { elapsed_ms: 0, started_at_ms: null, laps: [] }, weather_location: null, world_clocks: [], calendar_events: [] };
 let editingTask = null;
+let taskView = 'active';
+let reminderTask = null;
+let reminderBusy = false;
+let taskRedrawPending = false;
 const expandedTasks = new Set();
 let queue = Promise.resolve();
 let panelSequence = 0;
@@ -36,6 +41,7 @@ let preferences = {
   remember_module: false, last_module: null,
   mirror_enabled: true, mirror_shape: 'rounded', calendar_enabled: true, week_start: 'windows',
   timer_presets: [], timer_remember: true,
+  todo: { late_minutes: 0, snooze_minutes: 10, trash_days: 7 },
   panel: { direction: 'auto', top_gap: 0, position: 50, width: 200, height: 32, opacity: 100,
     expanded_width: 680, expanded_height: 196, tall_height: 268, show_in_screenshots: true },
 };
@@ -59,6 +65,7 @@ function setOpen(value) {
   closed.hidden = value;
   open.hidden = !value;
   closed.setAttribute('aria-expanded', String(value));
+  renderTodoReminder(false);
   updatePanelSize(value, value && keyboardOpen);
   if (value) {
     moduleTabs.get(activePage)?.scrollIntoView({block:'nearest', inline:'nearest'});
@@ -71,7 +78,8 @@ function updatePanelSize(isOpen, focus = false) {
   const tall = isOpen && isTallPage(activePage);
   open.classList.toggle('tall', tall);
   const seq = ++panelSequence;
-  panelReady.then(() => invoke('set_panel_open', { session: panelSession, open: isOpen, tall, focus, seq }))
+  const taskAlert = !isOpen && !todoReminder.hidden;
+  panelReady.then(() => invoke('set_panel_open', { session: panelSession, open: isOpen, tall, focus, seq, taskAlert }))
     .catch(error => { status.textContent = String(error); });
 }
 
@@ -117,6 +125,8 @@ function applyPreferences(value) {
   document.querySelector('#header-clock').hidden = !preferences.header_clock;
   document.querySelector('#home-calendar').hidden = !preferences.calendar_enabled;
   window.poniMirror?.configure({enabled:preferences.mirror_enabled, shape:preferences.mirror_shape});
+  renderTodoReminder();
+  if (activePage === 'tasks') renderTasks();
   updateClock();
   refreshWeekLayout();
 }
@@ -153,6 +163,21 @@ window.poniMirror?.mount(document.querySelector('#mirror'));
 window.poniFocusPlayback.listen().catch(error => { status.textContent = String(error); });
 window.__TAURI__.event.listen('poni-settings-changed', event => applyPreferences(event.payload))
   .catch(error => { status.textContent = String(error); });
+window.__TAURI__.event.listen('poni-todo-changed', () => {
+  queue = queue.then(async () => {
+    const updates = await invoke('get_todo_state');
+    if (!updates) return;
+    Object.assign(data, updates);
+    renderTodoReminder();
+    if (document.activeElement?.matches('#tasks input:not([type="checkbox"])')) {
+      taskRedrawPending = true;
+    } else {
+      renderTasks();
+    }
+    renderMonthCalendar();
+    renderCalendar();
+  }).catch(error => { status.textContent = String(error); });
+}).catch(error => { status.textContent = String(error); });
 window.__TAURI__.event.listen('poni-settings-open-module', event => {
   if (!moduleTabs.has(event.payload) || moduleTabs.get(event.payload).hidden) return;
   keyboardOpen = true;
@@ -471,17 +496,105 @@ function action(label, handler) {
   return button;
 }
 
-function render() {
+function reminderCandidate(now) {
+  return data.tasks.reduce((first, task) => {
+    const due = task.due_at_ms;
+    if (task.done || due == null || due > now || now - due > 12 * 60 * 60_000) return first;
+    return !first || due < first.due_at_ms ? task : first;
+  }, null);
+}
+
+function renderTodoReminder(resize = true) {
+  reminderTask = open.hidden ? reminderCandidate(Date.now()) : null;
+  const hidden = !reminderTask;
+  const changed = todoReminder.hidden !== hidden;
+  todoReminder.hidden = hidden;
+  if (reminderTask) {
+    const text = document.querySelector('#todo-reminder-text');
+    const label = 'Due: ' + reminderTask.text;
+    if (text.textContent !== label) text.textContent = label;
+    text.title = label;
+    const snooze = document.querySelector('#todo-reminder-snooze');
+    snooze.title = `Snooze for ${preferences.todo.snooze_minutes} minutes`;
+  }
+  if (resize && changed) updatePanelSize(!open.hidden);
+}
+
+function snoozeTask(task) {
+  return mutate('snooze_task', { id: task.id, dueAtMs: task.due_at_ms });
+}
+
+for (const [id, submit] of [
+  ['todo-reminder-complete', task => mutate('toggle_task', {id: task.id})],
+  ['todo-reminder-snooze', snoozeTask],
+]) {
+  document.getElementById(id).addEventListener('click', async () => {
+    if (!reminderTask || reminderBusy) return;
+    reminderBusy = true;
+    await submit(reminderTask);
+    reminderBusy = false;
+  });
+}
+setInterval(renderTodoReminder, 5000);
+
+function trashedItems() {
+  const now = Date.now();
+  const keep = preferences.todo.trash_days * 86_400_000;
+  return (data.trashed_tasks || []).filter(item => now - item.deleted_at_ms < keep);
+}
+
+function renderTasks() {
+  taskRedrawPending = false;
   const tasks = document.querySelector('#tasks');
   tasks.replaceChildren();
-  data.tasks.forEach(task => {
+  const trashed = trashedItems();
+  const active = data.tasks.filter(task => !task.done);
+  const done = data.tasks.filter(task => task.done);
+  for (const view of document.querySelectorAll('[data-task-view]')) {
+    const id = view.dataset.taskView;
+    const count = {active: active.length, done: done.length, trash: trashed.length}[id];
+    const name = {active:'Active', done:'Done', trash:'Trash'}[id];
+    view.textContent = count ? `${name} ${count}` : name;
+    view.setAttribute('aria-pressed', String(id === taskView));
+  }
+  const clear = document.querySelector('#task-clear');
+  clear.hidden = taskView === 'active' || !(taskView === 'trash' ? trashed.length : done.length);
+  clear.textContent = taskView === 'trash' ? 'Empty Trash' : 'Clear completed';
+  document.querySelector('#task-form').hidden = taskView !== 'active' && !editingTask;
+  if (taskView === 'trash') {
+    for (const {task, deleted_at_ms} of trashed.slice().sort((a,b) => b.deleted_at_ms - a.deleted_at_ms)) {
+      const row = document.createElement('div');
+      row.className = 'item';
+      const contents = document.createElement('span');
+      contents.className = 'task-content';
+      contents.textContent = task.text;
+      const restore = action('Restore', () => mutate('change_task_trash', {action:'restore', id:task.id}));
+      restore.setAttribute('aria-label', `Restore ${task.text}`);
+      const remove = action('Delete forever', () => {
+        if (window.confirm(`Permanently delete “${task.text}”?`)) void mutate('change_task_trash', {action:'delete', id:task.id});
+      });
+      remove.setAttribute('aria-label', `Delete ${task.text} forever`);
+      row.append(contents, restore, remove);
+      tasks.append(row);
+    }
+    if (!trashed.length) tasks.textContent = `Trash is empty · items are kept ${preferences.todo.trash_days} days`;
+    return;
+  }
+  const visible = taskView === 'done'
+    ? done.slice().sort((a,b) => (b.done_at_ms ?? 0) - (a.done_at_ms ?? 0))
+    : active.slice().sort((a,b) => (a.due_at_ms ?? Infinity) - (b.due_at_ms ?? Infinity));
+  visible.forEach(task => {
     const row = document.createElement('div'); row.className = 'item';
     const check = document.createElement('input'); check.type = 'checkbox'; check.checked = task.done; check.setAttribute('aria-label', `Complete ${task.text}`);
     check.addEventListener('change', () => mutate('toggle_task', { id: task.id }));
-    check.disabled = Boolean(task.repeated);
     const content = document.createElement('div'); content.className = 'task-content';
     const text = document.createElement('p'); text.textContent = task.text; text.classList.toggle('done', task.done); content.append(text);
     if (task.due_at_ms != null) { const due = document.createElement('small'); due.textContent = new Date(task.due_at_ms).toLocaleString(); content.append(due); }
+    if (task.auto_done) {
+      const late = document.createElement('small');
+      late.textContent = 'Completed automatically';
+      content.append(late);
+    }
     if (task.description) { const detail = document.createElement('small'); detail.textContent = task.description; content.append(detail); }
     if (task.repeat) {
       const label = document.createElement('small');
@@ -491,7 +604,9 @@ function render() {
     }
     const edit = action('Edit', () => {
       editingTask = task.id;
+      document.querySelector('#task-form').hidden = false;
       document.querySelector('#task-input').value = task.text;
+      document.querySelector('#task-late').value = task.late_minutes ?? '';
       const due = document.querySelector('#task-due');
       if (task.due_at_ms != null) { const date = new Date(task.due_at_ms); due.value = new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16); }
       else due.value = '';
@@ -520,9 +635,39 @@ function render() {
     details.setAttribute('aria-label', `Steps for ${task.text}`);
     details.setAttribute('aria-expanded', String(!stepsPanel.hidden));
     row.append(check, content, details, edit, remove);
+    if (!task.done && task.due_at_ms != null && task.due_at_ms <= Date.now()) {
+      const snooze = action('Snooze', () => snoozeTask(task));
+      snooze.setAttribute('aria-label', `Snooze ${task.text}`);
+      snooze.title = `Postpone for ${preferences.todo.snooze_minutes} minutes`;
+      row.append(snooze);
+    }
     card.append(row, stepsPanel);
     tasks.append(card);
   });
+  if (!visible.length) tasks.textContent = taskView === 'done' ? 'No completed tasks yet' : 'No active tasks';
+}
+
+document.querySelectorAll('[data-task-view]').forEach(button => button.addEventListener('click', () => {
+  taskView = button.dataset.taskView;
+  resetTaskForm();
+  renderTasks();
+}));
+document.querySelector('#tasks').addEventListener('focusout', () => {
+  if (taskRedrawPending) setTimeout(() => {
+    if (!document.activeElement?.matches('#tasks input:not([type="checkbox"])')) renderTasks();
+  }, 0);
+});
+document.querySelector('#task-clear').addEventListener('click', () => {
+  if (taskView === 'trash') {
+    if (window.confirm('Permanently delete all tasks in Trash?')) void mutate('change_task_trash', { action:'empty' });
+  } else {
+    void mutate('change_task_trash', { action:'clear_completed' });
+  }
+});
+
+function render() {
+  renderTasks();
+  renderTodoReminder();
   renderTimer();
   renderStopwatch();
   renderMonthCalendar();
@@ -779,6 +924,7 @@ const taskTimeLabel = minute => [Math.floor(minute / 60), minute % 60]
 function resetTaskForm() {
   editingTask = null;
   document.querySelector('#task-form').reset();
+  document.querySelector('#task-form').hidden = taskView !== 'active';
   document.querySelector('#task-description').hidden = true;
   document.querySelector('#task-cancel').hidden = true;
   document.querySelector('#task-submit').textContent = 'Add';
@@ -795,7 +941,8 @@ document.querySelector('#task-form').addEventListener('submit', async event => {
   if (days.length && !repeatTime.value) { status.textContent = 'Choose a repeat time.'; return; }
   const [hour, minute] = repeatTime.value.split(':').map(Number);
   const repeat = days.length ? {days, minute: hour * 60 + minute} : null;
-  const args = { text: input.value, dueAtMs, repeat };
+  const late = document.querySelector('#task-late').value;
+  const args = { text: input.value, dueAtMs, repeat, lateMinutes: late === '' ? null : Number(late) };
   if (editingTask) Object.assign(args, { id: editingTask, description: document.querySelector('#task-description').value });
   if (await mutate(editingTask ? 'update_task' : 'add_task', args)) resetTaskForm();
 });

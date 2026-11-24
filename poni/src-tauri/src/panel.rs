@@ -132,8 +132,13 @@ impl Preferences {
         window: &WebviewWindow,
         open: bool,
         tall: bool,
+        task_alert: bool,
     ) -> Result<(), String> {
-        let dimensions = self.dimensions(open, tall);
+        let mut dimensions = self.dimensions(open, tall);
+        if !open && task_alert {
+            dimensions.0 = dimensions.0.max(320);
+            dimensions.1 += 44;
+        }
         let monitor = window
             .current_monitor()
             .map_err(|error| error.to_string())?;
