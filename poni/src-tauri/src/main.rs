@@ -242,6 +242,7 @@ struct Timer {
     remaining_ms: u64,
     ends_at_ms: Option<u64>,
     notified_end_ms: Option<u64>,
+    notice_until_ms: Option<u64>,
     last_started_minutes: Option<u64>,
 }
 
@@ -269,6 +270,7 @@ impl Default for Timer {
             remaining_ms: 25 * 60_000,
             ends_at_ms: None,
             notified_end_ms: None,
+            notice_until_ms: None,
             last_started_minutes: None,
         }
     }
@@ -278,6 +280,23 @@ impl Timer {
     fn remaining_at(&self, now: u64) -> u64 {
         self.ends_at_ms
             .map_or(self.remaining_ms, |end| end.saturating_sub(now))
+    }
+
+    fn act_on_notice(&mut self, expected_end: u64, now: u64, extend: bool) -> Result<(), String> {
+        if self.ends_at_ms != Some(expected_end)
+            || self.notified_end_ms != Some(expected_end)
+            || self.notice_until_ms.is_none()
+        {
+            return Err("This timer has already changed".into());
+        }
+        self.notice_until_ms = None;
+        if extend {
+            self.total_ms = 5 * 60_000;
+            self.remaining_ms = self.total_ms;
+            self.ends_at_ms = Some(now.saturating_add(self.total_ms));
+            self.notified_end_ms = None;
+        }
+        Ok(())
     }
 }
 
@@ -718,6 +737,8 @@ fn unfinished_timer_end(timer: &Timer, now: u64) -> Option<u64> {
 fn finish_timer(data: &mut AppData, now: u64) -> Option<bool> {
     let end = unfinished_timer_end(&data.timer, now)?;
     data.timer.notified_end_ms = Some(end);
+    data.timer.notice_until_ms =
+        (now.saturating_sub(end) <= 60_000).then(|| now.saturating_add(30_000));
     notifs::record(data, notifs::Source::Timer, "Timer", "Time is up", now);
     let started_break = data.settings.timer_then_break
         && now.saturating_sub(end) <= 60_000
@@ -736,6 +757,7 @@ fn announce_timer_end(app: &tauri::AppHandle, finished: Option<bool>) {
         .body("Time is up")
         .show();
     sound::play_completion(app);
+    let _ = app.emit_to("main", "poni-timer-completed", ());
     if started_break {
         let _ = app.emit_to("main", "poni-pomodoro-timer-break", ());
         let state = app.state::<Mutex<Store>>();
@@ -957,10 +979,24 @@ fn timer_action(
                 }
                 _ => return Err("Unknown timer action".into()),
             }
+            data.timer.notice_until_ms = None;
             Ok(())
         })?;
     announce_timer_end(&app, finished);
     Ok(result)
+}
+
+#[tauri::command]
+fn timer_notice_action(
+    store: State<'_, Mutex<Store>>,
+    expected_end: u64,
+    extend: bool,
+) -> Result<AppData, String> {
+    let now = now_ms()?;
+    store
+        .lock()
+        .map_err(|_| "Storage unavailable")?
+        .update(|data| data.timer.act_on_notice(expected_end, now, extend))
 }
 
 #[tauri::command]
@@ -1402,6 +1438,7 @@ fn main() {
             save_calendar_event,
             remove_calendar_event,
             timer_action,
+            timer_notice_action,
             media_control,
             current_media,
             stopwatch_action,
@@ -1576,6 +1613,7 @@ mod tests {
         assert_eq!(finish_timer(&mut data, 1000), Some(true));
         assert_eq!(finish_timer(&mut data, 1001), None);
         assert_eq!(data.notifications.len(), 1);
+        assert_eq!(data.timer.notice_until_ms, Some(31_000));
 
         data.timer.ends_at_ms = Some(2000);
         assert_eq!(finish_timer(&mut data, 2000), Some(false));
@@ -1585,12 +1623,29 @@ mod tests {
         stale.settings.timer_then_break = true;
         stale.timer.ends_at_ms = Some(1000);
         assert_eq!(finish_timer(&mut stale, 61_001), Some(false));
+        assert_eq!(stale.timer.notice_until_ms, None);
         assert!(stale.pomodoro.start_timer_break(61_001));
 
         let mut disabled = AppData::default();
         disabled.timer.ends_at_ms = Some(1000);
         assert_eq!(finish_timer(&mut disabled, 1000), Some(false));
         assert!(disabled.pomodoro.start_timer_break(1000));
+    }
+
+    #[test]
+    fn timer_completion_can_be_extended_or_dismissed_once() {
+        let mut data = AppData::default();
+        data.timer.ends_at_ms = Some(1000);
+        data.timer.last_started_minutes = Some(25);
+        assert_eq!(finish_timer(&mut data, 1000), Some(false));
+        assert!(data.timer.act_on_notice(999, 2000, true).is_err());
+        data.timer.act_on_notice(1000, 2000, true).unwrap();
+        assert_eq!(data.timer.ends_at_ms, Some(302_000));
+        assert_eq!(data.timer.last_started_minutes, Some(25));
+        assert!(data.timer.act_on_notice(1000, 2000, true).is_err());
+        assert_eq!(finish_timer(&mut data, 302_000), Some(false));
+        data.timer.act_on_notice(302_000, 303_000, false).unwrap();
+        assert!(data.timer.act_on_notice(302_000, 303_000, true).is_err());
     }
 
     #[test]

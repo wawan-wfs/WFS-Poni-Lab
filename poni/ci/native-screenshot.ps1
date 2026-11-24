@@ -363,6 +363,10 @@ try {
         $seed.bed_minute = $bedAt.Hour * 60 + $bedAt.Minute
         $seed.bedtime_notified_at_ms = $null
         $now = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        $seed.timer = @{
+            total_ms = 60_000; remaining_ms = 60_000; ends_at_ms = $now + 18_000
+            last_started_minutes = 1
+        }
         $snoozeId = [Guid]::NewGuid().ToString()
         $lateId = [Guid]::NewGuid().ToString()
         $seed.tasks = @(
@@ -405,6 +409,28 @@ try {
             throw ('Unexpected Todo state after restart: ' + ($todoResult | ConvertTo-Json -Compress))
         }
         $todoChecked = $true
+
+        $timerUntil = [DateTimeOffset]::UtcNow.AddSeconds(22)
+        do {
+            $updated = Get-Content -Raw -LiteralPath $dataPath | ConvertFrom-Json
+            $timerVisible = $updated.timer.notice_until_ms -gt [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() -and
+                [CursorPosition]::GetClientRect($todoWindow, [ref]$todoClient) -and $todoClient.Bottom -ge 76
+            if ($timerVisible) { break }
+            Start-Sleep -Milliseconds 500
+        } while ([DateTimeOffset]::UtcNow -lt $timerUntil)
+        if (!$timerVisible) { throw 'The completed Timer did not show its notch actions.' }
+        Save-Screen 'timer-completed.png'
+        if (![CursorPosition]::ClientToScreen($todoWindow, [ref]$todoOrigin)) { throw 'Could not locate the Timer actions.' }
+        Click-Point ($todoOrigin.X + $todoClient.Right - 77) ($todoOrigin.Y + 54)
+        Start-Sleep -Seconds 2
+        $updated = Get-Content -Raw -LiteralPath $dataPath | ConvertFrom-Json
+        $remaining = [int64]$updated.timer.ends_at_ms - [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        if ($remaining -lt 290000 -or $remaining -gt 300000 -or $updated.timer.last_started_minutes -ne 1 -or
+            $null -ne $updated.timer.notice_until_ms) {
+            throw 'The Timer notice did not restart the countdown for five minutes.'
+        }
+        @{ extended_five_minutes = $true; last_preset_preserved = $true } |
+            ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'timer-observation.json') -Encoding UTF8
 
         $bedCheckUntil = [DateTimeOffset]::UtcNow.AddSeconds(115)
         $bedtimeChecked = $false

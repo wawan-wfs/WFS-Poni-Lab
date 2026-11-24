@@ -20,7 +20,10 @@ with sync_playwright() as pw:
     browser = pw.chromium.launch(**({'executable_path': executable} if executable else {}), headless=True, args=['--no-sandbox'])
     page = browser.new_page(viewport={'width': 680, 'height': 200}, timezone_id='UTC', locale='en-US')
     page.add_init_script('''
-      window.__TAURI__ = { event: {listen: async (name, listener) => { window.poniTestShortcut = listener; }}, core: { invoke: async (command, args = {}) => {
+      window.__TAURI__ = { event: {listen: async (name, listener) => {
+        if (name === 'poni-timer-completed') window.poniTestTimer = listener;
+        if (name === 'poni-toggle') window.poniTestShortcut = listener;
+      }}, core: { invoke: async (command, args = {}) => {
         const data = JSON.parse(localStorage.getItem('test-data') || '{"tasks":[],"notes":[],"timer":{"total_ms":1500000,"remaining_ms":1500000,"ends_at_ms":null},"stopwatch":{"elapsed_ms":0,"started_at_ms":null,"laps":[]},"world_clocks":[]}');
         if (command === 'current_media') return {title: 'Test track', artist: 'Test artist', playing: true, position_ms: 30000, duration_ms: 60000};
         if (command === 'system_snapshot') return {cpu_percent: 32.5, memory_used: 2147483648, memory_total: 8589934592};
@@ -81,6 +84,15 @@ with sync_playwright() as pw:
           if (args.action === 'start') { if (args.minutes) data.timer.total_ms = data.timer.remaining_ms = args.minutes * 60000; data.timer.ends_at_ms = Date.now() + data.timer.remaining_ms; }
           if (args.action === 'pause') { data.timer.remaining_ms = Math.max(0, data.timer.ends_at_ms - Date.now()); data.timer.ends_at_ms = null; }
           if (args.action === 'reset') { data.timer.remaining_ms = data.timer.total_ms; data.timer.ends_at_ms = null; }
+        }
+        if (command === 'timer_notice_action') {
+          if (data.timer.ends_at_ms !== args.expectedEnd || !data.timer.notice_until_ms) throw new Error('Stale timer');
+          data.timer.notice_until_ms = null;
+          if (args.extend) {
+            data.timer.total_ms = data.timer.remaining_ms = 300000;
+            data.timer.ends_at_ms = Date.now() + 300000;
+            data.timer.notified_end_ms = null;
+          }
         }
         if (command === 'stopwatch_action') {
           const sw = data.stopwatch;
@@ -268,6 +280,21 @@ with sync_playwright() as pw:
     expect(page.locator('#timer-start')).to_have_text('Start')
     page.locator('#timer-reset').click()
     expect(page.locator('#timer-display')).to_have_text('05:00')
+    page.locator('#close').click()
+    page.evaluate("""() => {
+        const saved = JSON.parse(localStorage.getItem('test-data'));
+        const end = Date.now() - 1000;
+        Object.assign(saved.timer, {ends_at_ms: end, notified_end_ms: end, notice_until_ms: Date.now() + 30000});
+        localStorage.setItem('test-data', JSON.stringify(saved));
+        window.poniTestTimer();
+    }""")
+    expect(page.locator('#timer-reminder-text')).to_have_text('Time’s up · Timer 5 min')
+    page.locator('#timer-extend').click()
+    expect(page.locator('#timer-reminder')).to_be_hidden()
+    assert page.evaluate("data.timer.ends_at_ms > Date.now() + 295000")
+    page.evaluate('window.poniTestShortcut()')
+    page.locator('[data-page="timer"]').click()
+    expect(page.locator('#timer-start')).to_have_text('Pause')
     page.get_by_role('button', name='Stopwatch').click()
     page.locator('#stopwatch-start').click()
     expect(page.locator('#stopwatch-start')).to_have_text('Pause')

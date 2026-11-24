@@ -7,6 +7,7 @@ const open = document.querySelector('#open');
 const status = document.querySelector('#status');
 const todoReminder = document.querySelector('#todo-reminder');
 const bedtimeReminder = document.querySelector('#bedtime-reminder');
+const timerReminder = document.querySelector('#timer-reminder');
 let data = { tasks: [], notes: [], timer: { total_ms: 1500000, remaining_ms: 1500000, ends_at_ms: null }, stopwatch: { elapsed_ms: 0, started_at_ms: null, laps: [] }, weather_location: null, world_clocks: [], calendar_events: [] };
 let editingTask = null;
 let ignoreTaskLanguage = false;
@@ -16,6 +17,9 @@ let reminderBusy = false;
 let taskRedrawPending = false;
 let bedtimeNotice = null;
 let bedtimeTimer = null;
+let timerNotice = null;
+let timerNoticeTimeout = null;
+let lastTimerNoticeEnd = null;
 const expandedTasks = new Set();
 let queue = Promise.resolve();
 let panelSequence = 0;
@@ -71,6 +75,7 @@ function setOpen(value) {
   open.hidden = !value;
   surface.classList.toggle('panel-open', value);
   closed.setAttribute('aria-expanded', String(value));
+  renderTimerNotice();
   renderTodoReminder(false);
   updatePanelSize(value, value && keyboardOpen);
   if (value) {
@@ -84,7 +89,7 @@ function updatePanelSize(isOpen, focus = false) {
   const tall = isOpen && isTallPage(activePage);
   open.classList.toggle('tall', tall);
   const seq = ++panelSequence;
-  const taskAlert = !isOpen && (!todoReminder.hidden || !bedtimeReminder.hidden);
+  const taskAlert = !isOpen && (!todoReminder.hidden || !bedtimeReminder.hidden || !timerReminder.hidden);
   panelReady.then(() => invoke('set_panel_open', { session: panelSession, open: isOpen, tall, focus, seq, taskAlert }))
     .catch(error => { status.textContent = String(error); });
 }
@@ -193,6 +198,14 @@ window.__TAURI__.event.listen('poni-day-schedule-changed', event => {
 }).catch(error => { status.textContent = String(error); });
 window.__TAURI__.event.listen('poni-bedtime', event => showBedtime(event.payload))
   .catch(error => { status.textContent = String(error); });
+window.__TAURI__.event.listen('poni-timer-completed', () => {
+  queue = queue.then(async () => {
+    const updated = await invoke('get_data');
+    if (!updated?.timer) return;
+    data.timer = updated.timer;
+    renderTimer();
+  }).catch(error => { status.textContent = String(error); });
+}).catch(error => { status.textContent = String(error); });
 window.__TAURI__.event.listen('poni-settings-open-module', event => {
   if (!moduleTabs.has(event.payload) || moduleTabs.get(event.payload).hidden) return;
   keyboardOpen = true;
@@ -520,7 +533,7 @@ function reminderCandidate(now) {
 }
 
 function renderTodoReminder(resize = true) {
-  reminderTask = open.hidden && !bedtimeNotice ? reminderCandidate(Date.now()) : null;
+  reminderTask = open.hidden && !bedtimeNotice && !timerNotice ? reminderCandidate(Date.now()) : null;
   const hidden = !reminderTask;
   const changed = todoReminder.hidden !== hidden;
   todoReminder.hidden = hidden;
@@ -547,8 +560,58 @@ function showBedtime(notice) {
     snooze.title = `Snooze for ${preferences.todo.snooze_minutes} minutes`;
     bedtimeTimer = setTimeout(() => showBedtime(null), bedtimeNotice.expires_at_ms - Date.now());
   }
+  renderTimerNotice();
   renderTodoReminder(false);
   if (open.hidden) updatePanelSize(false);
+}
+
+function renderTimerNotice(resize = false) {
+  const hidden = !timerNotice || !!bedtimeNotice;
+  const changed = timerReminder.hidden !== hidden;
+  timerReminder.hidden = hidden;
+  if (resize) {
+    renderTodoReminder(false);
+    if (changed && open.hidden) updatePanelSize(false);
+  }
+}
+
+function clearTimerNotice() {
+  clearTimeout(timerNoticeTimeout);
+  timerNotice = null;
+  renderTimerNotice(true);
+}
+
+function runTimerNoticeTimeout() {
+  clearTimeout(timerNoticeTimeout);
+  timerNotice.until = Date.now() + timerNotice.remaining;
+  timerNoticeTimeout = setTimeout(clearTimerNotice, timerNotice.remaining);
+}
+
+function syncTimerNotice(timer) {
+  const end = timer.ends_at_ms;
+  if (timerNotice && (!timer.notice_until_ms || end !== timerNotice.end)) clearTimerNotice();
+  if (end == null || end === lastTimerNoticeEnd || !(timer.notice_until_ms > Date.now()) ||
+      timer.notified_end_ms !== end) return;
+  lastTimerNoticeEnd = end;
+  timerNotice = { end, remaining: Math.min(timer.notice_until_ms - Date.now(), open.hidden ? 30000 : 8000) };
+  const duration = Math.round(timer.total_ms / 60000);
+  document.querySelector('#timer-reminder-text').textContent = `Time’s up · Timer ${duration} min`;
+  runTimerNoticeTimeout();
+  renderTimerNotice(true);
+}
+
+timerReminder.addEventListener('pointerenter', () => {
+  if (!timerNotice || !open.hidden) return;
+  clearTimeout(timerNoticeTimeout);
+  timerNotice.remaining = Math.max(0, timerNotice.until - Date.now());
+});
+timerReminder.addEventListener('pointerleave', () => {
+  if (timerNotice && open.hidden) runTimerNoticeTimeout();
+});
+for (const [id, extend] of [['timer-extend', true], ['timer-dismiss', false]]) {
+  document.getElementById(id).addEventListener('click', () => {
+    if (timerNotice) void mutate('timer_notice_action', { expectedEnd: timerNotice.end, extend });
+  });
 }
 
 for (const [id, action] of [['bedtime-dismiss', 'dismiss'], ['bedtime-snooze', 'snooze']]) {
@@ -953,6 +1016,7 @@ function renderTimerPresets() {
 let wasTimerActive = false;
 function renderTimer() {
   const timer = data.timer;
+  syncTimerNotice(timer);
   const active = timerActive(timer);
   if (wasTimerActive && !active) chooseTimerMinutes(startingTimerMinutes());
   wasTimerActive = active;
