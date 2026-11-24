@@ -50,6 +50,10 @@ Sakelar **Completion sound** pada Settings Pomodoro sekarang mengatur bunyi sele
 
 Empat kontrol Settings **Health** mengubah target air, jeda, menit mindful dan lama jeda mata manual. Target bawaan adalah 8 gelas, 6 jeda, dan 5 menit mindful sesuai tampilan asli. Penghitungan jeda saat PC idle atau terkunci, pengingat, dan overlay per layar belum tersedia. Kini **56 dari 201 kontrol standar (27,9%)** memiliki padanan setidaknya sebagian. Tersisa **145** tanpa padanan. [Tangkapan Settings Health asli](https://github.com/wawan-wfs/WFS-Poni-Lab/actions/runs/45244423357/artifacts/14854100797)
 
+Runner Windows mengubah target Health ke 16 gelas, 1 jeda, 30 menit mindful, dan 60 detik jeda mata, lalu memeriksa keempat nilai di profil. Runner juga mengonfirmasi sakelar bunyi selesai Pomodoro tersimpan dalam keadaan mati. Tes browser mengonfirmasi perubahan target langsung tampil pada tab Health dan durasi baru dipakai pada jeda mata berikutnya. [Bukti Settings Health dan Pomodoro di Windows](https://github.com/wawan-wfs/WFS-Poni-Lab/actions/runs/45422531090/artifacts/14934263247)
+
+Tangkapan Todo dan Day Progress dari kedua aplikasi memperlihatkan selisih pada isi sidebar, bilah judul, ikon, dan jarak antarbaris. Pengukuran piksel perlu memakai keadaan pengaturan dan posisi notch yang sama. [Tangkapan kedua aplikasi](https://github.com/wawan-wfs/WFS-Poni-Lab/actions/runs/45418690234/artifacts/14935065428)
+
 | Jenis kontrol | Deklarasi | Masuk katalog build |
 | --- | ---: | ---: |
 | Sakelar | 115 | 115 |
