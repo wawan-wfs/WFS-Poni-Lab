@@ -12,12 +12,13 @@ FIXTURE = """
 (() => {
   const defaults = {
     clock_format:'region', header_clock:true, open_on_hover:true, hover_delay:0, close_delay:450,
-    module_shortcuts:true, module_order:['home','tasks','notes','calendar','timer','weather','worldclock','screentime','pomodoro'],
+    module_shortcuts:true, module_order:['home','tasks','notes','calendar','timer','weather','worldclock','screentime','pomodoro','health'],
     hidden_modules:[], default_module:'home', remember_module:false, last_module:null,
     mirror_enabled:true, mirror_shape:'rounded',
     calendar_enabled:true, meeting_reminder_minutes:5, week_start:'windows',
     timer_presets:[], timer_remember:true, timer_then_break:false,
     todo: {late_minutes:0, snooze_minutes:10, trash_days:7},
+    health: {water_goal:8, break_goal:6, mindful_goal:5, eye_duration:20},
     bedtime_reminder:false, bedtime_chime_dnd:false,
     panel:{ direction:'auto', top_gap:0, position:50, width:200, height:32, opacity:100,
       expanded_width:680, expanded_height:196, tall_height:268, show_in_screenshots:true,
@@ -106,10 +107,11 @@ FIXTURE = """
         available:true, enabled:readScreenTime().enabled, apps:[], hours:Array(24).fill(0), total:0, switches:0,
       };
       if (command === 'set_poni_settings') {
-        const { panel, todo, ...patch } = args.patch;
+        const { panel, todo, health, ...patch } = args.patch;
         Object.assign(settings, patch);
         if (panel) Object.assign(settings.panel, panel);
         if (todo) Object.assign(settings.todo, todo);
+        if (health) Object.assign(settings.health, health);
         settings.timer_presets.sort((a,b) => a-b);
         if (settings.hidden_modules.includes(settings.default_module)) {
           settings.default_module = settings.module_order.find(id => !settings.hidden_modules.includes(id));
@@ -141,6 +143,7 @@ FIXTURE = """
         };
       }
       if (command === 'set_panel_open') return;
+      if (command === 'health_state') return {today:{water:2, breaks:1, mindful:1}, last_break_ms:null, streak:1};
       if (command === 'current_media') return null;
       if (command === 'calendar_first_weekday') return 0;
     } },
@@ -356,6 +359,20 @@ def test_settings(page):
     expect(page.locator('[data-pomo-time]')).to_have_text('55:00')
     expect(page.locator('[data-pomo-sound]')).to_have_value('rain')
 
+    search.fill('minum gelas')
+    search.press('Enter')
+    expect(settings.locator('#settings-health-water-goal')).to_be_focused()
+    for field, value in [('water-goal', '10'), ('break-goal', '7'), ('mindful-goal', '9'), ('eye-duration', '35')]:
+        settings.locator(f'#settings-health-{field}').fill(value)
+        expect(settings.get_by_role('status')).to_have_text('Saved')
+    page.locator('.tab[data-page="health"]').click()
+    expect(page.locator('[data-health-measure="water"] strong')).to_have_text('2 / 10')
+    expect(page.locator('[data-health-measure="breaks"] strong')).to_have_text('1 / 7')
+    expect(page.locator('[data-health-measure="mindful"] strong')).to_have_text('1 / 9')
+    page.get_by_role('button', name='Eye break', exact=True).click()
+    expect(page.locator('.health-countdown')).to_have_text('35s')
+    page.get_by_role('button', name='End', exact=True).click()
+
     popup.close()
     page.reload()
     closed = page.locator('#closed')
@@ -394,6 +411,9 @@ def test_settings(page):
     expect(settings.locator('#settings-pomo-break-sound')).to_be_checked()
     expect(settings.locator('#settings-timer-remember')).not_to_be_checked()
     expect(settings.locator('#settings-timer-then-break')).to_be_checked()
+    settings.get_by_role('button', name='Health', exact=True).click()
+    expect(settings.locator('#settings-health-eye-duration')).to_have_value('35')
+    expect(settings.locator('#settings-health-water-goal')).to_have_value('10')
 
     settings.get_by_role('button', name='Modules', exact=True).click()
     settings.locator('#settings-remember-module').check()

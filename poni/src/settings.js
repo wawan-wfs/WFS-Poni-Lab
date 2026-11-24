@@ -29,6 +29,7 @@
         hint: 'Choose a city, calculation method and Asr school.' },
       { id: 'pomodoro', title: 'Pomodoro', icon: '◷', color: 'orange', link: 'pomodoro',
         hint: 'Set focus sessions and break durations.' },
+      { id: 'health', title: 'Health', icon: '♥', color: 'green', link: 'health' },
       { id: 'dayprogress', title: 'Day Progress', icon: '◴', color: 'blue', link: 'dayprogress',
         hint: 'Choose when your day begins and ends.' },
       { id: 'screentime', title: 'Screen Time', icon: '⌛', color: 'indigo', link: 'screentime',
@@ -63,6 +64,10 @@
     ['dayprogress', 'Bedtime', 'day progress sleep time jadwal tidur', 'day-bed'],
     ['dayprogress', 'Remind me at bedtime', 'day progress reminder pengingat tidur', 'bedtime-reminder'],
     ['dayprogress', 'Chime even in Do not disturb', 'day progress dnd sound bunyi tidur', 'bedtime-chime-dnd'],
+    ['health', 'Water goal', 'health glasses water target minum gelas', 'health-water-goal'],
+    ['health', 'Break goal', 'health movement breaks daily target gerak jeda', 'health-break-goal'],
+    ['health', 'Mindful minutes goal', 'health breathing target pernapasan fokus menit', 'health-mindful-goal'],
+    ['health', 'Eye break length', 'health eye break duration istirahat mata', 'health-eye-duration'],
     ['general', 'Clock format', '12 hour 24 hour region time', 'clock-format'],
     ['general', 'Time at the top of the open Poni', 'header clock', 'header-clock'],
     ['general', 'Open on hover', 'mouse click to open', 'open-on-hover'],
@@ -163,7 +168,7 @@
           window.poniFocusPlayback.previewSettings(timer);
         }
       } else {
-        const update = source === 'panel' || source === 'todo' ? { [source]: patch } : patch;
+        const update = ['panel', 'todo', 'health'].includes(source) ? { [source]: patch } : patch;
         settings = await window.__TAURI__.core.invoke('set_poni_settings', { patch: update });
         broadcast();
       }
@@ -208,7 +213,7 @@
 
   function values(source) {
     if (source === 'pomodoro') return pomo;
-    if (source === 'panel' || source === 'todo') return settings[source];
+    if (['panel', 'todo', 'health'].includes(source)) return settings[source];
     if (source === 'startup') return { launch_at_login: launchAtLogin };
     return active === 'screentime' ? screenTime : settings;
   }
@@ -382,6 +387,18 @@
       'week_start', [['windows', 'As in Windows'], ['monday', 'Monday'], ['sunday', 'Sunday']]);
     const hidden = settings.hidden_modules.includes('calendar');
     content.append(button(hidden ? 'Show Calendar in Modules' : 'Open Calendar', () => void openLink('calendar')));
+  }
+
+  function health(content) {
+    const goals = group(content);
+    range(goals, 'health-water-goal', 'Water goal', 'water_goal',
+      { min: 2, max: 16, step: 1, unit: 'glasses', spokenUnit: 'glasses', source: 'health' });
+    range(goals, 'health-break-goal', 'Break goal', 'break_goal',
+      { min: 1, max: 16, step: 1, unit: 'breaks', spokenUnit: 'breaks', source: 'health' });
+    range(goals, 'health-mindful-goal', 'Mindful minutes goal', 'mindful_goal',
+      { min: 1, max: 30, step: 1, unit: 'min', spokenUnit: 'minutes', source: 'health' });
+    range(group(content, 'Eye breaks'), 'health-eye-duration', 'Eye break length', 'eye_duration',
+      { min: 10, max: 60, step: 5, unit: 's', spokenUnit: 'seconds', source: 'health' });
   }
 
   function screenTimeControls(content) {
@@ -628,6 +645,7 @@
         else if (active === 'modules') modules(controls);
         else if (active === 'todo') todo(controls);
         else if (active === 'dayprogress' && daySchedule) dayProgress(controls);
+        else if (active === 'health' && settings.health) health(controls);
         else if (active === 'mirror') mirror(controls);
         else if (active === 'calendar') calendar(controls);
         else if (active === 'screentime' && screenTime) screenTimeControls(controls);

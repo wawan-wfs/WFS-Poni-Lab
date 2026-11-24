@@ -131,6 +131,7 @@ function applyPreferences(value) {
   document.querySelector('#header-clock').hidden = !preferences.header_clock;
   document.querySelector('#home-calendar').hidden = !preferences.calendar_enabled;
   window.poniMirror?.configure({enabled:preferences.mirror_enabled, shape:preferences.mirror_shape});
+  window.poniModules?.health?.configure(preferences.health);
   if (!preferences.bedtime_reminder && bedtimeNotice) showBedtime(null);
   renderTodoReminder();
   if (activePage === 'tasks') renderTasks();

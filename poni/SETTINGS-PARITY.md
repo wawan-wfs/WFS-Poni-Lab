@@ -48,6 +48,8 @@ Runner Windows memeriksa bahwa aturan terlambat menuntaskan tugas, pengecualian 
 
 Sakelar **Completion sound** pada Settings Pomodoro sekarang mengatur bunyi selesai untuk sesi Pomodoro dan Timer. Nilai awal aktif mengikuti Settings Poni 1.8.1. Rust menggunakan bunyi dua nada dan status notifikasi Shell untuk menentukan kapan bunyi dapat diputar. Perbandingan bunyi asli dan hasil pada setiap mode Do not disturb masih diperlukan. Kini **52 dari 201 kontrol standar (25,9%)** memiliki padanan setidaknya sebagian. Tersisa **149** tanpa padanan. [Tangkapan Settings Pomodoro asli](https://github.com/wawan-wfs/WFS-Poni-Lab/actions/runs/45244423357/artifacts/14854100797)
 
+Empat kontrol Settings **Health** mengubah target air, jeda, menit mindful dan lama jeda mata manual. Target bawaan adalah 8 gelas, 6 jeda, dan 5 menit mindful sesuai tampilan asli. Penghitungan jeda saat PC idle atau terkunci, pengingat, dan overlay per layar belum tersedia. Kini **56 dari 201 kontrol standar (27,9%)** memiliki padanan setidaknya sebagian. Tersisa **145** tanpa padanan. [Tangkapan Settings Health asli](https://github.com/wawan-wfs/WFS-Poni-Lab/actions/runs/45244423357/artifacts/14854100797)
+
 | Jenis kontrol | Deklarasi | Masuk katalog build |
 | --- | ---: | ---: |
 | Sakelar | 115 | 115 |

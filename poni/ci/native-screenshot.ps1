@@ -216,6 +216,10 @@ try {
         }
         $geometryChecked = $true
 
+        Find-Setting 'gap from the top edge'
+        [System.Windows.Forms.SendKeys]::SendWait('{HOME}')
+        Start-Sleep -Seconds 2
+
         Find-Setting 'launch at login'
         [System.Windows.Forms.SendKeys]::SendWait(' ')
         Start-Sleep -Seconds 2
@@ -314,6 +318,26 @@ try {
             throw 'Bedtime reminder and chime settings did not save.'
         }
         $pomodoroChecked = $true
+
+        Find-Setting 'water goal'
+        [System.Windows.Forms.SendKeys]::SendWait('{END}')
+        Start-Sleep -Seconds 2
+        Find-Setting 'movement breaks daily target'
+        [System.Windows.Forms.SendKeys]::SendWait('{HOME}')
+        Start-Sleep -Seconds 2
+        Find-Setting 'mindful minutes goal'
+        [System.Windows.Forms.SendKeys]::SendWait('{END}')
+        Start-Sleep -Seconds 2
+        Find-Setting 'eye break length'
+        [System.Windows.Forms.SendKeys]::SendWait('{END}')
+        Start-Sleep -Seconds 2
+        Save-Screen 'settings-health.png'
+        $health = (Get-Content -Raw -LiteralPath $dataPath | ConvertFrom-Json).settings.health
+        $health | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'health-settings.json') -Encoding UTF8
+        if ($health.water_goal -ne 16 -or $health.break_goal -ne 1 -or
+            $health.mindful_goal -ne 30 -or $health.eye_duration -ne 60) {
+            throw ('Unexpected Health settings after native input: ' + ($health | ConvertTo-Json -Compress))
+        }
     }
     [CursorPosition]::PostMessage($settingsHandle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
     Start-Sleep -Seconds 2

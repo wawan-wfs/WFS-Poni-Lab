@@ -4,6 +4,59 @@ use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::State;
 
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(default)]
+pub(super) struct Preferences {
+    water_goal: u8,
+    break_goal: u8,
+    mindful_goal: u8,
+    eye_duration: u8,
+}
+
+impl Default for Preferences {
+    fn default() -> Self {
+        Self {
+            water_goal: 8,
+            break_goal: 6,
+            mindful_goal: 5,
+            eye_duration: 20,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct Patch {
+    water_goal: Option<u8>,
+    break_goal: Option<u8>,
+    mindful_goal: Option<u8>,
+    eye_duration: Option<u8>,
+}
+
+impl Preferences {
+    pub(super) fn apply(&mut self, patch: Patch) -> Result<(), String> {
+        let water = patch.water_goal.unwrap_or(self.water_goal);
+        let breaks = patch.break_goal.unwrap_or(self.break_goal);
+        let mindful = patch.mindful_goal.unwrap_or(self.mindful_goal);
+        let eye_duration = patch.eye_duration.unwrap_or(self.eye_duration);
+        if !(2..=16).contains(&water)
+            || !(1..=16).contains(&breaks)
+            || !(1..=30).contains(&mindful)
+            || !(10..=60).contains(&eye_duration)
+            || !eye_duration.is_multiple_of(5)
+        {
+            return Err(
+                "Choose targets and an eye break length within the displayed ranges".into(),
+            );
+        }
+        self.water_goal = water;
+        self.break_goal = breaks;
+        self.mindful_goal = mindful;
+        self.eye_duration = eye_duration;
+        Ok(())
+    }
+}
+
 #[derive(Clone, Default, Serialize, Deserialize)]
 pub(crate) struct DayTotals {
     water: u16,
@@ -122,6 +175,22 @@ pub(crate) fn health_record(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn preferences_preserve_unedited_goals_and_validate_eye_duration() {
+        let mut preferences = Preferences::default();
+        assert_eq!(preferences.break_goal, 6);
+        let patch = serde_json::from_str(r#"{"water_goal":10,"eye_duration":35}"#).unwrap();
+        preferences.apply(patch).unwrap();
+        let invalid = serde_json::from_str(r#"{"break_goal":8,"eye_duration":33}"#).unwrap();
+        assert!(preferences.apply(invalid).is_err());
+        let saved = serde_json::to_string(&preferences).unwrap();
+        let restored: Preferences = serde_json::from_str(&saved).unwrap();
+        assert_eq!(restored.water_goal, 10);
+        assert_eq!(restored.break_goal, 6);
+        assert_eq!(restored.mindful_goal, 5);
+        assert_eq!(restored.eye_duration, 35);
+    }
 
     #[test]
     fn rolls_over_daily_totals_and_keeps_streak_for_adjacent_days() {

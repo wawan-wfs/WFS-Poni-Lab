@@ -3,9 +3,9 @@
 
   const invoke = (command, args) => window.__TAURI__.core.invoke(command, args);
   const measures = [
-    ['breaks', 'Movement breaks', 4, '#30d158'],
-    ['water', 'Glasses of water', 8, '#64d2ff'],
-    ['mindful', 'Mindful minutes', 5, '#bf5af2'],
+    ['breaks', 'Movement breaks', 'break_goal', '#30d158'],
+    ['water', 'Glasses of water', 'water_goal', '#64d2ff'],
+    ['mindful', 'Mindful minutes', 'mindful_goal', '#bf5af2'],
   ];
   const stretches = [
     ['Neck turns', 'Gently turn your head left and right.'],
@@ -21,7 +21,9 @@
     ['Breathe out', 6, 1],
     ['Hold', 2, 1],
   ];
-  const duration = { stretch: 120, breathing: 60, eye: 20 };
+  const defaults = { break_goal: 6, water_goal: 8, mindful_goal: 5, eye_duration: 20 };
+  const durations = { stretch: 120, breathing: 60 };
+  let preferences = defaults;
   let page;
   let state;
   let guide;
@@ -50,7 +52,8 @@
   }
 
   function renderTotals() {
-    for (const [key, , goal] of measures) {
+    for (const [key, , preference] of measures) {
+      const goal = preferences[preference];
       const value = state.today[key];
       const entry = page.querySelector(`[data-health-measure="${key}"]`);
       entry.querySelector('strong').textContent = `${value} / ${goal}`;
@@ -71,7 +74,8 @@
 
   function startGuide(kind) {
     if (guide) return;
-    guide = { kind, started: Date.now(), phase: null };
+    const duration = kind === 'eye' ? preferences.eye_duration : durations[kind];
+    guide = { kind, duration, started: Date.now(), phase: null };
     page.querySelector('.health-status').textContent = '';
     page.querySelector('.health-actions').hidden = true;
     page.querySelector('.health-guide').hidden = false;
@@ -82,9 +86,9 @@
 
   function tickGuide() {
     if (!guide) return;
-    const {kind, started} = guide;
+    const {kind, duration, started} = guide;
     const seconds = Math.max(0, (Date.now() - started) / 1000);
-    const remaining = Math.ceil(duration[kind] - seconds);
+    const remaining = Math.ceil(duration - seconds);
     if (remaining <= 0) {
       stopGuide();
       if (kind === 'eye') {
@@ -121,7 +125,7 @@
       }
     }
     page.querySelector('.health-countdown').textContent = `${remaining}s`;
-    page.querySelector('.health-progress').value = seconds / duration[kind];
+    page.querySelector('.health-progress').value = seconds / duration;
   }
 
   function mount(container) {
@@ -165,5 +169,12 @@
   }
 
   window.poniModules ||= {};
-  window.poniModules.health = { mount, show: () => update() };
+  window.poniModules.health = {
+    mount,
+    show: () => update(),
+    configure(value) {
+      preferences = { ...defaults, ...value };
+      if (page && state) renderTotals();
+    },
+  };
 })();
