@@ -97,5 +97,5 @@
     if (current && context.state === 'suspended') void context.resume().catch(() => {});
   }, true);
 
-  window.poniFocusPlayback = { options, previewSettings, listen };
+  window.poniFocusPlayback = { options, previewSettings, listen, get session() { return session; } };
 })();

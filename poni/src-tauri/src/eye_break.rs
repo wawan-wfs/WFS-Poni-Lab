@@ -35,10 +35,6 @@ fn open(app: &AppHandle, duration: u8) -> Result<(), String> {
         return Ok(());
     }
     let state = app.state::<Mutex<Overlay>>();
-    let mut overlay = state.lock().map_err(|_| "Eye break is unavailable")?;
-    if overlay.session.is_some() {
-        return Ok(());
-    }
     let main = app
         .get_webview_window("main")
         .ok_or("Notch is unavailable")?;
@@ -50,10 +46,16 @@ fn open(app: &AppHandle, duration: u8) -> Result<(), String> {
     }
     let session = Uuid::new_v4();
     let page = format!("eye-break.html?session={session}&duration={duration}");
-    overlay.session = Some(session);
+    {
+        let mut overlay = state.lock().map_err(|_| "Eye break is unavailable")?;
+        if overlay.session.is_some() {
+            return Ok(());
+        }
+        overlay.session = Some(session);
+    }
     let mut windows = Vec::with_capacity(monitors.len());
     for (index, monitor) in monitors.iter().enumerate() {
-        let label = format!("eye-break-{index}");
+        let label = format!("eye-break-{session}-{index}");
         let result =
             WebviewWindowBuilder::new(app, &label, tauri::WebviewUrl::App(page.clone().into()))
                 .title("Poni Eye Break")
@@ -77,17 +79,21 @@ fn open(app: &AppHandle, duration: u8) -> Result<(), String> {
                 });
         match result {
             Ok(window) => {
+                let mut overlay = state.lock().map_err(|_| "Eye break is unavailable")?;
+                if overlay.session != Some(session) {
+                    drop(overlay);
+                    let _ = window.destroy();
+                    return Ok(());
+                }
                 overlay.labels.push(label);
                 windows.push(window);
             }
             Err(error) => {
-                drop(overlay);
                 close(app, session);
                 return Err(error.to_string());
             }
         }
     }
-    drop(overlay);
     for window in &windows {
         if let Err(error) = window.show() {
             close(app, session);
@@ -120,13 +126,15 @@ pub(super) fn schedule(app: &AppHandle, duration: u8) -> bool {
         return false;
     }
     let handle = app.clone();
-    app.run_on_main_thread(move || {
-        if let Err(error) = open(&handle, duration) {
-            eprintln!("Could not open eye break: {error}");
-            let _ = tauri::Emitter::emit_to(&handle, "main", "poni-eye-break-failed", error);
-        }
-    })
-    .is_ok()
+    std::thread::Builder::new()
+        .name("poni-eye-break".into())
+        .spawn(move || {
+            if let Err(error) = open(&handle, duration) {
+                eprintln!("Could not open eye break: {error}");
+                let _ = tauri::Emitter::emit_to(&handle, "main", "poni-eye-break-failed", error);
+            }
+        })
+        .is_ok()
 }
 
 #[cfg(not(windows))]

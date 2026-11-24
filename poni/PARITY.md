@@ -53,7 +53,7 @@ Skenario di bawah dirangkum dari aset asli di `poni-frontend/modules` dan lapora
 
 | Area | Jalankan dan bandingkan | Selisih atau prasyarat yang diketahui |
 | --- | --- | --- |
-| Home dan notch | Buka lewat tetikus dan Alt+N, berpindah tab, cek fokus, auto-hide, hit testing, aktivitas saat tertutup, pemutar, kalender, Mirror dan Buddy | Visual baseline lama menunjukkan selisih kontrol dan tata letak. Perlu perangkat audio/kamera, beberapa DPI dan monitor |
+| Home dan notch | Buka lewat tetikus dan Alt+N, berpindah tab, cek fokus, auto-hide, hit testing, aktivitas saat tertutup, pemutar, kalender, Mirror dan Buddy | Live Activities menampilkan sesi dan hitung mundur, acara mendatang, serta Todo. Musik dan sumber live lain masih perlu dihubungkan. Masih ada selisih kontrol dan tata letak, serta pengujian audio/kamera, DPI dan beberapa monitor |
 | Dock dan Shelf | Pin/urutkan/jalankan aplikasi, tampilkan aplikasi aktif dan beberapa jendela, uji pembesaran ikon, monitor kedua, serta tarik berkas ke Shelf lalu keluarkan kembali | Dock dan Shelf belum setara. Uji di desktop interaktif dengan berkas uji |
 | Stats dan HUD | Cocokkan metrik CPU/memori serta opsi perangkat pada sumber data yang sama. Picu volume dan kecerahan dari keyboard, lalu periksa indikator | Rust menampilkan statistik dasar. Perlu perangkat yang mendukung metrik serta tombol media/kecerahan |
 | Battery | Bandingkan persentase, ikon bar/ring, perubahan sumber daya, power saver, dan peringatan saat melewati ambang | Rust membaca status daya Windows dan menyediakan lima kontrol. Transisi diuji dengan status simulasi, dan perbandingan di laptop dengan baterai fisik masih diperlukan |

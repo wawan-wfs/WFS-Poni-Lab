@@ -57,6 +57,48 @@ pub(super) enum WeekStart {
 
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(default)]
+struct LiveActivities {
+    enabled: bool,
+    rotate: bool,
+    timers: bool,
+    calendar: bool,
+    todo: bool,
+}
+
+impl Default for LiveActivities {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            rotate: true,
+            timers: true,
+            calendar: true,
+            todo: true,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct LiveActivitiesPatch {
+    enabled: Option<bool>,
+    rotate: Option<bool>,
+    timers: Option<bool>,
+    calendar: Option<bool>,
+    todo: Option<bool>,
+}
+
+impl LiveActivities {
+    fn apply(&mut self, patch: LiveActivitiesPatch) {
+        self.enabled = patch.enabled.unwrap_or(self.enabled);
+        self.rotate = patch.rotate.unwrap_or(self.rotate);
+        self.timers = patch.timers.unwrap_or(self.timers);
+        self.calendar = patch.calendar.unwrap_or(self.calendar);
+        self.todo = patch.todo.unwrap_or(self.todo);
+    }
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(default)]
 pub(super) struct PoniSettings {
     clock_format: ClockFormat,
     header_clock: bool,
@@ -76,6 +118,7 @@ pub(super) struct PoniSettings {
     pub(super) todo: todo::Preferences,
     pub(super) health: health::Preferences,
     battery: battery::Preferences,
+    live: LiveActivities,
     pub(super) bedtime_reminder: bool,
     pub(super) bedtime_chime_dnd: bool,
     module_order: Vec<String>,
@@ -106,6 +149,7 @@ impl Default for PoniSettings {
             todo: todo::Preferences::default(),
             health: health::Preferences::default(),
             battery: battery::Preferences::default(),
+            live: LiveActivities::default(),
             bedtime_reminder: false,
             bedtime_chime_dnd: false,
             module_order: MODULES.iter().map(|id| (*id).to_string()).collect(),
@@ -138,6 +182,7 @@ pub(super) struct SettingsPatch {
     todo: Option<todo::Patch>,
     health: Option<health::Patch>,
     battery: Option<battery::Patch>,
+    live: Option<LiveActivitiesPatch>,
     bedtime_reminder: Option<bool>,
     bedtime_chime_dnd: Option<bool>,
     module_order: Option<Vec<String>>,
@@ -261,6 +306,9 @@ impl PoniSettings {
         }
         if let Some(battery) = patch.battery {
             self.battery.apply(battery)?;
+        }
+        if let Some(live) = patch.live {
+            self.live.apply(live);
         }
         self.clock_format = patch.clock_format.unwrap_or(self.clock_format);
         self.header_clock = patch.header_clock.unwrap_or(self.header_clock);

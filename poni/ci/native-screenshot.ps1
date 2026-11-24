@@ -357,6 +357,15 @@ try {
         if ($battery.low_threshold -ne 50 -or !$battery.show_percentage) {
             throw ('Unexpected Battery settings after native input: ' + ($battery | ConvertTo-Json -Compress))
         }
+        Find-Setting 'rotate between activities'
+        [System.Windows.Forms.SendKeys]::SendWait(' ')
+        Start-Sleep -Seconds 2
+        Save-Screen 'settings-live-activities.png'
+        $live = (Get-Content -Raw -LiteralPath $dataPath | ConvertFrom-Json).settings.live
+        $live | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'live-activity-settings.json') -Encoding UTF8
+        if ($live.rotate -ne $false -or !$live.enabled -or !$live.timers) {
+            throw ('Unexpected Live Activities settings after native input: ' + ($live | ConvertTo-Json -Compress))
+        }
     }
     [CursorPosition]::PostMessage($settingsHandle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
     Start-Sleep -Seconds 2
@@ -442,14 +451,21 @@ try {
         if (!$timerVisible) { throw 'The completed Timer did not show its notch actions.' }
         Start-Sleep -Milliseconds 750
         Save-Screen 'timer-completed.png'
+        $todoOrigin = [CursorPosition+Point]::new()
         if (![CursorPosition]::ClientToScreen($todoWindow, [ref]$todoOrigin)) { throw 'Could not locate the Timer actions.' }
         Click-Point ($todoOrigin.X + $todoClient.Right - 77) ($todoOrigin.Y + 54)
         Start-Sleep -Seconds 2
         $updated = Get-Content -Raw -LiteralPath $dataPath | ConvertFrom-Json
         $remaining = [int64]$updated.timer.ends_at_ms - [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        Save-Screen 'timer-after-extension.png'
+        $timerResult = @{
+            remaining_ms = $remaining
+            last_started_minutes = $updated.timer.last_started_minutes
+            notice_cleared = $null -eq $updated.timer.notice_until_ms
+        }
         if ($remaining -lt 290000 -or $remaining -gt 300000 -or $updated.timer.last_started_minutes -ne 1 -or
             $null -ne $updated.timer.notice_until_ms) {
-            throw 'The Timer notice did not restart the countdown for five minutes.'
+            throw ('Unexpected Timer state after extension: ' + ($timerResult | ConvertTo-Json -Compress))
         }
         @{ extended_five_minutes = $true; last_preset_preserved = $true } |
             ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'timer-observation.json') -Encoding UTF8
@@ -482,6 +498,7 @@ try {
         [CursorPosition]::keybd_event(0x4E, 0, 2, [UIntPtr]::Zero)
         [CursorPosition]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
         Start-Sleep -Seconds 3
+        $todoOrigin = [CursorPosition+Point]::new()
         if (![CursorPosition]::GetClientRect($todoWindow, [ref]$todoClient) -or
             ![CursorPosition]::ClientToScreen($todoWindow, [ref]$todoOrigin) -or $todoClient.Bottom -lt 220) {
             throw 'The Health panel did not open for the manual eye break.'

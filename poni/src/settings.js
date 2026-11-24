@@ -15,6 +15,7 @@
     { group: 'Poni', pages: [
       { id: 'general', title: 'General', icon: '⚙', color: 'grey' },
       { id: 'modules', title: 'Modules', icon: '▦', color: 'indigo' },
+      { id: 'live', title: 'Live Activities', icon: '↗', color: 'red' },
     ] },
     { group: 'Features', pages: [
       { id: 'dashboard', title: 'Dashboard', icon: '⊞', color: 'blue', link: 'dashboard',
@@ -104,6 +105,11 @@
     ['battery', 'Icon', 'battery bar ring icon', 'battery-icon'],
     ['battery', 'Charging animation', 'battery plugged unplugged charger', 'battery-charging-activity'],
     ['battery', 'Low battery warning at', 'battery low threshold daya rendah', 'battery-threshold'],
+    ['live', 'Live activities while Poni is closed', 'closed notch activities aktivitas tertutup', 'live-enabled'],
+    ['live', 'Rotate between activities', 'closed notch every six seconds bergantian', 'live-rotate'],
+    ['live', 'Pomodoro, timer and stopwatch', 'live clocks countdown activity', 'live-timers'],
+    ['live', 'Events starting within 15 minutes', 'live calendar event activity', 'live-calendar'],
+    ['live', 'Todo deadlines', 'live upcoming tasks hour deadline tunda tugas', 'live-todo'],
     ['calendar', 'Show calendar', 'calendar visibility home kalender', 'calendar-enabled'],
     ['calendar', 'Meeting reminder', 'calendar notification event minutes pertemuan pengingat', 'meeting-reminder'],
     ['calendar', 'Week starts on', 'calendar first day monday sunday minggu senin awal pekan', 'week-start'],
@@ -182,7 +188,7 @@
           window.poniFocusPlayback.previewSettings(timer);
         }
       } else {
-        const update = ['panel', 'todo', 'health', 'battery'].includes(source) ? { [source]: patch } : patch;
+        const update = ['panel', 'todo', 'health', 'battery', 'live'].includes(source) ? { [source]: patch } : patch;
         settings = await window.__TAURI__.core.invoke('set_poni_settings', { patch: update });
         broadcast();
       }
@@ -227,7 +233,7 @@
 
   function values(source) {
     if (source === 'pomodoro') return pomo;
-    if (['panel', 'todo', 'health', 'battery'].includes(source)) return settings[source];
+    if (['panel', 'todo', 'health', 'battery', 'live'].includes(source)) return settings[source];
     if (source === 'startup') return { launch_at_login: launchAtLogin };
     return active === 'screentime' ? screenTime : settings;
   }
@@ -350,6 +356,16 @@
       'Open the Mirror from Home to preview your camera.', 'mirror_enabled');
     select(controls, 'mirror-shape', 'Mirror shape', null, 'mirror_shape',
       [['rounded', 'Rounded'], ['circle', 'Circle']], !settings.mirror_enabled);
+  }
+
+  function liveActivities(content) {
+    const controls = group(content);
+    toggle(controls, 'live-enabled', 'Live activities while Poni is closed', null, 'enabled', 'live');
+    toggle(controls, 'live-rotate', 'Rotate between activities', 'Every 6 seconds', 'rotate', 'live');
+    toggle(controls, 'live-timers', 'Pomodoro, timer and stopwatch', null, 'timers', 'live');
+    toggle(controls, 'live-calendar', 'Events starting within 15 minutes', null, 'calendar', 'live');
+    toggle(controls, 'live-todo', 'Todo deadlines',
+      'Counts down the next task due within an hour.', 'todo', 'live');
   }
 
   function battery(content) {
@@ -701,6 +717,7 @@
         panel.append(controls);
         if (active === 'general') general(controls);
         else if (active === 'modules') modules(controls);
+        else if (active === 'live' && settings.live) liveActivities(controls);
         else if (active === 'todo') todo(controls);
         else if (active === 'dayprogress' && daySchedule) dayProgress(controls);
         else if (active === 'health' && settings.health) health(controls);

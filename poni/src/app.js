@@ -9,6 +9,11 @@ const todoReminder = document.querySelector('#todo-reminder');
 const bedtimeReminder = document.querySelector('#bedtime-reminder');
 const timerReminder = document.querySelector('#timer-reminder');
 const healthReminder = document.querySelector('#health-reminder');
+const liveActivity = document.querySelector('#notch-live');
+const liveTitle = document.querySelector('#notch-live-title');
+const liveTime = document.querySelector('#notch-live-time');
+let liveIndex = 0;
+let currentLive = null;
 let data = { tasks: [], notes: [], timer: { total_ms: 1500000, remaining_ms: 1500000, ends_at_ms: null }, stopwatch: { elapsed_ms: 0, started_at_ms: null, laps: [] }, weather_location: null, world_clocks: [], calendar_events: [] };
 let editingTask = null;
 let ignoreTaskLanguage = false;
@@ -54,6 +59,7 @@ let preferences = {
   timer_presets: [], timer_remember: true,
   todo: { late_minutes: 0, snooze_minutes: 10, trash_days: 7 },
   bedtime_reminder: false,
+  live: { enabled:true, rotate:true, timers:true, calendar:true, todo:true },
   panel: { direction: 'auto', top_gap: 0, position: 50, width: 200, height: 32, opacity: 100,
     expanded_width: 680, expanded_height: 196, tall_height: 268, show_in_screenshots: true },
 };
@@ -78,6 +84,7 @@ function setOpen(value) {
   open.hidden = !value;
   surface.classList.toggle('panel-open', value);
   closed.setAttribute('aria-expanded', String(value));
+  renderLiveActivities();
   renderTimerNotice();
   renderTodoReminder(false);
   updatePanelSize(value, value && keyboardOpen);
@@ -144,6 +151,7 @@ function applyPreferences(value) {
   if (!preferences.bedtime_reminder && bedtimeNotice) showBedtime(null);
   if (preferences.health?.enabled === false && healthNotice) showHealthNotice(null);
   renderTodoReminder();
+  renderLiveActivities();
   if (activePage === 'tasks') renderTasks();
   updateClock();
   refreshWeekLayout();
@@ -246,7 +254,11 @@ function callModule(method) {
     status.textContent = String(error);
   }
 }
-closed.addEventListener('click', () => setOpen(true));
+closed.addEventListener('click', () => {
+  const destination = currentLive?.tab;
+  setOpen(true);
+  if (destination) selectModule(destination);
+});
 closed.addEventListener('pointerenter', () => {
   clearTimeout(hoverTimer);
   if (!preferences.open_on_hover) return;
@@ -468,8 +480,68 @@ function updateClock() {
   if (preferences.clock_format !== 'region') options.hourCycle = preferences.clock_format === 'h24' ? 'h23' : 'h12';
   const time = new Intl.DateTimeFormat(undefined, options).format(now);
   document.querySelectorAll('.clock').forEach(clock => { clock.textContent = time; });
+  renderLiveActivities(now.getTime());
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   if (today !== calendarToday) { calendarToday = today; if (calendarDay == null || calendarDay < today) calendarDay = today; renderCalendar(); }
+}
+
+function liveCountdown(ms) {
+  const seconds = Math.max(0, Math.ceil(ms / 1000));
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor(seconds % 3600 / 60);
+  return (hours ? `${hours}:${String(minutes).padStart(2, '0')}` : String(minutes)) +
+    ':' + String(seconds % 60).padStart(2, '0');
+}
+
+function renderLiveActivities(now = Date.now()) {
+  const settings = preferences.live;
+  const candidates = [];
+  if (settings.enabled && open.hidden) {
+    const pomodoro = window.poniFocusPlayback.session;
+    if (settings.timers) {
+      if (pomodoro?.ends_at_ms > now) candidates.push({
+        tab: 'pomodoro', title: pomodoro.phase === 'focus' ? 'Focus' : 'Break',
+        time: liveCountdown(pomodoro.ends_at_ms - now),
+      });
+      const stopwatch = data.stopwatch;
+      if (stopwatch.started_at_ms != null) candidates.push({
+        tab: 'timer', title: 'Stopwatch',
+        time: stopwatchValue(stopwatch.elapsed_ms + Math.max(0, now - stopwatch.started_at_ms)).split('.')[0],
+      });
+      if (data.timer.ends_at_ms > now) candidates.push({
+        tab: 'timer', title: 'Timer', time: liveCountdown(data.timer.ends_at_ms - now),
+      });
+    }
+    if (settings.calendar && preferences.calendar_enabled && data.calendar_events?.length) {
+      const day = new Date(now);
+      const nextDay = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1);
+      const latest = now + 900_000;
+      const next = occurrencesOnDay(day).find(item => item.start > now && item.start <= latest) ??
+        (nextDay.getTime() <= latest
+          ? occurrencesOnDay(nextDay).find(item => item.start > now && item.start <= latest)
+          : null);
+      if (next) candidates.push({
+        tab: 'calendar', title: next.event.title, time: `in ${Math.ceil((next.start - now) / 60_000)}m`,
+      });
+    }
+    if (settings.todo) {
+      const upcoming = data.tasks.filter(task =>
+        !task.done && task.due_at_ms > now && task.due_at_ms - now <= 3_600_000);
+      const next = upcoming.reduce((earliest, task) =>
+        !earliest || task.due_at_ms < earliest.due_at_ms ? task : earliest, null);
+      if (next) candidates.push({
+        tab: 'tasks', title: upcoming.length > 1 ? `${upcoming.length} tasks` : next.text,
+        time: liveCountdown(next.due_at_ms - now),
+      });
+    }
+  }
+  currentLive = candidates[(settings.rotate ? liveIndex : 0) % candidates.length] || null;
+  liveActivity.hidden = !currentLive;
+  closed.classList.toggle('has-live', !!currentLive);
+  if (currentLive) {
+    if (liveTitle.textContent !== currentLive.title) liveTitle.textContent = currentLive.title;
+    if (liveTime.textContent !== currentLive.time) liveTime.textContent = currentLive.time;
+  }
 }
 function renderCalendar() {
   const today = new Date(calendarToday);
@@ -505,6 +577,12 @@ function renderCalendar() {
 }
 updateClock();
 setInterval(updateClock, 1000);
+setInterval(() => {
+  if (!open.hidden || !preferences.live.rotate || closed.matches(':hover') ||
+      bedtimeNotice || timerNotice || healthNotice || reminderTask) return;
+  liveIndex++;
+  renderLiveActivities();
+}, 6000);
 
 function mutate(command, args) {
   const operation = queue.then(async () => {
@@ -838,6 +916,7 @@ function render() {
   renderTasks();
   renderTodoReminder();
   renderTimer();
+  renderLiveActivities();
   renderStopwatch();
   renderMonthCalendar();
   renderCalendar();
