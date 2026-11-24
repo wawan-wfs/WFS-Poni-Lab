@@ -219,11 +219,11 @@ try {
         Find-Setting 'launch at login'
         [System.Windows.Forms.SendKeys]::SendWait(' ')
         Start-Sleep -Seconds 2
-        $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
-        $startupCommand = Get-ItemPropertyValue -LiteralPath $runKey -Name 'Poni Rebuild' -ErrorAction SilentlyContinue
+        $runKey = 'HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Run'
+        $startupCommand = [Microsoft.Win32.Registry]::GetValue($runKey, 'Poni Rebuild', $null)
         [System.Windows.Forms.SendKeys]::SendWait(' ')
         Start-Sleep -Seconds 2
-        $startupAfterDisable = Get-ItemPropertyValue -LiteralPath $runKey -Name 'Poni Rebuild' -ErrorAction SilentlyContinue
+        $startupAfterDisable = [Microsoft.Win32.Registry]::GetValue($runKey, 'Poni Rebuild', $null)
         if ($startupCommand -ne ('"{0}"' -f $exe) -or $null -ne $startupAfterDisable) {
             throw 'Launch at login did not enable and disable the expected Windows startup entry.'
         }
