@@ -30,6 +30,8 @@ Settings Pomodoro menambahkan pilihan **Start a break after the timer** dan memb
 
 Bagian **Background sound** menambahkan pilihan delapan suara, volume, dan opsi melanjutkan audio selama jeda. Sintesis audio dari referensi berjalan lokal di WebView dan mengikuti fase Pomodoro yang disimpan di Rust. Tersisa **167 dari 201 kontrol standar** tanpa padanan. Sakelar **Completion sound** masih belum tersedia.
 
+Pada pemeriksaan Windows, runner mengubah panjang siklus menjadi 8, menambahkan preset 35 menit, mengaktifkan jeda setelah Timer, lalu memilih White noise dan mengaktifkan audio selama jeda. Kelima nilai diperiksa di profil. Tes Chromium merender kedelapan suara dan memeriksa bahwa audio tetap berjalan ketika panel ditutup, berhenti ketika sesi dijeda, dan mengikuti pilihan audio saat jeda. Keluaran speaker Windows belum diukur. [Hasil pemeriksaan Settings Windows](https://github.com/wawan-wfs/WFS-Poni-Lab/actions/runs/45293270392/artifacts/14874693349)
+
 | Jenis kontrol | Deklarasi | Masuk katalog build |
 | --- | ---: | ---: |
 | Sakelar | 115 | 115 |
