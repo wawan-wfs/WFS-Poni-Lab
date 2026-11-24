@@ -41,40 +41,10 @@ fn play_chime(chime: Chime) {
     use windows_sys::Win32::Media::Audio::{PlaySoundW, SND_ASYNC, SND_MEMORY, SND_NODEFAULT};
     static BEDTIME: OnceLock<Vec<u8>> = OnceLock::new();
     static COMPLETION: OnceLock<Vec<u8>> = OnceLock::new();
-    let (wave, notes) = match chime {
-        Chime::Bedtime => (&BEDTIME, [(0.0, 660.0), (0.16, 880.0)]),
-        Chime::Completion => (&COMPLETION, [(0.0, 784.0), (0.20, 1046.5)]),
+    let audio = match chime {
+        Chime::Bedtime => BEDTIME.get_or_init(|| synthesize(&[660.0, 880.0])),
+        Chime::Completion => COMPLETION.get_or_init(|| synthesize(&[880.0, 1108.7, 1318.5])),
     };
-    let audio = wave.get_or_init(|| {
-        const RATE: u32 = 16_000;
-        let frames = RATE * 6 / 5;
-        let sample_bytes = frames * 2;
-        let mut bytes = b"RIFF".to_vec();
-        bytes.extend_from_slice(&(36 + sample_bytes).to_le_bytes());
-        bytes.extend_from_slice(b"WAVEfmt ");
-        bytes.extend_from_slice(&16u32.to_le_bytes());
-        bytes.extend_from_slice(&1u16.to_le_bytes());
-        bytes.extend_from_slice(&1u16.to_le_bytes());
-        bytes.extend_from_slice(&RATE.to_le_bytes());
-        bytes.extend_from_slice(&(RATE * 2).to_le_bytes());
-        bytes.extend_from_slice(&2u16.to_le_bytes());
-        bytes.extend_from_slice(&16u16.to_le_bytes());
-        bytes.extend_from_slice(b"data");
-        bytes.extend_from_slice(&sample_bytes.to_le_bytes());
-        for frame in 0..frames {
-            let time = f64::from(frame) / f64::from(RATE);
-            let mut sample = 0.0;
-            for (start, hz) in notes {
-                let elapsed = time - start;
-                if (0.0..1.0).contains(&elapsed) {
-                    let gain = (elapsed / 0.02).min(1.0) * (-7.5 * (elapsed - 0.02).max(0.0)).exp();
-                    sample += 0.12 * gain * (std::f64::consts::TAU * hz * elapsed).sin();
-                }
-            }
-            bytes.extend_from_slice(&((sample * f64::from(i16::MAX)) as i16).to_le_bytes());
-        }
-        bytes
-    });
     unsafe {
         PlaySoundW(
             audio.as_ptr().cast(),
@@ -82,6 +52,47 @@ fn play_chime(chime: Chime) {
             SND_MEMORY | SND_ASYNC | SND_NODEFAULT,
         );
     }
+}
+
+// Match the sine frequencies and envelope of the Poni 1.8.1 Web Audio chime.
+#[cfg(windows)]
+fn synthesize(notes: &[f64]) -> Vec<u8> {
+    const RATE: u32 = 48_000;
+    const NOTE_GAP: u32 = RATE * 16 / 100;
+    let frames = RATE + (notes.len() as u32 - 1) * NOTE_GAP;
+    let sample_bytes = frames * 2;
+    let mut bytes = b"RIFF".to_vec();
+    bytes.extend_from_slice(&(36 + sample_bytes).to_le_bytes());
+    bytes.extend_from_slice(b"WAVEfmt ");
+    bytes.extend_from_slice(&16u32.to_le_bytes());
+    bytes.extend_from_slice(&1u16.to_le_bytes());
+    bytes.extend_from_slice(&1u16.to_le_bytes());
+    bytes.extend_from_slice(&RATE.to_le_bytes());
+    bytes.extend_from_slice(&(RATE * 2).to_le_bytes());
+    bytes.extend_from_slice(&2u16.to_le_bytes());
+    bytes.extend_from_slice(&16u16.to_le_bytes());
+    bytes.extend_from_slice(b"data");
+    bytes.extend_from_slice(&sample_bytes.to_le_bytes());
+    for frame in 0..frames {
+        let mut sample = 0.0;
+        for (index, &hz) in notes.iter().enumerate() {
+            let Some(elapsed) = frame.checked_sub(index as u32 * NOTE_GAP) else {
+                continue;
+            };
+            if elapsed >= RATE {
+                continue;
+            }
+            let seconds = f64::from(elapsed) / f64::from(RATE);
+            let gain = if seconds < 0.02 {
+                0.12 * (seconds / 0.02)
+            } else {
+                0.12 * (0.0001_f64 / 0.12).powf(((seconds - 0.02) / 0.88).min(1.0))
+            };
+            sample += gain * (std::f64::consts::TAU * hz * seconds).sin();
+        }
+        bytes.extend_from_slice(&((sample * f64::from(i16::MAX)).round() as i16).to_le_bytes());
+    }
+    bytes
 }
 
 #[cfg(not(windows))]
