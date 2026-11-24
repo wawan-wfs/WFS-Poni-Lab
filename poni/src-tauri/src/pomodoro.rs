@@ -32,6 +32,7 @@ pub(super) struct Settings {
     cycle_length: u16,
     auto_break: bool,
     auto_focus: bool,
+    completion_sound: bool,
     focus_sound: FocusSound,
     focus_sound_volume: u8,
     focus_sound_breaks: bool,
@@ -60,6 +61,7 @@ impl Default for Settings {
             cycle_length: 4,
             auto_break: true,
             auto_focus: false,
+            completion_sound: true,
             focus_sound: FocusSound::Off,
             focus_sound_volume: 70,
             focus_sound_breaks: false,
@@ -101,6 +103,7 @@ pub(super) struct SettingsPatch {
     cycle_length: Option<u16>,
     auto_break: Option<bool>,
     auto_focus: Option<bool>,
+    completion_sound: Option<bool>,
     focus_sound: Option<FocusSound>,
     focus_sound_volume: Option<u8>,
     focus_sound_breaks: Option<bool>,
@@ -114,6 +117,7 @@ impl SettingsPatch {
         settings.cycle_length = self.cycle_length.unwrap_or(settings.cycle_length);
         settings.auto_break = self.auto_break.unwrap_or(settings.auto_break);
         settings.auto_focus = self.auto_focus.unwrap_or(settings.auto_focus);
+        settings.completion_sound = self.completion_sound.unwrap_or(settings.completion_sound);
         settings.focus_sound = self.focus_sound.unwrap_or(settings.focus_sound);
         settings.focus_sound_volume = self
             .focus_sound_volume
@@ -160,6 +164,10 @@ impl Default for Pomodoro {
 }
 
 impl Pomodoro {
+    pub(super) fn completion_sound_enabled(&self) -> bool {
+        self.settings.completion_sound
+    }
+
     pub(super) fn start_timer_break(&mut self, now: u64) -> bool {
         if self.ends_at_ms.is_some() {
             return false;
@@ -281,6 +289,7 @@ fn notify(app: &AppHandle, phase: Option<Phase>) {
             .title("Pomodoro")
             .body(phase.completed_message())
             .show();
+        super::sound::play_completion(app);
     }
 }
 
@@ -413,6 +422,13 @@ mod tests {
         assert_eq!(settings.short_minutes, 8);
         assert!(settings.auto_break);
         assert!(!settings.auto_focus);
+        assert!(settings.completion_sound);
+        let patch: SettingsPatch = serde_json::from_str(r#"{"completion_sound":false}"#).unwrap();
+        patch.apply(&mut settings).unwrap();
+        let saved = serde_json::to_string(&settings).unwrap();
+        let restored: Settings = serde_json::from_str(&saved).unwrap();
+        assert!(!restored.completion_sound);
+        assert_eq!(restored.focus_minutes, 45);
     }
 
     #[test]

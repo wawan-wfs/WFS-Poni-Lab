@@ -28,7 +28,7 @@ Settings Screen Time kini menyediakan sakelar pelacakan, ambang idle 30–600 de
 
 Settings Pomodoro menambahkan pilihan **Start a break after the timer** dan membawa enam kontrol sesi dari tab Pomodoro ke Settings. Timer memakai pilihan **Remember the last duration** dan preset yang dapat ditambah atau dihapus. Preset masuk renderer kustom, sehingga tidak mengubah hitungan kontrol standar. Tersisa **170 dari 201 kontrol standar** tanpa padanan setelah tahap ini.
 
-Bagian **Background sound** menambahkan pilihan delapan suara, volume, dan opsi melanjutkan audio selama jeda. Sintesis audio dari referensi berjalan lokal di WebView dan mengikuti fase Pomodoro yang disimpan di Rust. Tersisa **167 dari 201 kontrol standar** tanpa padanan. Sakelar **Completion sound** masih belum tersedia.
+Bagian **Background sound** menambahkan pilihan delapan suara, volume, dan opsi melanjutkan audio selama jeda. Sintesis audio dari referensi berjalan lokal di WebView dan mengikuti fase Pomodoro yang disimpan di Rust. Tersisa **167 dari 201 kontrol standar** tanpa padanan pada tahap tersebut.
 
 Pada pemeriksaan Windows, runner mengubah panjang siklus menjadi 8, menambahkan preset 35 menit, mengaktifkan jeda setelah Timer, lalu memilih White noise dan mengaktifkan audio selama jeda. Kelima nilai diperiksa di profil. Tes Chromium merender kedelapan suara dan memeriksa bahwa audio tetap berjalan ketika panel ditutup, berhenti ketika sesi dijeda, dan mengikuti pilihan audio saat jeda. Keluaran speaker Windows belum diukur. [Hasil pemeriksaan Settings Windows](https://github.com/wawan-wfs/WFS-Poni-Lab/actions/runs/45293270392/artifacts/14874693349)
 
@@ -43,6 +43,10 @@ Runner Windows memeriksa lebar notch 320 px, perubahan jarak 120 px, dan perataa
 Ketiga kontrol Todo yang aktif di Poni 1.8.1 kini punya padanan. Pengaturan menentukan kapan tugas terlambat berpindah ke Done, berapa lama snooze memindahkan tenggat, dan berapa hari Trash menyimpan tugas. Tugas dapat menimpa aturan keterlambatan, dan snooze tersedia di tab Todo serta pengingat notch tertutup. Trash memisahkan tugas terhapus dari agenda dan daftar aktif serta memungkinkan pemulihan. Tersisa **152 dari 201 kontrol standar** tanpa padanan.
 
 Settings Day Progress kini memakai jam mulai dan jam tidur yang sama dengan tab Day Progress. Dua kontrol baru mengaktifkan pengingat tidur 15 detik dan mengizinkan chime saat Windows melaporkan bahwa interupsi sedang dibatasi. Pengingat dapat ditunda dengan durasi snooze Todo. Deteksi Windows memakai status notifikasi Shell, sehingga perilakunya pada setiap mode Do not disturb dan keluaran speaker masih perlu dibandingkan. Tersisa **150 dari 201 kontrol standar** tanpa padanan.
+
+Runner Windows memeriksa bahwa aturan terlambat menuntaskan tugas, pengecualian per tugas dipatuhi, snooze memakai 15 menit, dan Trash menghapus item setelah 30 hari. Runner juga menunggu jam tidur uji, melihat notch terbuka untuk menampilkan pengingat, lalu menutup pengingat dengan tombol Done. [Bukti Todo dan Day Progress](https://github.com/wawan-wfs/WFS-Poni-Lab/actions/runs/45418690234/artifacts/14935065428)
+
+Sakelar **Completion sound** pada Settings Pomodoro sekarang mengatur bunyi selesai untuk sesi Pomodoro dan Timer. Nilai awal aktif mengikuti Settings Poni 1.8.1. Rust menggunakan bunyi dua nada dan status notifikasi Shell untuk menentukan kapan bunyi dapat diputar. Perbandingan bunyi asli dan hasil pada setiap mode Do not disturb masih diperlukan. Kini **52 dari 201 kontrol standar (25,9%)** memiliki padanan setidaknya sebagian. Tersisa **149** tanpa padanan. [Tangkapan Settings Pomodoro asli](https://github.com/wawan-wfs/WFS-Poni-Lab/actions/runs/45244423357/artifacts/14854100797)
 
 | Jenis kontrol | Deklarasi | Masuk katalog build |
 | --- | ---: | ---: |

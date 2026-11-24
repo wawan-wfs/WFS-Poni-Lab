@@ -98,6 +98,7 @@
     ['pomodoro', 'Focus sessions before a long break', 'pomodoro cycle', 'pomo-cycle'],
     ['pomodoro', 'Start breaks automatically', 'pomodoro auto break', 'pomo-auto-break'],
     ['pomodoro', 'Start focus automatically after a break', 'pomodoro auto focus', 'pomo-auto-focus'],
+    ['pomodoro', 'Completion sound', 'pomodoro timer end quiet do not disturb suara selesai', 'pomo-completion-sound'],
     ['pomodoro', 'Sound while you focus', 'pomodoro background audio noise suara', 'pomo-sound'],
     ['pomodoro', 'Volume', 'pomodoro background sound audio suara', 'pomo-volume'],
     ['pomodoro', 'Keep playing in breaks', 'pomodoro background sound audio', 'pomo-break-sound'],
@@ -417,6 +418,8 @@
       { min: 2, max: 8, step: 1, source: 'pomodoro' });
     toggle(durations, 'pomo-auto-break', 'Start breaks automatically', null, 'auto_break', 'pomodoro');
     toggle(durations, 'pomo-auto-focus', 'Start focus automatically after a break', null, 'auto_focus', 'pomodoro');
+    toggle(durations, 'pomo-completion-sound', 'Completion sound',
+      'The Timer’s too. Quiet while Windows’ Do not disturb is on.', 'completion_sound', 'pomodoro');
 
     const audio = group(content, 'Background sound');
     select(audio, 'pomo-sound', 'Sound while you focus', 'Fades in when a focus session runs.',

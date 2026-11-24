@@ -28,6 +28,7 @@ mod prayer;
 mod radio;
 mod screentime;
 mod settings;
+mod sound;
 mod startup;
 mod support;
 mod teleprompter;
@@ -734,6 +735,7 @@ fn announce_timer_end(app: &tauri::AppHandle, finished: Option<bool>) {
         .title("Timer")
         .body("Time is up")
         .show();
+    sound::play_completion(app);
     if started_break {
         let _ = app.emit_to("main", "poni-pomodoro-timer-break", ());
         let state = app.state::<Mutex<Store>>();

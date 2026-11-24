@@ -285,6 +285,9 @@ try {
         Find-Setting 'keep playing in breaks'
         [System.Windows.Forms.SendKeys]::SendWait(' ')
         Start-Sleep -Seconds 2
+        Find-Setting 'completion sound'
+        [System.Windows.Forms.SendKeys]::SendWait(' ')
+        Start-Sleep -Seconds 2
         # Select the sound last because WebView2's native menu can consume the next mouse click.
         Find-Setting 'pomodoro background audio noise'
         [System.Windows.Forms.SendKeys]::SendWait('{DOWN}')
@@ -299,10 +302,11 @@ try {
             timer_then_break = $profile.settings.timer_then_break
             focus_sound = $profile.pomodoro.settings.focus_sound
             focus_sound_breaks = $profile.pomodoro.settings.focus_sound_breaks
+            completion_sound_off = ($profile.pomodoro.settings.completion_sound -eq $false)
         }
         $observed | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'pomodoro-settings.json') -Encoding UTF8
         if ($observed.cycle_length -ne 8 -or !$observed.preset_saved -or !$observed.timer_then_break -or
-            $observed.focus_sound -ne 'white' -or !$observed.focus_sound_breaks) {
+            $observed.focus_sound -ne 'white' -or !$observed.focus_sound_breaks -or !$observed.completion_sound_off) {
             throw ('Unexpected Pomodoro settings after native input: ' + ($observed | ConvertTo-Json -Compress))
         }
         if ($profile.settings.todo.trash_days -ne 30) { throw 'Todo Trash retention did not save from Settings.' }
