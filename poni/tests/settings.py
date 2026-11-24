@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -17,7 +18,8 @@ FIXTURE = """
     calendar_enabled:true, meeting_reminder_minutes:5, week_start:'windows',
     timer_presets:[], timer_remember:true, timer_then_break:false,
     panel:{ direction:'auto', top_gap:0, position:50, width:200, height:32, opacity:100,
-      expanded_width:680, expanded_height:196, tall_height:268, show_in_screenshots:true },
+      expanded_width:680, expanded_height:196, tall_height:268, show_in_screenshots:true,
+      warm_night:false, warmth:60 },
   };
   const read = () => JSON.parse(localStorage.getItem('test-settings')) || structuredClone(defaults);
   const save = value => localStorage.setItem('test-settings', JSON.stringify(value));
@@ -57,6 +59,11 @@ FIXTURE = """
         return;
       }
       if (command === 'get_poni_settings') return settings;
+      if (command === 'get_poni_daylight') return [];
+      if (command === 'preview_night_warmth') {
+        bus.postMessage({name:'poni-night-warmth-preview',payload:args.strength});
+        return;
+      }
       if (command === 'get_pomodoro_settings') return readPomodoro();
       if (command === 'pomodoro_state') return pomodoroState(readPomodoro());
       if (command === 'pomodoro_settings') {
@@ -155,6 +162,20 @@ def test_settings(page):
     settings.locator('#settings-layout-direction').select_option('ltr')
     expect(page.locator('html')).to_have_attribute('dir', 'ltr')
 
+    page.clock.set_fixed_time(datetime(2026, 11, 24, 12, tzinfo=timezone.utc))
+    settings.locator('#settings-warm-night').check()
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    surface = page.locator('#surface')
+    expect(surface).to_have_css('--ambient-tint', '0.00%')
+    settings.locator('#settings-night-warmth').fill('80')
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    expect(surface).to_have_css('--ambient-tint', '8.00%')
+    expect(surface).to_have_css('--ambient-tint', '0.00%')
+    for hour, minute, second, amount in [(18, 22, 30, '4.00%'), (23, 0, 0, '8.00%'), (6, 45, 0, '0.00%')]:
+        page.clock.set_fixed_time(datetime(2026, 11, 24, hour, minute, second, tzinfo=timezone.utc))
+        page.evaluate("window.poniNightWarmth.configure(JSON.parse(localStorage.getItem('test-settings')).panel)")
+        expect(surface).to_have_css('--ambient-tint', amount)
+
     search.fill('hover delay')
     settings.get_by_role('button', name='Hover delay', exact=False).click()
     expect(settings.locator('#settings-hover-delay')).to_be_focused()
@@ -164,6 +185,8 @@ def test_settings(page):
     expect(settings.locator('#settings-notch-top-gap')).to_have_value('24')
     expect(settings.locator('#settings-notch-position')).to_have_value('94')
     expect(settings.locator('#settings-show-in-screenshots')).not_to_be_checked()
+    expect(settings.locator('#settings-warm-night')).to_be_checked()
+    expect(settings.locator('#settings-night-warmth')).to_have_value('80')
     expect(settings.get_by_role('status')).to_have_text('Saved')
 
     settings.locator('#settings-clock-format').select_option('h24')
@@ -321,7 +344,7 @@ def main():
                 executable = which('chromium') or which('chromium-browser') or which('google-chrome')
                 options = {'executable_path': executable} if executable else {}
                 browser = playwright.chromium.launch(headless=True, args=['--no-sandbox'], **options)
-                context = browser.new_context(viewport={'width': 900, 'height': 600}, locale='en-US')
+                context = browser.new_context(viewport={'width': 900, 'height': 600}, locale='en-US', timezone_id='UTC')
                 context.set_default_timeout(7000)
                 errors = []
                 context.on('page', lambda page: page.on('pageerror', lambda error: errors.append(str(error))))

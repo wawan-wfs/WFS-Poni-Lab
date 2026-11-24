@@ -43,4 +43,6 @@ Di luar inventaris modul, Rust menyediakan sebagian perilaku Home/notch, Mirror 
 
 Settings General mengatur ukuran panel sesuai jenis modul, jarak vertikal, posisi horizontal, opasitas tertutup, arah tata letak, dan visibilitas dalam tangkapan layar Windows. Build memakai ukuran terbuka asli 680 × 196 px dengan tinggi 268 px untuk modul tinggi. Pengaturan posisi dapat diubah melalui slider dan tiga preset. Preview saat menyeret slider dan pemilihan monitor masih belum tersedia.
 
+Warna hangat malam hari berlaku pada latar notch dengan transisi 45 menit dan pratinjau intensitas. Jadwal mengikuti kota Prayer Times atau Weather. Tanpa jadwal kota, build memakai 18.00–06.00 waktu setempat.
+
 Pengujian browser menggunakan backend tiruan untuk memeriksa alur modul. Runner Windows menjalankan tes Rust, membuat build dan installer, serta memeriksa pembukaan panel melalui Alt+N dan perubahan tinggi panel saat berpindah modul. Fitur yang memerlukan perangkat, akses akun, atau layanan eksternal juga memerlukan pengujian pada kondisi tersebut.

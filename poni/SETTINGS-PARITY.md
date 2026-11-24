@@ -34,6 +34,8 @@ Pada pemeriksaan Windows, runner mengubah panjang siklus menjadi 8, menambahkan 
 
 Bagian General sekarang punya sembilan padanan tambahan untuk kontrol standar. Kontrolnya mencakup arah tata letak, jarak dari tepi atas, lebar dan tinggi notch tertutup, opasitas tertutup, lebar panel terbuka, tinggi panel biasa dan tinggi, serta visibilitas notch dalam tangkapan layar. Pengaturan posisi horizontal memakai slider dan preset kiri/tengah/kanan. Ini padanan untuk renderer kustom, sehingga tidak menambah hitungan standar. Tersisa **158 dari 201 kontrol standar** tanpa padanan. Ukuran bawaan terbuka 680 × 196 px dan tinggi modul tinggi 268 px berasal dari pengamatan Windows. Pengaturan ukuran berlaku saat nilai disimpan, sementara pratinjau saat slider diseret, drag langsung pada notch, tata letak lintas bahasa, dan pemilihan monitor masih perlu dikerjakan. [Tangkapan ukuran bawaan asli](https://github.com/wawan-wfs/WFS-Poni-Lab/actions/runs/45329941348/artifacts/14891860807)
 
+Dua kontrol tambahan, **Warmer colors at night** dan **Night warmth**, mengubah warna latar notch secara bertahap selama 45 menit. Jadwal memakai waktu terbit dan terbenam dari Open-Meteo untuk kota Prayer Times atau Weather, lalu jadwal 18.00–06.00 waktu lokal sebagai cadangan. Slider menampilkan pratinjau singkat. Warna aksen, Dock, dan pilihan tampilan notch lainnya belum tercakup. Tersisa **156 dari 201 kontrol standar** tanpa padanan. Tangkapan tambahan mengonfirmasi ukuran bawaan notch tertutup 200 × 32 px. [Tangkapan ukuran tertutup asli](https://github.com/wawan-wfs/WFS-Poni-Lab/actions/runs/45330694790/artifacts/14891024629)
+
 | Jenis kontrol | Deklarasi | Masuk katalog build |
 | --- | ---: | ---: |
 | Sakelar | 115 | 115 |

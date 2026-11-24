@@ -210,6 +210,14 @@ try {
         }
         $geometryChecked = $true
 
+        Find-Setting 'warmer colors at night'
+        [System.Windows.Forms.SendKeys]::SendWait(' ')
+        Start-Sleep -Seconds 2
+        Find-Setting 'night warmth strength'
+        [System.Windows.Forms.SendKeys]::SendWait('{END}')
+        Start-Sleep -Milliseconds 750
+        Save-Screen 'settings-notch-warmth.png'
+
         Find-Setting 'stop counting after idle'
         [System.Windows.Forms.SendKeys]::SendWait('{END}')
         Start-Sleep -Seconds 2
@@ -223,7 +231,11 @@ try {
             Select-Object -Unique
         $dataPath = $dataPaths | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
         if (!$dataPath) { throw 'Screen Time changes did not create the application profile.' }
-        $screenTime = (Get-Content -Raw -LiteralPath $dataPath | ConvertFrom-Json).screen_time
+        $savedSettings = Get-Content -Raw -LiteralPath $dataPath | ConvertFrom-Json
+        if (!$savedSettings.settings.panel.warm_night -or $savedSettings.settings.panel.warmth -ne 100) {
+            throw 'The night warmth controls did not save the enabled state and strength.'
+        }
+        $screenTime = $savedSettings.screen_time
         if ($screenTime.idle_seconds -ne 600 -or @($screenTime.excluded_apps) -notcontains 'notepad.exe') {
             throw 'Screen Time did not save the idle limit and excluded executable.'
         }

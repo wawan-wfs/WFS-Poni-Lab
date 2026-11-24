@@ -30,6 +30,7 @@ mod settings;
 mod support;
 mod teleprompter;
 mod translate;
+mod warmth;
 
 #[derive(Clone, Serialize, Deserialize)]
 struct Task {
@@ -486,17 +487,20 @@ async fn weather_forecast(location: WeatherLocation) -> Result<Forecast, String>
 
 #[tauri::command]
 fn set_weather_location(
+    app: tauri::AppHandle,
     store: State<'_, Mutex<Store>>,
     location: WeatherLocation,
 ) -> Result<AppData, String> {
     location.validate()?;
-    store
+    let result = store
         .lock()
         .map_err(|_| "Storage unavailable")?
         .update(|data| {
             data.weather_location = Some(location);
             Ok(())
-        })
+        })?;
+    let _ = app.emit_to("main", "poni-daylight-location-changed", ());
+    Ok(result)
 }
 
 fn validate_world_clocks(places: &[WorldPlace]) -> Result<(), String> {
@@ -1259,6 +1263,8 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             settings::get_poni_settings,
+            warmth::get_poni_daylight,
+            warmth::preview_night_warmth,
             open_poni_settings,
             show_poni_module,
             calendar_first_weekday,

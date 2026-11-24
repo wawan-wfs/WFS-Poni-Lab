@@ -70,6 +70,8 @@
     ['general', 'Expanded width', 'notch expanded width lebar terbuka', 'expanded-width'],
     ['general', 'Expanded height', 'notch expanded height biasa', 'expanded-height'],
     ['general', 'Expanded height (tall modules)', 'notch expanded height tall tinggi modul', 'tall-height'],
+    ['general', 'Warmer colors at night', 'sunset blue light malam warna hangat', 'warm-night'],
+    ['general', 'Night warmth', 'strength colour preview opasitas malam', 'night-warmth'],
     ['modules', 'Open this module by default', 'initial page', 'default-module'],
     ['modules', 'Remember the last module', 'startup restore last tab', 'remember-module'],
     ['mirror', 'Show the Mirror on Home', 'camera webcam local video', 'mirror-enabled'],
@@ -211,7 +213,7 @@
     row(container, title, description, input);
   }
 
-  function range(container, id, title, key, { min = 0, max, step, disabled = false, unit, spokenUnit, description, source, physical = false }) {
+  function range(container, id, title, key, { min = 0, max, step, disabled = false, unit, spokenUnit, description, source, physical = false, preview }) {
     const box = create('span', 'settings-range');
     const input = create('input');
     const output = create('span', 'settings-range-value');
@@ -229,7 +231,10 @@
       if (spokenUnit) input.setAttribute('aria-valuetext', input.value + ' ' + spokenUnit);
     };
     showValue();
-    input.addEventListener('input', showValue);
+    input.addEventListener('input', () => {
+      showValue();
+      if (preview) preview(input.valueAsNumber);
+    });
     input.addEventListener('change', () => void change({ [key]: Number(input.value) }, id, source));
     box.append(input, output);
     row(container, title, description, box);
@@ -282,6 +287,16 @@
     range(size, 'expanded-height', 'Expanded height', 'expanded_height', { ...pixels, min: 170, max: 260, step: 2 });
     range(size, 'tall-height', 'Expanded height (tall modules)', 'tall_height',
       { ...pixels, min: 220, max: 340, step: 2 });
+
+    const colors = group(content, 'Colors');
+    toggle(colors, 'warm-night', 'Warmer colors at night',
+      'Poni’s background warms gradually after sunset and returns to its daytime color at sunrise.',
+      'warm_night', 'panel');
+    range(colors, 'night-warmth', 'Night warmth', 'warmth', {
+      min: 10, max: 100, step: 5, unit: '%', spokenUnit: 'percent', source: 'panel',
+      preview: strength => void window.__TAURI__.core.invoke('preview_night_warmth', { strength })
+        .catch(error => { banner.textContent = String(error); }),
+    });
   }
 
   function mirror(content) {

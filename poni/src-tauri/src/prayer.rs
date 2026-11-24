@@ -1,11 +1,11 @@
 use super::{weather_client, AppData, Store, WeatherLocation};
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 
 #[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct PrayerSettings {
-    location: WeatherLocation,
+    pub(super) location: WeatherLocation,
     method: u8,
     school: u8,
 }
@@ -82,17 +82,20 @@ fn provider_date(date: &str) -> Result<String, String> {
 
 #[tauri::command]
 pub(crate) fn set_prayer_settings(
+    app: AppHandle,
     store: State<'_, Mutex<Store>>,
     settings: PrayerSettings,
 ) -> Result<AppData, String> {
     settings.validate()?;
-    store
+    let result = store
         .lock()
         .map_err(|_| "Storage unavailable")?
         .update(|data| {
             data.prayer_settings = Some(settings);
             Ok(())
-        })
+        })?;
+    let _ = app.emit_to("main", "poni-daylight-location-changed", ());
+    Ok(result)
 }
 
 #[tauri::command]

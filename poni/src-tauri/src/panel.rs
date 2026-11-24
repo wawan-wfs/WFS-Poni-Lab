@@ -23,6 +23,8 @@ pub(super) struct Preferences {
     tall_height: u16,
     opacity: u16,
     pub(super) show_in_screenshots: bool,
+    warm_night: bool,
+    warmth: u16,
 }
 
 impl Default for Preferences {
@@ -38,6 +40,8 @@ impl Default for Preferences {
             tall_height: 268,
             opacity: 100,
             show_in_screenshots: true,
+            warm_night: false,
+            warmth: 60,
         }
     }
 }
@@ -55,6 +59,8 @@ pub(super) struct Patch {
     tall_height: Option<u16>,
     opacity: Option<u16>,
     show_in_screenshots: Option<bool>,
+    warm_night: Option<bool>,
+    warmth: Option<u16>,
 }
 
 impl Preferences {
@@ -68,6 +74,7 @@ impl Preferences {
             ("expanded height", patch.expanded_height, 170, 260, 2),
             ("tall height", patch.tall_height, 220, 340, 2),
             ("opacity", patch.opacity, 20, 100, 5),
+            ("night warmth", patch.warmth, 10, 100, 5),
         ] {
             if value.is_some_and(|value| {
                 !(minimum..=maximum).contains(&value) || (value - minimum) % step != 0
@@ -87,6 +94,8 @@ impl Preferences {
         self.show_in_screenshots = patch
             .show_in_screenshots
             .unwrap_or(self.show_in_screenshots);
+        self.warm_night = patch.warm_night.unwrap_or(self.warm_night);
+        self.warmth = patch.warmth.unwrap_or(self.warmth);
         Ok(())
     }
 

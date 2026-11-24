@@ -92,6 +92,7 @@ function applyPreferences(value) {
   surface.style.setProperty('--notch-width', panel.width + 'px');
   surface.style.setProperty('--notch-height', panel.height + 'px');
   surface.style.setProperty('--notch-opacity', String(panel.opacity / 100));
+  window.poniNightWarmth.configure(panel);
   if (['top_gap', 'position', 'width', 'height', 'expanded_width', 'expanded_height', 'tall_height',
     'show_in_screenshots'].some(key => previous.panel[key] !== panel[key])) {
     updatePanelSize(!open.hidden);
