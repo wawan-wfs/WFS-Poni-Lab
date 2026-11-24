@@ -53,6 +53,8 @@ struct Task {
     #[serde(default)]
     auto_done: bool,
     #[serde(default)]
+    note_id: Option<Uuid>,
+    #[serde(default)]
     repeat: Option<TaskRepeat>,
     #[serde(default)]
     repeated: bool,
@@ -584,6 +586,7 @@ fn add_task(
                 notified_due_at_ms: None,
                 late_minutes,
                 auto_done: false,
+                note_id: None,
                 repeat,
                 repeated: false,
                 steps: Vec::new(),
@@ -1388,6 +1391,8 @@ fn main() {
             todo::change_task_trash,
             todo::snooze_task,
             todo::get_todo_state,
+            todo::set_task_note,
+            notes::note_choices,
             notes::notes_get,
             notes::notes_save,
             notes::notes_delete,
@@ -1429,6 +1434,7 @@ mod tests {
             notified_due_at_ms: Some(first_due),
             late_minutes: None,
             auto_done: false,
+            note_id: None,
             repeat: Some(schedule),
             repeated: false,
             steps: vec![TaskStep {
@@ -1513,6 +1519,7 @@ mod tests {
                     notified_due_at_ms: None,
                     late_minutes: None,
                     auto_done: false,
+                    note_id: None,
                     repeat: None,
                     repeated: false,
                     steps: Vec::new(),
@@ -1618,6 +1625,7 @@ mod tests {
             notified_due_at_ms: None,
             late_minutes: None,
             auto_done: false,
+            note_id: None,
             repeat: None,
             repeated: false,
             steps: Vec::new(),

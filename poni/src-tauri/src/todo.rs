@@ -256,6 +256,29 @@ pub(super) fn get_todo_state(store: State<'_, Mutex<Store>>) -> Result<Snapshot,
     })
 }
 
+#[tauri::command]
+pub(super) fn set_task_note(
+    store: State<'_, Mutex<Store>>,
+    id: Uuid,
+    note_id: Option<Uuid>,
+) -> Result<AppData, String> {
+    store
+        .lock()
+        .map_err(|_| "Storage unavailable")?
+        .update(|data| {
+            if note_id.is_some_and(|id| !data.notes.iter().any(|note| note.id == id)) {
+                return Err("The note is no longer available".into());
+            }
+            let task = data
+                .tasks
+                .iter_mut()
+                .find(|task| task.id == id)
+                .ok_or("Task not found")?;
+            task.note_id = note_id;
+            Ok(())
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -4,12 +4,12 @@ use std::{
     sync::Mutex,
     time::{SystemTime, UNIX_EPOCH},
 };
-use tauri::State;
+use tauri::{AppHandle, Emitter, State};
 use uuid::Uuid;
 
 #[derive(Clone, Deserialize, Serialize)]
 pub(super) struct Note {
-    id: Uuid,
+    pub(super) id: Uuid,
     text: String,
     #[serde(default)]
     updated_at: Option<u64>,
@@ -67,6 +67,34 @@ pub(super) fn notes_get(store: State<'_, Mutex<Store>>) -> Result<Vec<Note>, Str
     Ok(store.data.notes.clone())
 }
 
+#[derive(Serialize)]
+pub(super) struct NoteChoice {
+    id: Uuid,
+    title: String,
+}
+
+#[tauri::command]
+pub(super) fn note_choices(store: State<'_, Mutex<Store>>) -> Result<Vec<NoteChoice>, String> {
+    let store = store.lock().map_err(|_| "Storage unavailable")?;
+    Ok(store
+        .data
+        .notes
+        .iter()
+        .map(|note| NoteChoice {
+            id: note.id,
+            title: note
+                .text
+                .lines()
+                .map(str::trim)
+                .find(|line| !line.is_empty())
+                .unwrap_or("Untitled")
+                .chars()
+                .take(120)
+                .collect(),
+        })
+        .collect())
+}
+
 #[tauri::command]
 pub(super) fn notes_save(
     store: State<'_, Mutex<Store>>,
@@ -82,14 +110,32 @@ pub(super) fn notes_save(
 }
 
 #[tauri::command]
-pub(super) fn notes_delete(store: State<'_, Mutex<Store>>, id: Uuid) -> Result<(), String> {
+pub(super) fn notes_delete(
+    app: AppHandle,
+    store: State<'_, Mutex<Store>>,
+    id: Uuid,
+) -> Result<(), String> {
+    let mut links_changed = false;
     store
         .lock()
         .map_err(|_| "Storage unavailable")?
         .update(|data| {
             data.notes.retain(|note| note.id != id);
+            for task in data
+                .tasks
+                .iter_mut()
+                .chain(data.trashed_tasks.iter_mut().map(|item| &mut item.task))
+            {
+                if task.note_id == Some(id) {
+                    task.note_id = None;
+                    links_changed = true;
+                }
+            }
             Ok(())
         })?;
+    if links_changed {
+        let _ = app.emit_to("main", "poni-todo-changed", ());
+    }
     Ok(())
 }
 

@@ -74,6 +74,9 @@ with sync_playwright() as pw:
           task.due_at_ms = Date.now() + 600000;
           task.notified_due_at_ms = null;
         }
+        if (command === 'note_choices') return JSON.parse(localStorage.getItem('notes-parity-fixture') || '[]')
+          .map(note => ({id:note.id, title:note.text.split('\\n')[0]}));
+        if (command === 'set_task_note') data.tasks.find(t => t.id === args.id).note_id = args.noteId;
         if (command === 'timer_action') {
           if (args.action === 'start') { if (args.minutes) data.timer.total_ms = data.timer.remaining_ms = args.minutes * 60000; data.timer.ends_at_ms = Date.now() + data.timer.remaining_ms; }
           if (args.action === 'pause') { data.timer.remaining_ms = Math.max(0, data.timer.ends_at_ms - Date.now()); data.timer.ends_at_ms = null; }
@@ -244,6 +247,19 @@ with sync_playwright() as pw:
     page.locator('#task-submit').click()
     expect(page.get_by_text('Call mom in 15 minutes', exact=True)).to_be_visible()
     test_notes(page)
+    page.locator('[data-page="tasks"]').click()
+    page.get_by_role('button', name='Steps for Rapat', exact=True).click()
+    card = page.locator('.task-card').filter(has_text='Rapat').first
+    card.get_by_role('button', name='Link note', exact=True).click()
+    card.get_by_role('combobox', name='Note for Rapat').select_option(label='Science')
+    card.get_by_role('button', name='Open linked note').click()
+    expect(page.locator('#page-notes').get_by_role('textbox', name='Note', exact=True)).to_have_value(
+        'Science\nEarth :: Planet\nMoon :: Satellite'
+    )
+    page.locator('[data-page="tasks"]').click()
+    card.get_by_role('button', name='Change linked note').click()
+    card.get_by_role('combobox', name='Note for Rapat').select_option('')
+    expect(card.get_by_role('button', name='Open linked note')).to_have_count(0)
     page.locator('[data-page="timer"]').click()
     page.locator('#timer-minutes').fill('5')
     page.locator('#timer-start').click()

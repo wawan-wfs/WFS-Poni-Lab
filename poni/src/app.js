@@ -722,6 +722,49 @@ function taskStepsPanel(task, steps) {
   const panel = document.createElement('div');
   panel.className = 'task-steps';
   panel.hidden = !expandedTasks.has(task.id);
+  const links = document.createElement('div');
+  links.className = 'task-note';
+  const list = document.createElement('select');
+  list.setAttribute('aria-label', `Note for ${task.text}`);
+  list.hidden = true;
+  list.addEventListener('change', () => {
+    void mutate('set_task_note', {id:task.id, noteId:list.value || null});
+  });
+  if (task.note_id) {
+    links.append(action('Open linked note', async () => {
+      if (!selectModule('notes')) {
+        status.textContent = 'Enable Notes in Settings to open this note.';
+        return;
+      }
+      if (!await modules.notes?.openNote(task.note_id)) status.textContent = 'The note is no longer available.';
+    }));
+  }
+  const link = action(task.note_id ? 'Change linked note' : 'Link note', async () => {
+    if (!list.hidden) {
+      list.hidden = true;
+      return;
+    }
+    link.disabled = true;
+    try {
+      const available = await invoke('note_choices');
+      list.replaceChildren(new Option(task.note_id ? 'Unlink note' : 'Choose a note', ''));
+      if (!task.note_id) list.firstElementChild.disabled = true;
+      for (const note of available) list.add(new Option(note.title, note.id));
+      list.value = task.note_id ?? '';
+      if (!available.length && !task.note_id) {
+        status.textContent = 'Create a note before linking it to a task.';
+        return;
+      }
+      list.hidden = false;
+      list.focus();
+    } catch (error) {
+      status.textContent = String(error);
+    } finally {
+      link.disabled = false;
+    }
+  });
+  links.append(link, list);
+  panel.append(links);
   for (const step of steps) {
     const row = document.createElement('div');
     row.className = 'task-step';

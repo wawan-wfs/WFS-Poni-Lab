@@ -493,5 +493,14 @@
     return ready;
   }
 
-  modules.notes = { mount, show, hide: flush };
+  async function openNote(id) {
+    await show();
+    if (!notes.has(id)) return false;
+    setMode('notes');
+    element('.nt-search').value = '';
+    select(id);
+    return true;
+  }
+
+  modules.notes = { mount, show, hide: flush, openNote };
 })();
