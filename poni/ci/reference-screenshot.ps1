@@ -146,6 +146,9 @@ public static class PoniPointer {
                     # The original's search opens the first match when Enter is pressed.
                     # Use distinct labels for pages farther down the 1024x768 sidebar.
                     $settingsSearches = [ordered]@{
+                        'notch-size' = 'expanded height tall modules'
+                        'notch-opacity' = 'opacity when closed'
+                        'notch-position' = 'gap from the top edge'
                         screentime = 'Track screen time'
                         'day-progress' = 'Remind me at bedtime'
                         health = 'Track health'
