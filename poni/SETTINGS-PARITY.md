@@ -36,6 +36,8 @@ Bagian General sekarang punya sembilan padanan tambahan untuk kontrol standar. K
 
 Dua kontrol tambahan, **Warmer colors at night** dan **Night warmth**, mengubah warna latar notch secara bertahap selama 45 menit. Jadwal memakai waktu terbit dan terbenam dari Open-Meteo untuk kota Prayer Times atau Weather, lalu jadwal 18.00–06.00 waktu lokal sebagai cadangan. Slider menampilkan pratinjau singkat. Warna aksen, Dock, dan pilihan tampilan notch lainnya belum tercakup. Tersisa **156 dari 201 kontrol standar** tanpa padanan. Tangkapan tambahan mengonfirmasi ukuran bawaan notch tertutup 200 × 32 px. [Tangkapan ukuran tertutup asli](https://github.com/wawan-wfs/WFS-Poni-Lab/actions/runs/45330694790/artifacts/14891024629)
 
+**Launch at login** membaca dan mengubah entri per pengguna untuk Poni Rebuild di startup Windows. Entri dibuat setelah sakelar diaktifkan pengguna dan dihapus saat dimatikan. Tersisa **155 dari 201 kontrol standar** tanpa padanan.
+
 | Jenis kontrol | Deklarasi | Masuk katalog build |
 | --- | ---: | ---: |
 | Sakelar | 115 | 115 |

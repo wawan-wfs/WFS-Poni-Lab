@@ -59,6 +59,11 @@ FIXTURE = """
         return;
       }
       if (command === 'get_poni_settings') return settings;
+      if (command === 'get_poni_startup') return localStorage.getItem('test-launch-at-login') === 'true';
+      if (command === 'set_poni_startup') {
+        localStorage.setItem('test-launch-at-login', args.enabled);
+        return args.enabled;
+      }
       if (command === 'get_poni_daylight') return [];
       if (command === 'preview_night_warmth') {
         bus.postMessage({name:'poni-night-warmth-preview',payload:args.strength});
@@ -161,6 +166,8 @@ def test_settings(page):
     expect(popup.locator('html')).to_have_attribute('dir', 'rtl')
     settings.locator('#settings-layout-direction').select_option('ltr')
     expect(page.locator('html')).to_have_attribute('dir', 'ltr')
+    settings.locator('#settings-launch-at-login').check()
+    expect(settings.get_by_role('status')).to_have_text('Saved')
 
     page.clock.set_fixed_time(datetime(2026, 11, 24, 12, tzinfo=timezone.utc))
     settings.locator('#settings-warm-night').check()
@@ -187,6 +194,9 @@ def test_settings(page):
     expect(settings.locator('#settings-show-in-screenshots')).not_to_be_checked()
     expect(settings.locator('#settings-warm-night')).to_be_checked()
     expect(settings.locator('#settings-night-warmth')).to_have_value('80')
+    expect(settings.locator('#settings-launch-at-login')).to_be_checked()
+    settings.locator('#settings-launch-at-login').uncheck()
+    expect(settings.get_by_role('status')).to_have_text('Saved')
     expect(settings.get_by_role('status')).to_have_text('Saved')
 
     settings.locator('#settings-clock-format').select_option('h24')

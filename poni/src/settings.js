@@ -61,6 +61,7 @@
     ['general', 'Close delay', 'dismiss mouse milliseconds', 'close-delay'],
     ['general', 'Switch tabs with ← / →', 'arrows keyboard shortcuts', 'module-shortcuts'],
     ['general', 'Layout direction', 'right left rtl ltr writing arah tata letak', 'layout-direction'],
+    ['general', 'Launch at login', 'windows startup sign in otomatis mulai masuk', 'launch-at-login'],
     ['general', 'Position along the top', 'notch position left centre right posisi', 'notch-position'],
     ['general', 'Gap from the top edge', 'notch position floating distance jarak atas', 'notch-top-gap'],
     ['general', 'Show Poni in screenshots & recordings', 'share capture protection privacy rekaman', 'show-in-screenshots'],
@@ -113,6 +114,7 @@
   let settings = null;
   let screenTime = null;
   let pomo = null;
+  let launchAtLogin = null;
   let active = 'general';
   let busy = false;
   let loading = false;
@@ -138,6 +140,8 @@
     try {
       if (source === 'screenTime') {
         screenTime = await window.__TAURI__.core.invoke('set_screentime_preferences', { patch });
+      } else if (source === 'startup') {
+        launchAtLogin = await window.__TAURI__.core.invoke('set_poni_startup', { enabled: patch.launch_at_login });
       } else if (source === 'pomodoro') {
         const timer = await window.__TAURI__.core.invoke('pomodoro_settings', { settings: patch });
         pomo = timer.settings;
@@ -191,14 +195,16 @@
   function values(source) {
     if (source === 'pomodoro') return pomo;
     if (source === 'panel') return settings.panel;
+    if (source === 'startup') return { launch_at_login: launchAtLogin };
     return active === 'screentime' ? screenTime : settings;
   }
 
-  function toggle(container, id, title, description, key, source) {
+  function toggle(container, id, title, description, key, source, disabled = false) {
     const input = create('input', 'settings-switch');
     input.id = 'settings-' + id;
     input.type = 'checkbox';
     input.checked = values(source)[key];
+    input.disabled = disabled;
     input.addEventListener('change', () => void change({ [key]: input.checked }, id, source));
     row(container, title, description, input);
   }
@@ -248,6 +254,9 @@
     const display = group(content, 'Display');
     select(display, 'layout-direction', 'Layout direction', null, 'direction',
       [['auto', 'Follow the language'], ['ltr', 'Left to right'], ['rtl', 'Right to left']], false, 'panel');
+    toggle(display, 'launch-at-login', 'Launch at login',
+      launchAtLogin == null ? 'Startup settings are unavailable.' : 'Open Poni when you sign in to Windows.',
+      'launch_at_login', 'startup', launchAtLogin == null);
     range(display, 'notch-position', 'Position along the top', 'position',
       { max: 100, step: 1, unit: '%', spokenUnit: 'percent', source: 'panel', physical: true });
     const positions = create('div', 'settings-position-presets');
@@ -579,8 +588,9 @@
     updateBusy();
     try {
       const invoke = window.__TAURI__.core.invoke;
-      [settings, screenTime, pomo] = await Promise.all([
+      [settings, screenTime, pomo, launchAtLogin] = await Promise.all([
         invoke('get_poni_settings'), invoke('get_screentime_preferences'), invoke('get_pomodoro_settings'),
+        invoke('get_poni_startup').catch(() => null),
       ]);
       broadcast();
     } catch (error) {

@@ -27,6 +27,7 @@ mod prayer;
 mod radio;
 mod screentime;
 mod settings;
+mod startup;
 mod support;
 mod teleprompter;
 mod translate;
@@ -1263,6 +1264,8 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             settings::get_poni_settings,
+            startup::get_poni_startup,
+            startup::set_poni_startup,
             warmth::get_poni_daylight,
             warmth::preview_night_warmth,
             open_poni_settings,

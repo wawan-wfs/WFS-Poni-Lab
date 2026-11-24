@@ -210,6 +210,20 @@ try {
         }
         $geometryChecked = $true
 
+        Find-Setting 'launch at login'
+        [System.Windows.Forms.SendKeys]::SendWait(' ')
+        Start-Sleep -Seconds 2
+        $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
+        $startupCommand = Get-ItemPropertyValue -LiteralPath $runKey -Name 'Poni Rebuild' -ErrorAction SilentlyContinue
+        [System.Windows.Forms.SendKeys]::SendWait(' ')
+        Start-Sleep -Seconds 2
+        $startupAfterDisable = Get-ItemPropertyValue -LiteralPath $runKey -Name 'Poni Rebuild' -ErrorAction SilentlyContinue
+        if ($startupCommand -ne ('"{0}"' -f $exe) -or $null -ne $startupAfterDisable) {
+            throw 'Launch at login did not enable and disable the expected Windows startup entry.'
+        }
+        @{ registered = $true; removed = $true } |
+            ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'startup-settings.json') -Encoding UTF8
+
         Find-Setting 'warmer colors at night'
         [System.Windows.Forms.SendKeys]::SendWait(' ')
         Start-Sleep -Seconds 2

@@ -45,4 +45,6 @@ Settings General mengatur ukuran panel sesuai jenis modul, jarak vertikal, posis
 
 Warna hangat malam hari berlaku pada latar notch dengan transisi 45 menit dan pratinjau intensitas. Jadwal mengikuti kota Prayer Times atau Weather. Tanpa jadwal kota, build memakai 18.00–06.00 waktu setempat.
 
+Launch at login memakai entri startup Windows untuk pengguna yang menjalankan Poni Rebuild. Pengguna dapat mengaktifkan dan menghapus entri itu dari General.
+
 Pengujian browser menggunakan backend tiruan untuk memeriksa alur modul. Runner Windows menjalankan tes Rust, membuat build dan installer, serta memeriksa pembukaan panel melalui Alt+N dan perubahan tinggi panel saat berpindah modul. Fitur yang memerlukan perangkat, akses akun, atau layanan eksternal juga memerlukan pengujian pada kondisi tersebut.
