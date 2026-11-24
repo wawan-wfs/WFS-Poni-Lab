@@ -139,6 +139,7 @@ function applyPreferences(value) {
   document.querySelector('#header-clock').hidden = !preferences.header_clock;
   document.querySelector('#home-calendar').hidden = !preferences.calendar_enabled;
   window.poniMirror?.configure({enabled:preferences.mirror_enabled, shape:preferences.mirror_shape});
+  window.poniBattery?.configure(preferences.battery);
   window.poniModules?.health?.configure(preferences.health);
   if (!preferences.bedtime_reminder && bedtimeNotice) showBedtime(null);
   if (preferences.health?.enabled === false && healthNotice) showHealthNotice(null);
@@ -177,6 +178,7 @@ invoke('calendar_first_weekday').then(day => {
 }).catch(error => { status.textContent = String(error); });
 
 window.poniMirror?.mount(document.querySelector('#mirror'));
+window.poniBattery?.listen().catch(error => { status.textContent = String(error); });
 window.poniFocusPlayback.listen().catch(error => { status.textContent = String(error); });
 window.__TAURI__.event.listen('poni-settings-changed', event => applyPreferences(event.payload))
   .catch(error => { status.textContent = String(error); });

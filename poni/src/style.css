@@ -7,6 +7,20 @@ button { color: inherit; cursor: pointer; }
 .surface { position: absolute; inset: 0; }
 .closed { display: block; width: min(100%, var(--notch-width, 200px)); height: min(100%, var(--notch-height, 32px)); margin: 0 auto; border: 0; border-radius: 0 0 17px 17px; background: #000; font-weight: 700; opacity: var(--notch-opacity, 1); }
 .closed:hover, .closed:focus-visible { opacity: 1; }
+.closed { position: relative; }
+.battery-indicator { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-variant-numeric: tabular-nums; color: #f2f2f5; }
+.battery-plugged { color: #30d158; }
+.battery-low { color: #ff453a; }
+.battery-saver:not(.battery-low) { color: #ffd60a; }
+.closed .battery-indicator { position: absolute; inset-inline-end: 11px; inset-block-start: 50%; transform: translateY(-50%); }
+.closed.has-battery { padding-inline: 5px 58px; }
+.battery-icon { position: relative; display: block; width: 18px; height: 9px; border: 1px solid currentColor; border-radius: 3px; background: linear-gradient(to right, currentColor 0 var(--level), transparent var(--level)) content-box; padding: 1px; }
+.battery-icon::after { content: ""; position: absolute; inset-inline-start: calc(100% + 1px); inset-block: 2px; width: 2px; background: currentColor; border-radius: 0 2px 2px 0; }
+.battery-ring .battery-icon { width: 12px; height: 12px; border: none; padding: 0; border-radius: 50%; background: conic-gradient(currentColor 0 var(--level), #45454a var(--level)); }
+.battery-ring .battery-icon::after { inset: 2px; width: auto; border-radius: 50%; background: #0c0c0d; }
+.battery-alert #battery-activity { animation: battery-reveal .25s ease-out; white-space: nowrap; }
+@keyframes battery-reveal { from { opacity: 0; transform: translateY(2px); } }
+@media (prefers-reduced-motion: reduce) { .battery-alert #battery-activity { animation: none; } }
 .open { position: absolute; inset: 0; display: flex; flex-direction: column; background: #000; border-radius: 0 0 27px 27px; padding: 8px 18px 13px; overflow: hidden; }
 .surface .closed, .surface .open { background: color-mix(in srgb, #000, #ff8f3d var(--ambient-tint, 0%)); }
 .floating .closed { border-radius: 999px; }

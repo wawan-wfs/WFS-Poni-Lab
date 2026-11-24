@@ -39,6 +39,7 @@
       { id: 'notifications', title: 'Notifications', icon: '♧', color: 'red', link: 'notifs',
         hint: 'View or clear notifications saved by Poni.' },
       { id: 'mirror', title: 'Mirror', icon: '●', color: 'purple' },
+      { id: 'battery', title: 'Battery', icon: '▣', color: 'green' },
       { id: 'dock', title: 'Dock', icon: '▭', color: 'blue',
         hint: 'Dock settings will be available when the Dock is implemented.' },
       { id: 'buddy', title: 'Buddy', icon: '♢', color: 'orange',
@@ -98,6 +99,11 @@
     ['modules', 'Remember the last module', 'startup restore last tab', 'remember-module'],
     ['mirror', 'Show the Mirror on Home', 'camera webcam local video', 'mirror-enabled'],
     ['mirror', 'Mirror shape', 'rounded circle camera', 'mirror-shape'],
+    ['battery', 'Show battery', 'battery indicator tampilkan baterai', 'battery-enabled'],
+    ['battery', 'Show percentage', 'battery level persentase baterai', 'battery-percentage'],
+    ['battery', 'Icon', 'battery bar ring icon', 'battery-icon'],
+    ['battery', 'Charging animation', 'battery plugged unplugged charger', 'battery-charging-activity'],
+    ['battery', 'Low battery warning at', 'battery low threshold daya rendah', 'battery-threshold'],
     ['calendar', 'Show calendar', 'calendar visibility home kalender', 'calendar-enabled'],
     ['calendar', 'Meeting reminder', 'calendar notification event minutes pertemuan pengingat', 'meeting-reminder'],
     ['calendar', 'Week starts on', 'calendar first day monday sunday minggu senin awal pekan', 'week-start'],
@@ -136,6 +142,7 @@
   let settings = null;
   let screenTime = null;
   let pomo = null;
+  let batteryStatus = null;
   let launchAtLogin = null;
   let daySchedule = null;
   let active = 'general';
@@ -175,7 +182,7 @@
           window.poniFocusPlayback.previewSettings(timer);
         }
       } else {
-        const update = ['panel', 'todo', 'health'].includes(source) ? { [source]: patch } : patch;
+        const update = ['panel', 'todo', 'health', 'battery'].includes(source) ? { [source]: patch } : patch;
         settings = await window.__TAURI__.core.invoke('set_poni_settings', { patch: update });
         broadcast();
       }
@@ -220,7 +227,7 @@
 
   function values(source) {
     if (source === 'pomodoro') return pomo;
-    if (['panel', 'todo', 'health'].includes(source)) return settings[source];
+    if (['panel', 'todo', 'health', 'battery'].includes(source)) return settings[source];
     if (source === 'startup') return { launch_at_login: launchAtLogin };
     return active === 'screentime' ? screenTime : settings;
   }
@@ -343,6 +350,36 @@
       'Open the Mirror from Home to preview your camera.', 'mirror_enabled');
     select(controls, 'mirror-shape', 'Mirror shape', null, 'mirror_shape',
       [['rounded', 'Rounded'], ['circle', 'Circle']], !settings.mirror_enabled);
+  }
+
+  function battery(content) {
+    const controls = group(content);
+    toggle(controls, 'battery-enabled', 'Show battery', null, 'enabled', 'battery');
+    toggle(controls, 'battery-percentage', 'Show percentage',
+      'Next to the battery icon in the open and closed Poni.', 'show_percentage', 'battery');
+    select(controls, 'battery-icon', 'Icon', null, 'icon',
+      [['bar', 'Bar'], ['ring', 'Ring']], false, 'battery');
+    toggle(controls, 'battery-charging-activity', 'Charging animation',
+      'When you plug in or unplug the charger.', 'charging_activity', 'battery');
+    range(controls, 'battery-threshold', 'Low battery warning at', 'low_threshold',
+      { min: 5, max: 50, step: 1, unit: '%', spokenUnit: 'percent', source: 'battery' });
+    const details = create('p', 'settings-lead');
+    details.id = 'battery-details';
+    content.append(details);
+    paintBattery();
+  }
+
+  function paintBattery() {
+    const details = document.querySelector('#battery-details');
+    if (!details) return;
+    if (typeof batteryStatus?.charging !== 'boolean') {
+      details.textContent = 'No battery detected. The battery indicator stays hidden.';
+      return;
+    }
+    const level = batteryStatus.percent == null ? 'Battery level unavailable' : `Battery: ${batteryStatus.percent}%`;
+    const source = batteryStatus.plugged_in == null ? 'power source unavailable'
+      : batteryStatus.plugged_in ? 'plugged in' : 'on battery';
+    details.textContent = `${level} · ${source}${batteryStatus.saver ? ' · battery saver on' : ''}`;
   }
 
   function todo(content) {
@@ -668,6 +705,7 @@
         else if (active === 'dayprogress' && daySchedule) dayProgress(controls);
         else if (active === 'health' && settings.health) health(controls);
         else if (active === 'mirror') mirror(controls);
+        else if (active === 'battery' && settings.battery) battery(controls);
         else if (active === 'calendar') calendar(controls);
         else if (active === 'screentime' && screenTime) screenTimeControls(controls);
         else if (active === 'pomodoro' && pomo) pomodoroControls(controls);
@@ -685,10 +723,11 @@
     updateBusy();
     try {
       const invoke = window.__TAURI__.core.invoke;
-      [settings, screenTime, pomo, launchAtLogin, daySchedule] = await Promise.all([
+      [settings, screenTime, pomo, launchAtLogin, daySchedule, batteryStatus] = await Promise.all([
         invoke('get_poni_settings'), invoke('get_screentime_preferences'), invoke('get_pomodoro_settings'),
         invoke('get_poni_startup').catch(() => null),
         invoke('get_day_schedule').catch(() => null),
+        invoke('get_battery').catch(() => null),
       ]);
       broadcast();
     } catch (error) {
@@ -736,6 +775,10 @@
     window.__TAURI__.event.listen('poni-day-schedule-changed', event => {
       daySchedule = event.payload;
       if (active === 'dayprogress' && !busy && !loading) render(true);
+    }).catch(error => { banner.textContent = String(error); });
+    window.__TAURI__.event.listen('poni-battery-changed', event => {
+      batteryStatus = event.payload;
+      paintBattery();
     }).catch(error => { banner.textContent = String(error); });
     window.__TAURI__.event.listen('poni-screentime-changed', event => {
       screenTime = event.payload;

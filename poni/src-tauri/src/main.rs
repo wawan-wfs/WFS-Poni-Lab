@@ -10,6 +10,7 @@ use uuid::Uuid;
 
 mod activity;
 mod aiusage;
+mod battery;
 mod bedtime;
 mod bluetooth;
 mod bookmarks;
@@ -1334,6 +1335,8 @@ fn main() {
                 app.global_shortcut().register("Alt+N").is_ok(),
             ));
             let handle = app.handle().clone();
+            let power_handle = handle.clone();
+            std::thread::spawn(move || battery::monitor(power_handle));
             std::thread::spawn(move || loop {
                 if let Ok(now) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
                 {
@@ -1352,6 +1355,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             settings::get_poni_settings,
+            battery::get_battery,
             startup::get_poni_startup,
             startup::set_poni_startup,
             warmth::get_poni_daylight,

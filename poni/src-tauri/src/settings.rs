@@ -1,4 +1,4 @@
-use crate::{health, panel, todo, Store};
+use crate::{battery, health, panel, todo, Store};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, sync::Mutex};
 use tauri::{AppHandle, Emitter, State};
@@ -75,6 +75,7 @@ pub(super) struct PoniSettings {
     pub(super) panel: panel::Preferences,
     pub(super) todo: todo::Preferences,
     pub(super) health: health::Preferences,
+    battery: battery::Preferences,
     pub(super) bedtime_reminder: bool,
     pub(super) bedtime_chime_dnd: bool,
     module_order: Vec<String>,
@@ -104,6 +105,7 @@ impl Default for PoniSettings {
             panel: panel::Preferences::default(),
             todo: todo::Preferences::default(),
             health: health::Preferences::default(),
+            battery: battery::Preferences::default(),
             bedtime_reminder: false,
             bedtime_chime_dnd: false,
             module_order: MODULES.iter().map(|id| (*id).to_string()).collect(),
@@ -135,6 +137,7 @@ pub(super) struct SettingsPatch {
     panel: Option<panel::Patch>,
     todo: Option<todo::Patch>,
     health: Option<health::Patch>,
+    battery: Option<battery::Patch>,
     bedtime_reminder: Option<bool>,
     bedtime_chime_dnd: Option<bool>,
     module_order: Option<Vec<String>>,
@@ -255,6 +258,9 @@ impl PoniSettings {
         }
         if let Some(health) = patch.health {
             self.health.apply(health)?;
+        }
+        if let Some(battery) = patch.battery {
+            self.battery.apply(battery)?;
         }
         self.clock_format = patch.clock_format.unwrap_or(self.clock_format);
         self.header_clock = patch.header_clock.unwrap_or(self.header_clock);

@@ -152,6 +152,7 @@ public static class PoniPointer {
                         'notch-position' = 'gap from the top edge'
                         screentime = 'Track screen time'
                         'day-progress' = 'Remind me at bedtime'
+                        battery = 'Low battery warning at'
                         health = 'Track health'
                         pomodoro = 'Focus sessions before a long break'
                         weather = 'Weather city celsius'

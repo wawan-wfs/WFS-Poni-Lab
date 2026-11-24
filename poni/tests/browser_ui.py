@@ -22,12 +22,14 @@ with sync_playwright() as pw:
     page.add_init_script('''
       window.__TAURI__ = { event: {listen: async (name, listener) => {
         if (name === 'poni-timer-completed') window.poniTestTimer = listener;
+        if (name === 'poni-battery-changed') window.poniTestBattery = payload => listener({payload});
         if (name === 'poni-toggle') window.poniTestShortcut = listener;
       }}, core: { invoke: async (command, args = {}) => {
         const data = JSON.parse(localStorage.getItem('test-data') || '{"tasks":[],"notes":[],"timer":{"total_ms":1500000,"remaining_ms":1500000,"ends_at_ms":null},"stopwatch":{"elapsed_ms":0,"started_at_ms":null,"laps":[]},"world_clocks":[]}');
         if (command === 'current_media') return {title: 'Test track', artist: 'Test artist', playing: true, position_ms: 30000, duration_ms: 60000};
         if (command === 'system_snapshot') return {cpu_percent: 32.5, memory_used: 2147483648, memory_total: 8589934592};
         if (command === 'shortcut_status') return true;
+        if (command === 'get_battery') return null;
         if (command === 'set_panel_open' && typeof args.focus !== 'boolean') throw new Error('focus is required');
         if (command === 'search_weather_city') return [{name:'Jakarta', admin1:'Jakarta', country:'Indonesia', latitude:-6.2, longitude:106.8}];
         if (command === 'weather_forecast') return {current:{temperature_2m:30, relative_humidity_2m:70, weather_code:2, wind_speed_10m:10}, daily:{time:['2026-11-22'], temperature_2m_max:[32], temperature_2m_min:[25], weather_code:[2]}};
@@ -303,6 +305,23 @@ with sync_playwright() as pw:
     page.locator('#stopwatch-start').click()
     page.locator('#stopwatch-reset').click()
     expect(page.locator('#stopwatch-display')).to_have_text('00:00.0')
+    page.locator('#close').click()
+    page.evaluate("""() => {
+      window.poniBattery.configure({icon:'ring', show_percentage:true, low_threshold:25});
+      window.poniTestBattery({percent:26, plugged_in:false, charging:false, saver:false, seconds_remaining:3800});
+    }""")
+    indicator = page.locator('#closed .battery-indicator')
+    expect(indicator).to_be_visible()
+    expect(indicator.locator('.battery-percent')).to_have_text('26%')
+    expect(indicator).to_have_class('battery-indicator battery-ring')
+    page.evaluate("window.poniTestBattery({percent:25, plugged_in:false, charging:false, saver:false, seconds_remaining:3600})")
+    expect(page.locator('#battery-activity')).to_have_text('Low battery')
+    expect(indicator).to_have_class('battery-indicator battery-ring battery-low')
+    page.evaluate("window.poniTestBattery({percent:25, plugged_in:true, charging:true, saver:false, seconds_remaining:null})")
+    expect(page.locator('#battery-activity')).to_have_text('Plugged in')
+    page.evaluate("window.poniTestBattery(null)")
+    expect(indicator).to_be_hidden()
+    page.evaluate('window.poniTestShortcut()')
     page.locator('[data-page="weather"]').click()
     page.locator('#weather-city').fill('Jakarta')
     page.locator('#weather-search button').click()

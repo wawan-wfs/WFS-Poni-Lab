@@ -20,6 +20,7 @@ FIXTURE = """
     todo: {late_minutes:0, snooze_minutes:10, trash_days:7},
     health: {water_goal:8, break_goal:6, mindful_goal:5, eye_duration:20, enabled:true,
       break_reminders:true, break_interval:50, water_reminders:false, water_interval:60, eye_breaks:false, eye_interval:20},
+    battery:{enabled:true,show_percentage:false,icon:'bar',charging_activity:true,low_threshold:20},
     bedtime_reminder:false, bedtime_chime_dnd:false,
     panel:{ direction:'auto', top_gap:0, position:50, width:200, height:32, opacity:100,
       expanded_width:680, expanded_height:196, tall_height:268, show_in_screenshots:true,
@@ -70,6 +71,7 @@ FIXTURE = """
       }
       if (command === 'get_poni_settings') return settings;
       if (command === 'get_day_schedule') return readSchedule();
+      if (command === 'get_battery') return null;
       if (command === 'bedtime_action') {
         localStorage.setItem('test-bedtime-action', args.action);
         return;
@@ -108,11 +110,12 @@ FIXTURE = """
         available:true, enabled:readScreenTime().enabled, apps:[], hours:Array(24).fill(0), total:0, switches:0,
       };
       if (command === 'set_poni_settings') {
-        const { panel, todo, health, ...patch } = args.patch;
+        const { panel, todo, health, battery, ...patch } = args.patch;
         Object.assign(settings, patch);
         if (panel) Object.assign(settings.panel, panel);
         if (todo) Object.assign(settings.todo, todo);
         if (health) Object.assign(settings.health, health);
+        if (battery) Object.assign(settings.battery, battery);
         settings.timer_presets.sort((a,b) => a-b);
         if (settings.hidden_modules.includes(settings.default_module)) {
           settings.default_module = settings.module_order.find(id => !settings.hidden_modules.includes(id));
@@ -382,6 +385,14 @@ def test_settings(page):
     page.get_by_role('button', name='Eye break', exact=True).click()
     expect(page.locator('.health-countdown')).to_have_text('35s')
     page.get_by_role('button', name='End', exact=True).click()
+    settings.get_by_role('button', name='Battery', exact=True).click()
+    expect(settings.locator('#battery-details')).to_contain_text('No battery detected')
+    settings.locator('#settings-battery-icon').select_option('ring')
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    settings.locator('#settings-battery-percentage').check()
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    settings.locator('#settings-battery-threshold').fill('27')
+    expect(settings.get_by_role('status')).to_have_text('Saved')
 
     popup.close()
     page.reload()
@@ -430,6 +441,10 @@ def test_settings(page):
     expect(settings.locator('#settings-health-water-reminders')).to_be_checked()
     expect(settings.locator('#settings-health-eye-breaks')).to_be_checked()
     expect(settings.locator('#settings-health-enabled')).not_to_be_checked()
+    settings.get_by_role('button', name='Battery', exact=True).click()
+    expect(settings.locator('#settings-battery-icon')).to_have_value('ring')
+    expect(settings.locator('#settings-battery-percentage')).to_be_checked()
+    expect(settings.locator('#settings-battery-threshold')).to_have_value('27')
 
     settings.get_by_role('button', name='Modules', exact=True).click()
     settings.locator('#settings-remember-module').check()

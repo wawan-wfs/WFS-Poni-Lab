@@ -54,6 +54,8 @@ Runner Windows mengubah target Health ke 16 gelas, 1 jeda, 30 menit mindful, dan
 
 Tangkapan Todo dan Day Progress dari kedua aplikasi memperlihatkan selisih pada isi sidebar, bilah judul, ikon, dan jarak antarbaris. Pengukuran piksel perlu memakai keadaan pengaturan dan posisi notch yang sama. [Tangkapan kedua aplikasi](https://github.com/wawan-wfs/WFS-Poni-Lab/actions/runs/45418690234/artifacts/14935065428)
 
+Tujuh kontrol **Health** lain telah terhubung ke pelacakan aktivitas serta pengingat jeda, air, dan mata. Pengingat air menghitung waktu saat PC aktif, berhenti ketika target harian tercapai, dan dapat mencatat segelas langsung dari notch. Overlay mata memakai jendela per monitor. Lima kontrol **Battery** membaca status daya Windows dan mengatur visibilitas, persentase, ikon, animasi pengisi daya, dan ambang peringatan. Kini **68 dari 201 kontrol standar (33,8%)** memiliki padanan setidaknya sebagian. Tersisa **133** tanpa padanan.
+
 | Jenis kontrol | Deklarasi | Masuk katalog build |
 | --- | ---: | ---: |
 | Sakelar | 115 | 115 |

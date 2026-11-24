@@ -50,11 +50,15 @@
   <script src="ics-import.js" defer></script>
   <script src="night-warmth.js" defer></script>
   <script src="todo-language.js" defer></script>
+  <script src="battery.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
   <div class="surface" id="surface">
-    <button class="closed" id="closed" aria-expanded="false" aria-controls="open"><time class="clock">--:--</time></button>
+    <button class="closed" id="closed" aria-expanded="false" aria-controls="open">
+      <time class="clock">--:--</time><span id="battery-activity" role="status" hidden></span>
+      <span class="battery-indicator" role="img" hidden><span class="battery-percent"></span><i class="battery-icon"></i></span>
+    </button>
     <div id="todo-reminder" class="todo-reminder" aria-label="Due task" hidden>
       <span id="todo-reminder-text" role="status"></span>
       <button type="button" id="todo-reminder-complete">Done</button>
@@ -106,6 +110,7 @@
           <button class="tab" data-page="currency" title="Currency" aria-label="Currency">¤ <span>Currency</span></button>
         </nav>
         <time class="clock" id="header-clock">--:--</time>
+        <span class="battery-indicator" role="img" hidden><span class="battery-percent"></span><i class="battery-icon"></i></span>
         <button class="settings-gear" type="button" id="settings-gear" title="Settings" aria-label="Settings">⚙</button>
         <button class="close" id="close" aria-label="Close panel">×</button>
       </header>

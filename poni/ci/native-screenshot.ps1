@@ -345,6 +345,18 @@ try {
             !$health.water_reminders -or $health.eye_interval -ne 60) {
             throw ('Unexpected Health settings after native input: ' + ($health | ConvertTo-Json -Compress))
         }
+        Find-Setting 'low battery warning at'
+        [System.Windows.Forms.SendKeys]::SendWait('{END}')
+        Start-Sleep -Seconds 2
+        Find-Setting 'battery level persentase'
+        [System.Windows.Forms.SendKeys]::SendWait(' ')
+        Start-Sleep -Seconds 2
+        Save-Screen 'settings-battery.png'
+        $battery = (Get-Content -Raw -LiteralPath $dataPath | ConvertFrom-Json).settings.battery
+        $battery | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'battery-settings.json') -Encoding UTF8
+        if ($battery.low_threshold -ne 50 -or !$battery.show_percentage) {
+            throw ('Unexpected Battery settings after native input: ' + ($battery | ConvertTo-Json -Compress))
+        }
     }
     [CursorPosition]::PostMessage($settingsHandle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
     Start-Sleep -Seconds 2
