@@ -21,7 +21,8 @@ with sync_playwright() as playwright:
               breathing: () => totals.mindful++,
             };
             window.__TAURI__ = {core: {
-              invoke: async (command, {day, action}) => {
+              invoke: async (command, {day, action} = {}) => {
+                if (command === 'health_eye_break') return false;
                 if (!Number.isInteger(day)) throw Error('Expected local date');
                 if (command === 'health_record') handlers[action]();
                 return {today: {...totals}, last_break_ms: null, streak: 0};

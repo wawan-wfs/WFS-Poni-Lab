@@ -65,9 +65,16 @@
     ['dayprogress', 'Remind me at bedtime', 'day progress reminder pengingat tidur', 'bedtime-reminder'],
     ['dayprogress', 'Chime even in Do not disturb', 'day progress dnd sound bunyi tidur', 'bedtime-chime-dnd'],
     ['health', 'Water goal', 'health glasses water target minum gelas', 'health-water-goal'],
+    ['health', 'Track health', 'health activity pelacakan kesehatan', 'health-enabled'],
     ['health', 'Break goal', 'health movement breaks daily target gerak jeda', 'health-break-goal'],
     ['health', 'Mindful minutes goal', 'health breathing target pernapasan fokus menit', 'health-mindful-goal'],
     ['health', 'Eye break length', 'health eye break duration istirahat mata', 'health-eye-duration'],
+    ['health', 'Remind me to take a break', 'health movement stretch reminder pengingat jeda', 'health-break-reminders'],
+    ['health', 'After working continuously for', 'health movement stretch interval', 'health-break-interval'],
+    ['health', 'Remind me to drink water', 'health drink water reminder pengingat minum', 'health-water-reminders'],
+    ['health', 'Water reminder every', 'health drink water interval', 'health-water-interval'],
+    ['health', '20-20-20 eye breaks', 'health eye screen overlay mata', 'health-eye-breaks'],
+    ['health', 'Eye break every', 'health eye interval screen reminder', 'health-eye-interval'],
     ['general', 'Clock format', '12 hour 24 hour region time', 'clock-format'],
     ['general', 'Time at the top of the open Poni', 'header clock', 'header-clock'],
     ['general', 'Open on hover', 'mouse click to open', 'open-on-hover'],
@@ -391,13 +398,27 @@
 
   function health(content) {
     const goals = group(content);
+    toggle(goals, 'health-enabled', 'Track health', null, 'enabled', 'health');
     range(goals, 'health-water-goal', 'Water goal', 'water_goal',
       { min: 2, max: 16, step: 1, unit: 'glasses', spokenUnit: 'glasses', source: 'health' });
     range(goals, 'health-break-goal', 'Break goal', 'break_goal',
       { min: 1, max: 16, step: 1, unit: 'breaks', spokenUnit: 'breaks', source: 'health' });
     range(goals, 'health-mindful-goal', 'Mindful minutes goal', 'mindful_goal',
       { min: 1, max: 30, step: 1, unit: 'min', spokenUnit: 'minutes', source: 'health' });
-    range(group(content, 'Eye breaks'), 'health-eye-duration', 'Eye break length', 'eye_duration',
+    const reminders = group(content, 'Reminders');
+    const minutes = { step: 5, unit: 'min', spokenUnit: 'minutes', source: 'health' };
+    toggle(reminders, 'health-break-reminders', 'Remind me to take a break', null, 'break_reminders', 'health');
+    range(reminders, 'health-break-interval', 'After working continuously for', 'break_interval',
+      { ...minutes, min: 15, max: 120 });
+    toggle(reminders, 'health-water-reminders', 'Remind me to drink water',
+      'While you’re at the PC. Pauses when you reach today’s goal.', 'water_reminders', 'health');
+    range(reminders, 'health-water-interval', 'Water reminder every', 'water_interval',
+      { ...minutes, min: 5, max: 180 });
+    toggle(reminders, 'health-eye-breaks', '20-20-20 eye breaks',
+      'Dims the screen and prompts you to look 20 feet away. Press Esc to skip.', 'eye_breaks', 'health');
+    range(reminders, 'health-eye-interval', 'Eye break every', 'eye_interval',
+      { ...minutes, min: 10, max: 60 });
+    range(reminders, 'health-eye-duration', 'Eye break length', 'eye_duration',
       { min: 10, max: 60, step: 5, unit: 's', spokenUnit: 'seconds', source: 'health' });
   }
 

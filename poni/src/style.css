@@ -145,6 +145,9 @@ textarea { resize: vertical; min-height: 55px; }
 .panel-open .bedtime-reminder { position: absolute; z-index: 2; inset-inline: 12px; inset-block-end: 7px; border: 1px solid #56528d; }
 .panel-open .timer-reminder { position: absolute; z-index: 2; inset-inline: 12px; inset-block-start: 44px; border: 1px solid #6c4926; }
 .panel-open .timer-reminder button { display: none; }
+.health-reminder[data-kind="water"] span { color: #a0e4ff; }
+.health-reminder[data-kind="break"] span { color: #97eaac; }
+.panel-open .health-reminder { position: absolute; z-index: 2; inset-inline: 12px; inset-block-start: 44px; border: 1px solid #385568; }
 .todo-reminder button, .task-views button { border: 1px solid #333; border-radius: 6px; padding: 3px 7px; background: #232325; color: #eee; font-size: 12px; }
 .task-views { display: flex; gap: 5px; padding-block: 5px; }
 .task-views [aria-pressed="true"] { background: #444; color: #fff; }

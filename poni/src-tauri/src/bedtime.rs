@@ -136,7 +136,7 @@ pub(super) fn tick(app: &AppHandle, now: u64) {
         .filter(|(due, _)| now.saturating_sub(*due) <= MAX_DELAY_MS)
         .map(|(_, original)| original)
         .or(scheduled);
-    let Some(when) = due.filter(|_| desktop_available()) else {
+    let Some(when) = due.filter(|_| crate::activity::desktop_available()) else {
         return;
     };
     if let Err(error) = store.update(|data| {
@@ -156,39 +156,6 @@ pub(super) fn tick(app: &AppHandle, now: u64) {
     drop(tracker);
     let _ = app.emit_to("main", "poni-bedtime", notice);
     crate::sound::play_bedtime(force_chime);
-}
-
-#[cfg(windows)]
-fn desktop_available() -> bool {
-    use windows_sys::Win32::System::StationsAndDesktops::{
-        CloseDesktop, GetUserObjectInformationW, OpenInputDesktop, DESKTOP_READOBJECTS, UOI_NAME,
-    };
-    unsafe {
-        let desktop = OpenInputDesktop(0, 0, DESKTOP_READOBJECTS);
-        if desktop.is_null() {
-            return false;
-        }
-        let mut name = [0u16; 64];
-        let mut written = 0;
-        let ok = GetUserObjectInformationW(
-            desktop,
-            UOI_NAME,
-            name.as_mut_ptr().cast(),
-            (name.len() * 2) as u32,
-            &mut written,
-        );
-        CloseDesktop(desktop);
-        let length = name
-            .iter()
-            .position(|unit| *unit == 0)
-            .unwrap_or(name.len());
-        ok != 0 && String::from_utf16_lossy(&name[..length]).eq_ignore_ascii_case("Default")
-    }
-}
-
-#[cfg(not(windows))]
-fn desktop_available() -> bool {
-    true
 }
 
 #[cfg(test)]

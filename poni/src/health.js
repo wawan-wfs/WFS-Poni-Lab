@@ -28,6 +28,7 @@
   let state;
   let guide;
   let timer;
+  let openingEyeBreak = false;
   let queue = Promise.resolve();
 
   function localDay() {
@@ -82,6 +83,18 @@
     page.querySelector('.health-orb').style.transform = 'scale(1)';
     tickGuide();
     timer = setInterval(tickGuide, 200);
+  }
+
+  async function startEyeBreak() {
+    if (openingEyeBreak) return;
+    openingEyeBreak = true;
+    try {
+      if (await invoke('health_eye_break') !== true) startGuide('eye');
+    } catch (error) {
+      page.querySelector('.health-status').textContent = String(error);
+    } finally {
+      openingEyeBreak = false;
+    }
   }
 
   function tickGuide() {
@@ -163,7 +176,11 @@
       button.addEventListener('click', () => update(button.dataset.healthAction));
     });
     page.querySelectorAll('[data-health-guide]').forEach(button => {
-      button.addEventListener('click', () => startGuide(button.dataset.healthGuide));
+      const kind = button.dataset.healthGuide;
+      button.addEventListener('click', () => {
+        if (kind === 'eye') void startEyeBreak();
+        else startGuide(kind);
+      });
     });
     page.querySelector('.health-end').addEventListener('click', stopGuide);
   }
@@ -175,6 +192,11 @@
     configure(value) {
       preferences = { ...defaults, ...value };
       if (page && state) renderTotals();
+    },
+    update(stateUpdate) {
+      if (!page) return;
+      state = stateUpdate;
+      renderTotals();
     },
   };
 })();

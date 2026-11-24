@@ -1,0 +1,63 @@
+html, body {
+  height: 100%;
+  margin: 0;
+  color: #fff;
+  font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  user-select: none;
+}
+
+main {
+  min-height: 100%;
+  box-sizing: border-box;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  text-align: center;
+  background: radial-gradient(circle at 50% 40%, rgba(20, 30, 50, .86), rgba(0, 0, 0, .94));
+  animation: appear .6s ease;
+}
+
+@keyframes appear { from { opacity: 0; } }
+@keyframes blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.1); } }
+
+.eye {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 38px;
+  border-radius: 48% 48% 46% 46%;
+  background: #ffd60a;
+  animation: blink 4s infinite;
+}
+
+.eye::before {
+  content: "";
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #161a26;
+}
+
+h1 { margin: 0; font-size: 34px; letter-spacing: -.5px; }
+p { margin: 0; color: #aeaeb2; font-size: 16px; }
+output { font-size: 64px; font-weight: 700; font-variant-numeric: tabular-nums; }
+button {
+  margin-top: 10px;
+  padding: 9px 22px;
+  border: 0;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, .12);
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+button:hover { background: rgba(255, 255, 255, .2); }
+button:focus-visible { outline: 2px solid #ffd60a; outline-offset: 4px; }
+
+@media (prefers-reduced-motion: reduce) {
+  main, .eye { animation: none; }
+}

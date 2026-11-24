@@ -74,7 +74,7 @@ pub(super) struct PoniSettings {
     pub(super) timer_then_break: bool,
     pub(super) panel: panel::Preferences,
     pub(super) todo: todo::Preferences,
-    health: health::Preferences,
+    pub(super) health: health::Preferences,
     pub(super) bedtime_reminder: bool,
     pub(super) bedtime_chime_dnd: bool,
     module_order: Vec<String>,

@@ -8,6 +8,7 @@ use tauri_plugin_notification::NotificationExt;
 use tempfile::NamedTempFile;
 use uuid::Uuid;
 
+mod activity;
 mod aiusage;
 mod bedtime;
 mod bluetooth;
@@ -17,6 +18,7 @@ mod chat;
 mod control;
 mod currency;
 mod dashboard;
+mod eye_break;
 mod github;
 mod health;
 mod ics_import;
@@ -1319,6 +1321,8 @@ fn main() {
             app.manage(Mutex::new(control::ControlState::default()));
             app.manage(Mutex::new(screentime::Tracker::default()));
             app.manage(Mutex::new(bedtime::Tracker::default()));
+            app.manage(Mutex::new(health::Tracker::default()));
+            app.manage(Mutex::new(eye_break::Overlay::default()));
             let mut system = sysinfo::System::new();
             system.refresh_cpu_usage();
             app.manage(Mutex::new(SystemMonitor {
@@ -1337,6 +1341,7 @@ fn main() {
                     notify_due(&handle, now_ms);
                     todo::tick(&handle, now_ms);
                     bedtime::tick(&handle, now_ms);
+                    health::tick(&handle, now_ms);
                     pomodoro::tick(&handle, now_ms);
                     calendar_reminders::tick(&handle, now_ms);
                     screentime::sample(&handle);
@@ -1403,6 +1408,8 @@ fn main() {
             dashboard::set_dashboard_widgets,
             health::health_state,
             health::health_record,
+            eye_break::health_eye_break,
+            eye_break::dismiss_eye_break,
             pomodoro::pomodoro_state,
             pomodoro::get_pomodoro_settings,
             pomodoro::get_pomodoro_playback,

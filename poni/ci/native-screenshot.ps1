@@ -331,11 +331,18 @@ try {
         Find-Setting 'eye break length'
         [System.Windows.Forms.SendKeys]::SendWait('{END}')
         Start-Sleep -Seconds 2
+        Find-Setting 'remind me to drink water'
+        [System.Windows.Forms.SendKeys]::SendWait(' ')
+        Start-Sleep -Seconds 2
+        Find-Setting 'eye break every'
+        [System.Windows.Forms.SendKeys]::SendWait('{END}')
+        Start-Sleep -Seconds 2
         Save-Screen 'settings-health.png'
         $health = (Get-Content -Raw -LiteralPath $dataPath | ConvertFrom-Json).settings.health
         $health | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'health-settings.json') -Encoding UTF8
         if ($health.water_goal -ne 16 -or $health.break_goal -ne 1 -or
-            $health.mindful_goal -ne 30 -or $health.eye_duration -ne 60) {
+            $health.mindful_goal -ne 30 -or $health.eye_duration -ne 60 -or
+            !$health.water_reminders -or $health.eye_interval -ne 60) {
             throw ('Unexpected Health settings after native input: ' + ($health | ConvertTo-Json -Compress))
         }
     }
@@ -355,6 +362,8 @@ try {
         $seed.settings.panel.top_gap = 0
         $seed.settings.panel.position = 50
         $seed.settings.panel.width = 200
+        $seed.settings.default_module = 'health'
+        $seed.settings.health.eye_duration = 20
         $seed.settings.todo.late_minutes = 3
         $seed.settings.todo.snooze_minutes = 15
         $localNow = [DateTimeOffset]::Now
@@ -364,7 +373,7 @@ try {
         $seed.bedtime_notified_at_ms = $null
         $now = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
         $seed.timer = @{
-            total_ms = 60_000; remaining_ms = 60_000; ends_at_ms = $now + 18_000
+            total_ms = 60000; remaining_ms = 60000; ends_at_ms = $now + 18000
             last_started_minutes = 1
         }
         $snoozeId = [Guid]::NewGuid().ToString()
@@ -410,7 +419,7 @@ try {
         }
         $todoChecked = $true
 
-        $timerUntil = [DateTimeOffset]::UtcNow.AddSeconds(22)
+        $timerUntil = [DateTimeOffset]::UtcNow.AddSeconds(24)
         do {
             $updated = Get-Content -Raw -LiteralPath $dataPath | ConvertFrom-Json
             $timerVisible = $updated.timer.notice_until_ms -gt [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds() -and
@@ -419,6 +428,7 @@ try {
             Start-Sleep -Milliseconds 500
         } while ([DateTimeOffset]::UtcNow -lt $timerUntil)
         if (!$timerVisible) { throw 'The completed Timer did not show its notch actions.' }
+        Start-Sleep -Milliseconds 750
         Save-Screen 'timer-completed.png'
         if (![CursorPosition]::ClientToScreen($todoWindow, [ref]$todoOrigin)) { throw 'Could not locate the Timer actions.' }
         Click-Point ($todoOrigin.X + $todoClient.Right - 77) ($todoOrigin.Y + 54)
@@ -454,6 +464,39 @@ try {
         }
         @{ reminder_appeared = $true; acknowledged = $true } |
             ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'bedtime-observation.json') -Encoding UTF8
+
+        [CursorPosition]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero)
+        [CursorPosition]::keybd_event(0x4E, 0, 0, [UIntPtr]::Zero)
+        [CursorPosition]::keybd_event(0x4E, 0, 2, [UIntPtr]::Zero)
+        [CursorPosition]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
+        Start-Sleep -Seconds 3
+        if (![CursorPosition]::GetClientRect($todoWindow, [ref]$todoClient) -or
+            ![CursorPosition]::ClientToScreen($todoWindow, [ref]$todoOrigin) -or $todoClient.Bottom -lt 220) {
+            throw 'The Health panel did not open for the manual eye break.'
+        }
+        Save-Screen 'health-panel.png'
+        Click-Point ($todoOrigin.X + 330) ($todoOrigin.Y + 104)
+        $eyeDeadline = [DateTimeOffset]::UtcNow.AddSeconds(8)
+        do {
+            $eyeWindow = [CursorPosition]::FindWindowByTitle('Poni Eye Break')
+            if ($eyeWindow -ne [IntPtr]::Zero) { break }
+            Start-Sleep -Milliseconds 300
+        } while ([DateTimeOffset]::UtcNow -lt $eyeDeadline)
+        $eyeRect = [CursorPosition+Rect]::new()
+        if ($eyeWindow -eq [IntPtr]::Zero -or
+            ![CursorPosition]::GetClientRect($eyeWindow, [ref]$eyeRect) -or
+            $eyeRect.Right -lt $bounds.Width -or $eyeRect.Bottom -lt $bounds.Height) {
+            throw 'The manual eye break did not cover the runner display.'
+        }
+        Start-Sleep -Seconds 2
+        Save-Screen 'eye-break-overlay.png'
+        [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
+        Start-Sleep -Seconds 2
+        if ([CursorPosition]::FindWindowByTitle('Poni Eye Break') -ne [IntPtr]::Zero) {
+            throw 'Escape did not dismiss the eye break.'
+        }
+        @{ covered_display = $true; dismissed_with_escape = $true } |
+            ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'eye-break-observation.json') -Encoding UTF8
     }
     @{ process_id = $observedPid; main_window_handle = $mainHandle.ToInt64(); screenshot = 'desktop.png'; width_after_shortcut = $windowWidth; module_height = $moduleHeight; settings_width = $settingsWidth; settings_window_handle = $settingsHandle.ToInt64(); settings_closed_independently = $true; geometry_checked = $geometryChecked; screen_time_saved = $screenTimeChecked; pomodoro_saved = $pomodoroChecked; todo_checked = $todoChecked; weather_attempted = ($bounds.Width -eq 1024 -and $bounds.Height -eq 768) } |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'observation.json') -Encoding UTF8

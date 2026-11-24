@@ -18,7 +18,8 @@ FIXTURE = """
     calendar_enabled:true, meeting_reminder_minutes:5, week_start:'windows',
     timer_presets:[], timer_remember:true, timer_then_break:false,
     todo: {late_minutes:0, snooze_minutes:10, trash_days:7},
-    health: {water_goal:8, break_goal:6, mindful_goal:5, eye_duration:20},
+    health: {water_goal:8, break_goal:6, mindful_goal:5, eye_duration:20, enabled:true,
+      break_reminders:true, break_interval:50, water_reminders:false, water_interval:60, eye_breaks:false, eye_interval:20},
     bedtime_reminder:false, bedtime_chime_dnd:false,
     panel:{ direction:'auto', top_gap:0, position:50, width:200, height:32, opacity:100,
       expanded_width:680, expanded_height:196, tall_height:268, show_in_screenshots:true,
@@ -365,6 +366,15 @@ def test_settings(page):
     for field, value in [('water-goal', '10'), ('break-goal', '7'), ('mindful-goal', '9'), ('eye-duration', '35')]:
         settings.locator(f'#settings-health-{field}').fill(value)
         expect(settings.get_by_role('status')).to_have_text('Saved')
+    for field, value in [('break-interval', '35'), ('water-interval', '45'), ('eye-interval', '30')]:
+        settings.locator(f'#settings-health-{field}').fill(value)
+        expect(settings.get_by_role('status')).to_have_text('Saved')
+    settings.locator('#settings-health-enabled').uncheck()
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    settings.locator('#settings-health-water-reminders').check()
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    settings.locator('#settings-health-eye-breaks').check()
+    expect(settings.get_by_role('status')).to_have_text('Saved')
     page.locator('.tab[data-page="health"]').click()
     expect(page.locator('[data-health-measure="water"] strong')).to_have_text('2 / 10')
     expect(page.locator('[data-health-measure="breaks"] strong')).to_have_text('1 / 7')
@@ -414,6 +424,12 @@ def test_settings(page):
     settings.get_by_role('button', name='Health', exact=True).click()
     expect(settings.locator('#settings-health-eye-duration')).to_have_value('35')
     expect(settings.locator('#settings-health-water-goal')).to_have_value('10')
+    expect(settings.locator('#settings-health-break-interval')).to_have_value('35')
+    expect(settings.locator('#settings-health-water-interval')).to_have_value('45')
+    expect(settings.locator('#settings-health-eye-interval')).to_have_value('30')
+    expect(settings.locator('#settings-health-water-reminders')).to_be_checked()
+    expect(settings.locator('#settings-health-eye-breaks')).to_be_checked()
+    expect(settings.locator('#settings-health-enabled')).not_to_be_checked()
 
     settings.get_by_role('button', name='Modules', exact=True).click()
     settings.locator('#settings-remember-module').check()

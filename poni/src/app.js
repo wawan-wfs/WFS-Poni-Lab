@@ -8,6 +8,7 @@ const status = document.querySelector('#status');
 const todoReminder = document.querySelector('#todo-reminder');
 const bedtimeReminder = document.querySelector('#bedtime-reminder');
 const timerReminder = document.querySelector('#timer-reminder');
+const healthReminder = document.querySelector('#health-reminder');
 let data = { tasks: [], notes: [], timer: { total_ms: 1500000, remaining_ms: 1500000, ends_at_ms: null }, stopwatch: { elapsed_ms: 0, started_at_ms: null, laps: [] }, weather_location: null, world_clocks: [], calendar_events: [] };
 let editingTask = null;
 let ignoreTaskLanguage = false;
@@ -20,6 +21,8 @@ let bedtimeTimer = null;
 let timerNotice = null;
 let timerNoticeTimeout = null;
 let lastTimerNoticeEnd = null;
+let healthNotice = null;
+let healthNoticeTimeout = null;
 const expandedTasks = new Set();
 let queue = Promise.resolve();
 let panelSequence = 0;
@@ -89,7 +92,7 @@ function updatePanelSize(isOpen, focus = false) {
   const tall = isOpen && isTallPage(activePage);
   open.classList.toggle('tall', tall);
   const seq = ++panelSequence;
-  const taskAlert = !isOpen && (!todoReminder.hidden || !bedtimeReminder.hidden || !timerReminder.hidden);
+  const taskAlert = !isOpen && (!todoReminder.hidden || !bedtimeReminder.hidden || !timerReminder.hidden || !healthReminder.hidden);
   panelReady.then(() => invoke('set_panel_open', { session: panelSession, open: isOpen, tall, focus, seq, taskAlert }))
     .catch(error => { status.textContent = String(error); });
 }
@@ -138,6 +141,7 @@ function applyPreferences(value) {
   window.poniMirror?.configure({enabled:preferences.mirror_enabled, shape:preferences.mirror_shape});
   window.poniModules?.health?.configure(preferences.health);
   if (!preferences.bedtime_reminder && bedtimeNotice) showBedtime(null);
+  if (preferences.health?.enabled === false && healthNotice) showHealthNotice(null);
   renderTodoReminder();
   if (activePage === 'tasks') renderTasks();
   updateClock();
@@ -206,6 +210,12 @@ window.__TAURI__.event.listen('poni-timer-completed', () => {
     renderTimer();
   }).catch(error => { status.textContent = String(error); });
 }).catch(error => { status.textContent = String(error); });
+window.__TAURI__.event.listen('poni-health-reminder', event => showHealthNotice(event.payload))
+  .catch(error => { status.textContent = String(error); });
+window.__TAURI__.event.listen('poni-health-changed', event => modules.health?.update(event.payload))
+  .catch(error => { status.textContent = String(error); });
+window.__TAURI__.event.listen('poni-eye-break-failed', event => { status.textContent = event.payload; })
+  .catch(error => { status.textContent = String(error); });
 window.__TAURI__.event.listen('poni-settings-open-module', event => {
   if (!moduleTabs.has(event.payload) || moduleTabs.get(event.payload).hidden) return;
   keyboardOpen = true;
@@ -533,7 +543,7 @@ function reminderCandidate(now) {
 }
 
 function renderTodoReminder(resize = true) {
-  reminderTask = open.hidden && !bedtimeNotice && !timerNotice ? reminderCandidate(Date.now()) : null;
+  reminderTask = open.hidden && !bedtimeNotice && !timerNotice && !healthNotice ? reminderCandidate(Date.now()) : null;
   const hidden = !reminderTask;
   const changed = todoReminder.hidden !== hidden;
   todoReminder.hidden = hidden;
@@ -569,11 +579,60 @@ function renderTimerNotice(resize = false) {
   const hidden = !timerNotice || !!bedtimeNotice;
   const changed = timerReminder.hidden !== hidden;
   timerReminder.hidden = hidden;
+  renderHealthNotice();
   if (resize) {
     renderTodoReminder(false);
     if (changed && open.hidden) updatePanelSize(false);
   }
 }
+
+function renderHealthNotice() {
+  healthReminder.hidden = !healthNotice || !!bedtimeNotice || !!timerNotice;
+}
+
+function showHealthNotice(notice) {
+  clearTimeout(healthNoticeTimeout);
+  healthNotice = notice?.expires_at_ms > Date.now() && preferences.health?.enabled !== false ? notice : null;
+  if (healthNotice) {
+    const water = notice.kind === 'water';
+    healthReminder.dataset.kind = notice.kind;
+    document.querySelector('#health-reminder-text').textContent = water
+      ? `Time for a glass of water · ${notice.glasses}/${notice.goal}`
+      : `Time for a break · ${notice.minutes}m`;
+    document.querySelector('#health-log-water').hidden = !water;
+    document.querySelector('#health-reminder-open').hidden = !!moduleTabs.get('health')?.hidden;
+    healthNoticeTimeout = setTimeout(() => showHealthNotice(null), notice.expires_at_ms - Date.now());
+  }
+  renderHealthNotice();
+  renderTodoReminder(false);
+  if (open.hidden) updatePanelSize(false);
+}
+
+document.querySelector('#health-reminder-open').addEventListener('click', () => {
+  if (!healthNotice || moduleTabs.get('health')?.hidden) return;
+  showHealthNotice(null);
+  keyboardOpen = true;
+  setOpen(true);
+  selectModule('health');
+  updatePanelSize(true, true);
+});
+
+document.querySelector('#health-log-water').addEventListener('click', async event => {
+  const notice = healthNotice;
+  if (notice?.kind !== 'water') return;
+  const button = event.currentTarget;
+  button.disabled = true;
+  try {
+    const date = new Date();
+    const day = Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000;
+    await invoke('health_record', { day, action: 'water_add' });
+    if (healthNotice === notice) showHealthNotice(null);
+  } catch (error) {
+    status.textContent = String(error);
+  } finally {
+    button.disabled = false;
+  }
+});
 
 function clearTimerNotice() {
   clearTimeout(timerNoticeTimeout);
