@@ -60,6 +60,8 @@ Tangkapan Battery asli pada profil baru mengonfirmasi ikon Bar, ambang 20%, sert
 
 Lima kontrol **Live Activities** mengaktifkan aktivitas notch, rotasi enam detik, serta sumber Pomodoro/Timer/stopwatch, Calendar, dan Todo. Calendar menampilkan acara dalam 15 menit, sedangkan Todo menampilkan tenggat berikutnya dalam satu jam. Pengingat tugas jatuh tempo tetap terpisah. Musik, ringkasan sistem, Bluetooth, dan tampilan daftar beberapa tugas di notch masih perlu disamakan. Kini **73 dari 201 kontrol standar (36,3%)** memiliki padanan setidaknya sebagian. Tersisa **128** tanpa padanan.
 
+Runner Windows memeriksa bahwa **+5 min** memulai ulang hitung mundur tanpa mengubah pilihan durasi terakhir. Runner juga mengonfirmasi bahwa overlay mata sejajar dengan keempat tepi layar 1024 × 768 dan dapat ditutup dengan Esc. Perubahan pilihan pengingat Health, ambang Battery, persentase baterai, dan rotasi Live Activities tersimpan di profil. Tes Rust mensimulasikan idle, layar terkunci, dan target air harian, sedangkan tes Chromium memeriksa rotasi, jeda saat hover, serta perubahan status daya simulasi. Pengujian pada laptop dengan baterai fisik dan pada lebih dari satu monitor masih diperlukan. [Hasil runner Windows](https://github.com/wawan-wfs/WFS-Poni-Lab/actions/runs/45434767244)
+
 | Jenis kontrol | Deklarasi | Masuk katalog build |
 | --- | ---: | ---: |
 | Sakelar | 115 | 115 |
