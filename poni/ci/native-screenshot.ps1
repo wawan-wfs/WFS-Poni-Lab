@@ -10,12 +10,14 @@ public static class CursorPosition {
     [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(System.IntPtr window, out Rect rect);
     [DllImport("user32.dll")] public static extern bool GetClientRect(System.IntPtr window, out Rect rect);
+    [DllImport("user32.dll")] public static extern bool ClientToScreen(System.IntPtr window, ref Point point);
     [DllImport("user32.dll")] public static extern bool GetWindowDisplayAffinity(System.IntPtr window, out uint affinity);
     [DllImport("user32.dll", EntryPoint="FindWindowW", CharSet=CharSet.Unicode, ExactSpelling=true)] private static extern IntPtr FindWindow(string className, string title);
     public static IntPtr FindWindowByTitle(string title) => FindWindow(null, title);
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr window, out uint processId);
     [DllImport("user32.dll", EntryPoint="PostMessageW")] public static extern bool PostMessage(System.IntPtr window, uint message, System.IntPtr wParam, System.IntPtr lParam);
     [StructLayout(LayoutKind.Sequential)] public struct Rect { public int Left, Top, Right, Bottom; }
+    [StructLayout(LayoutKind.Sequential)] public struct Point { public int X, Y; }
 }
 '@
 $outputDir = Join-Path $env:GITHUB_WORKSPACE 'native-observation'
@@ -181,15 +183,18 @@ try {
         Start-Sleep -Seconds 2
         $newRect = [CursorPosition+Rect]::new()
         $clientRect = [CursorPosition+Rect]::new()
+        $clientOrigin = [CursorPosition+Point]::new()
         if (![CursorPosition]::GetWindowRect($mainHandle, [ref]$newRect) -or
-            ![CursorPosition]::GetClientRect($mainHandle, [ref]$clientRect)) {
+            ![CursorPosition]::GetClientRect($mainHandle, [ref]$clientRect) -or
+            ![CursorPosition]::ClientToScreen($mainHandle, [ref]$clientOrigin)) {
             throw 'Could not read the resized notch.'
         }
         Save-Screen 'settings-notch-geometry.png'
         $newWidth = $clientRect.Right - $clientRect.Left
         $movedDown = $newRect.Top - $closedRect.Top
-        if ($newWidth -ne 320 -or $movedDown -ne 120 -or $newRect.Left -le $closedRect.Left) {
-            throw "Notch geometry did not take effect. Width: $newWidth, moved down: $movedDown, X: $($closedRect.Left) to $($newRect.Left)."
+        $clientRight = $clientOrigin.X + $newWidth
+        if ($newWidth -ne 320 -or $movedDown -ne 120 -or $clientRight -ne $bounds.Right -or $newRect.Left -le $closedRect.Left) {
+            throw "Notch geometry did not take effect. Width: $newWidth, moved down: $movedDown, visible right edge: $clientRight of $($bounds.Right)."
         }
 
         Find-Setting 'show poni in screenshots'
@@ -203,6 +208,7 @@ try {
         $restored = [CursorPosition]::GetWindowDisplayAffinity($mainHandle, [ref]$affinity) -and $affinity -eq 0
         @{
             closed_width = $newWidth; moved_down = $movedDown; original_x = $closedRect.Left; new_x = $newRect.Left
+            visible_right_edge = $clientRight
             protected_affinity = $protectedAffinity; restored_affinity = $affinity
         } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'notch-geometry.json') -Encoding UTF8
         if (!$protected -or !$restored) {
