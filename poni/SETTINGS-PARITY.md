@@ -32,6 +32,8 @@ Bagian **Background sound** menambahkan pilihan delapan suara, volume, dan opsi 
 
 Pada pemeriksaan Windows, runner mengubah panjang siklus menjadi 8, menambahkan preset 35 menit, mengaktifkan jeda setelah Timer, lalu memilih White noise dan mengaktifkan audio selama jeda. Kelima nilai diperiksa di profil. Tes Chromium merender kedelapan suara dan memeriksa bahwa audio tetap berjalan ketika panel ditutup, berhenti ketika sesi dijeda, dan mengikuti pilihan audio saat jeda. Keluaran speaker Windows belum diukur. [Hasil pemeriksaan Settings Windows](https://github.com/wawan-wfs/WFS-Poni-Lab/actions/runs/45293270392/artifacts/14874693349)
 
+Bagian General sekarang punya sembilan padanan tambahan untuk kontrol standar. Kontrolnya mencakup arah tata letak, jarak dari tepi atas, lebar dan tinggi notch tertutup, opasitas tertutup, lebar panel terbuka, tinggi panel biasa dan tinggi, serta visibilitas notch dalam tangkapan layar. Pengaturan posisi horizontal memakai slider dan preset kiri/tengah/kanan. Ini padanan untuk renderer kustom, sehingga tidak menambah hitungan standar. Tersisa **158 dari 201 kontrol standar** tanpa padanan. Ukuran bawaan terbuka 680 × 196 px dan tinggi modul tinggi 268 px berasal dari pengamatan Windows. Pengaturan ukuran berlaku saat nilai disimpan, sementara pratinjau saat slider diseret, drag langsung pada notch, tata letak lintas bahasa, dan pemilihan monitor masih perlu dikerjakan. [Tangkapan ukuran bawaan asli](https://github.com/wawan-wfs/WFS-Poni-Lab/actions/runs/45329941348/artifacts/14891860807)
+
 | Jenis kontrol | Deklarasi | Masuk katalog build |
 | --- | ---: | ---: |
 | Sakelar | 115 | 115 |

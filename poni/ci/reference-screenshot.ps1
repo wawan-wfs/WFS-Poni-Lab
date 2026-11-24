@@ -147,6 +147,7 @@ public static class PoniPointer {
                     # Use distinct labels for pages farther down the 1024x768 sidebar.
                     $settingsSearches = [ordered]@{
                         'notch-size' = 'expanded height tall modules'
+                        'notch-closed-size' = 'corner curve'
                         'notch-opacity' = 'opacity when closed'
                         'notch-position' = 'gap from the top edge'
                         screentime = 'Track screen time'

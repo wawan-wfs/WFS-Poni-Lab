@@ -36,6 +36,8 @@ let preferences = {
   remember_module: false, last_module: null,
   mirror_enabled: true, mirror_shape: 'rounded', calendar_enabled: true, week_start: 'windows',
   timer_presets: [], timer_remember: true,
+  panel: { direction: 'auto', top_gap: 0, position: 50, width: 200, height: 32, opacity: 100,
+    expanded_width: 680, expanded_height: 196, tall_height: 268, show_in_screenshots: true },
 };
 const mountedModules = new Set();
 let activePage = 'home';
@@ -84,6 +86,16 @@ function applyPreferences(value) {
   if (!value || !Array.isArray(value.module_order) || !Array.isArray(value.hidden_modules)) return;
   const previous = preferences;
   preferences = { ...preferences, ...value };
+  const panel = preferences.panel;
+  document.documentElement.dir = panel.direction === 'rtl' ? 'rtl' : 'ltr';
+  surface.classList.toggle('floating', panel.top_gap > 0);
+  surface.style.setProperty('--notch-width', panel.width + 'px');
+  surface.style.setProperty('--notch-height', panel.height + 'px');
+  surface.style.setProperty('--notch-opacity', String(panel.opacity / 100));
+  if (['top_gap', 'position', 'width', 'height', 'expanded_width', 'expanded_height', 'tall_height',
+    'show_in_screenshots'].some(key => previous.panel[key] !== panel[key])) {
+    updatePanelSize(!open.hidden);
+  }
   if (previous.timer_remember !== preferences.timer_remember ||
       previous.timer_presets.join(',') !== preferences.timer_presets.join(',')) {
     if (!timerActive(data.timer)) chooseTimerMinutes(startingTimerMinutes());
@@ -148,8 +160,9 @@ window.__TAURI__.event.listen('poni-settings-open-module', event => {
   updatePanelSize(true, true);
 }).catch(error => { status.textContent = String(error); });
 
+const compactPages = new Set(['home', 'dashboard', 'pomodoro', 'system', 'timer']);
 function isTallPage(page) {
-  return page === 'tasks' || page === 'calendar' || page === 'dayprogress' || Object.hasOwn(modules, page);
+  return !compactPages.has(page);
 }
 
 function callModule(method) {
@@ -212,7 +225,8 @@ document.addEventListener('keydown', event => {
   const tabs = [...navigation.querySelectorAll('.tab:not([hidden])')];
   if (!tabs.length) return;
   const active = tabs.findIndex(tab => tab.classList.contains('active'));
-  const direction = event.key === 'ArrowRight' ? 1 : -1;
+  const next = event.key === 'ArrowRight' ? 1 : -1;
+  const direction = document.documentElement.dir === 'rtl' ? -next : next;
   tabs[(active + direction + tabs.length) % tabs.length].click();
   event.preventDefault();
 });

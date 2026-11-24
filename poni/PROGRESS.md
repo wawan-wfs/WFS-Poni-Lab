@@ -41,4 +41,6 @@ Angka 100% mengukur cakupan inventaris modul. Kesetaraan penuh menunggu perbandi
 
 Di luar inventaris modul, Rust menyediakan sebagian perilaku Home/notch, Mirror di Home, jendela Settings terpisah dengan pengaturan dasar yang tersimpan, pemutaran media Windows, stopwatch, timer, statistik CPU/memori dan installer. Poni asli masih memiliki lebih banyak pengaturan, termasuk wizard Setup. Mirror perlu diuji dengan kamera fisik Windows. Tampilan pengingat OS pada instalasi Windows juga perlu diuji. Audit keamanan menyeluruh masih menunggu kesetaraan fitur.
 
+Settings General mengatur ukuran panel sesuai jenis modul, jarak vertikal, posisi horizontal, opasitas tertutup, arah tata letak, dan visibilitas dalam tangkapan layar Windows. Build memakai ukuran terbuka asli 680 × 196 px dengan tinggi 268 px untuk modul tinggi. Pengaturan posisi dapat diubah melalui slider dan tiga preset. Preview saat menyeret slider dan pemilihan monitor masih belum tersedia.
+
 Pengujian browser menggunakan backend tiruan untuk memeriksa alur modul. Runner Windows menjalankan tes Rust, membuat build dan installer, serta memeriksa pembukaan panel melalui Alt+N dan perubahan tinggi panel saat berpindah modul. Fitur yang memerlukan perangkat, akses akun, atau layanan eksternal juga memerlukan pengujian pada kondisi tersebut.

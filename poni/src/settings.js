@@ -60,6 +60,16 @@
     ['general', 'Hover delay', 'open mouse milliseconds', 'hover-delay'],
     ['general', 'Close delay', 'dismiss mouse milliseconds', 'close-delay'],
     ['general', 'Switch tabs with ← / →', 'arrows keyboard shortcuts', 'module-shortcuts'],
+    ['general', 'Layout direction', 'right left rtl ltr writing arah tata letak', 'layout-direction'],
+    ['general', 'Position along the top', 'notch position left centre right posisi', 'notch-position'],
+    ['general', 'Gap from the top edge', 'notch position floating distance jarak atas', 'notch-top-gap'],
+    ['general', 'Show Poni in screenshots & recordings', 'share capture protection privacy rekaman', 'show-in-screenshots'],
+    ['general', 'Width', 'closed notch width lebar tertutup', 'notch-width'],
+    ['general', 'Height', 'closed notch height tinggi tertutup', 'notch-height'],
+    ['general', 'Opacity when closed', 'closed notch transparency opasitas', 'notch-opacity'],
+    ['general', 'Expanded width', 'notch expanded width lebar terbuka', 'expanded-width'],
+    ['general', 'Expanded height', 'notch expanded height biasa', 'expanded-height'],
+    ['general', 'Expanded height (tall modules)', 'notch expanded height tall tinggi modul', 'tall-height'],
     ['modules', 'Open this module by default', 'initial page', 'default-module'],
     ['modules', 'Remember the last module', 'startup restore last tab', 'remember-module'],
     ['mirror', 'Show the Mirror on Home', 'camera webcam local video', 'mirror-enabled'],
@@ -114,6 +124,7 @@
   }
 
   function broadcast() {
+    document.documentElement.dir = settings.panel?.direction === 'rtl' ? 'rtl' : 'ltr';
     window.dispatchEvent(new CustomEvent('poni-settings-changed', { detail: settings }));
   }
 
@@ -132,7 +143,8 @@
           window.poniFocusPlayback.previewSettings(timer);
         }
       } else {
-        settings = await window.__TAURI__.core.invoke('set_poni_settings', { patch });
+        const update = source === 'panel' ? { panel: patch } : patch;
+        settings = await window.__TAURI__.core.invoke('set_poni_settings', { patch: update });
         broadcast();
       }
       banner.textContent = 'Saved';
@@ -176,6 +188,7 @@
 
   function values(source) {
     if (source === 'pomodoro') return pomo;
+    if (source === 'panel') return settings.panel;
     return active === 'screentime' ? screenTime : settings;
   }
 
@@ -198,7 +211,7 @@
     row(container, title, description, input);
   }
 
-  function range(container, id, title, key, { min = 0, max, step, disabled = false, unit, spokenUnit, description, source }) {
+  function range(container, id, title, key, { min = 0, max, step, disabled = false, unit, spokenUnit, description, source, physical = false }) {
     const box = create('span', 'settings-range');
     const input = create('input');
     const output = create('span', 'settings-range-value');
@@ -210,6 +223,7 @@
     input.step = step;
     input.value = values(source)[key];
     input.disabled = disabled;
+    if (physical) box.dir = 'ltr';
     const showValue = () => {
       output.textContent = unit ? input.value + ' ' + unit : input.value;
       if (spokenUnit) input.setAttribute('aria-valuetext', input.value + ' ' + spokenUnit);
@@ -226,6 +240,25 @@
   }
 
   function general(content) {
+    const display = group(content, 'Display');
+    select(display, 'layout-direction', 'Layout direction', null, 'direction',
+      [['auto', 'Follow the language'], ['ltr', 'Left to right'], ['rtl', 'Right to left']], false, 'panel');
+    range(display, 'notch-position', 'Position along the top', 'position',
+      { max: 100, step: 1, unit: '%', spokenUnit: 'percent', source: 'panel', physical: true });
+    const positions = create('div', 'settings-position-presets');
+    positions.dir = 'ltr';
+    for (const [title, position] of [['Left', 6], ['Centre', 50], ['Right', 94]]) {
+      const preset = button(title, () => void change({ position }, 'notch-position', 'panel'));
+      preset.setAttribute('aria-pressed', String(settings.panel.position === position));
+      positions.append(preset);
+    }
+    display.append(positions);
+    const pixels = { unit: 'px', spokenUnit: 'pixels', source: 'panel' };
+    range(display, 'notch-top-gap', 'Gap from the top edge', 'top_gap',
+      { ...pixels, max: 120, step: 2, description: 'At 0, Poni stays attached to the top edge.' });
+    toggle(display, 'show-in-screenshots', 'Show Poni in screenshots & recordings',
+      'Turn off to hide the notch from Windows screen capture.', 'show_in_screenshots', 'panel');
+
     const clock = group(content, 'Clock');
     select(clock, 'clock-format', 'Clock format', 'Follow the Windows region or choose a format.',
       'clock_format', [['region', 'Windows region'], ['h12', '12-hour'], ['h24', '24-hour']]);
@@ -239,6 +272,16 @@
     const shortcuts = group(content, 'Keyboard shortcuts');
     toggle(shortcuts, 'module-shortcuts', 'Switch tabs with ← / →', 'After opening Poni with Alt+N.',
       'module_shortcuts');
+
+    const size = group(content, 'Size');
+    range(size, 'notch-width', 'Width', 'width', { ...pixels, min: 80, max: 320, step: 2 });
+    range(size, 'notch-height', 'Height', 'height', { ...pixels, min: 22, max: 44, step: 1 });
+    range(size, 'notch-opacity', 'Opacity when closed', 'opacity',
+      { min: 20, max: 100, step: 5, unit: '%', spokenUnit: 'percent', source: 'panel' });
+    range(size, 'expanded-width', 'Expanded width', 'expanded_width', { ...pixels, min: 560, max: 780, step: 10 });
+    range(size, 'expanded-height', 'Expanded height', 'expanded_height', { ...pixels, min: 170, max: 260, step: 2 });
+    range(size, 'tall-height', 'Expanded height (tall modules)', 'tall_height',
+      { ...pixels, min: 220, max: 340, step: 2 });
   }
 
   function mirror(content) {

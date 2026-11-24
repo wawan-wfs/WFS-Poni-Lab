@@ -21,6 +21,7 @@ mod health;
 mod ics_import;
 mod notes;
 mod notifs;
+mod panel;
 mod pomodoro;
 mod prayer;
 mod radio;
@@ -308,6 +309,7 @@ struct Store {
 struct WindowSequence {
     session: Option<Uuid>,
     last: u64,
+    capture_protected: bool,
 }
 
 struct ShortcutStatus(bool);
@@ -1062,41 +1064,43 @@ fn stopwatch_action(store: State<'_, Mutex<Store>>, action: String) -> Result<Ap
         })
 }
 
-fn resize_panel(window: &tauri::WebviewWindow, open: bool, tall: bool) -> Result<(), String> {
-    let (mut width, mut height): (f64, f64) = match (open, tall) {
-        (true, true) => (680.0, 420.0),
-        (true, false) => (680.0, 200.0),
-        (false, _) => (200.0, 32.0),
-    };
-    let monitor = window.current_monitor().map_err(|e| e.to_string())?;
-    if let Some(monitor) = &monitor {
-        let scale = monitor.scale_factor();
-        let work = monitor.work_area();
-        width = width.min(f64::from(work.size.width) / scale);
-        height = height.min(f64::from(work.size.height) / scale);
-    }
-    window
-        .set_size(tauri::LogicalSize::new(width, height))
-        .map_err(|e| e.to_string())?;
-    if let Some(monitor) = monitor {
-        let physical_width = (width * monitor.scale_factor()).round() as u32;
-        let x =
-            monitor.position().x + (monitor.size().width.saturating_sub(physical_width) / 2) as i32;
+fn apply_panel_preferences(
+    window: &tauri::WebviewWindow,
+    state: &mut WindowSequence,
+    preferences: &panel::Preferences,
+    open: bool,
+    tall: bool,
+) -> Result<(), String> {
+    let protect = !preferences.show_in_screenshots;
+    if protect != state.capture_protected {
+        #[cfg(any(windows, target_os = "macos"))]
         window
-            .set_position(tauri::PhysicalPosition::new(x, monitor.position().y))
-            .map_err(|e| e.to_string())?;
+            .set_content_protected(protect)
+            .map_err(|error| error.to_string())?;
+        state.capture_protected = protect;
     }
-    Ok(())
+    preferences.apply_layout(window, open, tall)
 }
 
 #[tauri::command]
 fn initialize_panel(
     window: tauri::WebviewWindow,
     sequence: State<'_, Mutex<WindowSequence>>,
+    store: State<'_, Mutex<Store>>,
     session: Uuid,
 ) -> Result<(), String> {
+    if window.label() != "main" {
+        return Err("Only the notch can initialize the panel".into());
+    }
     let mut state = sequence.lock().map_err(|_| "Window state unavailable")?;
-    resize_panel(&window, false, false)?;
+    let preferences = store
+        .lock()
+        .map_err(|_| "Storage unavailable")?
+        .data
+        .settings
+        .panel
+        .clone();
+    apply_panel_preferences(&window, &mut state, &preferences, false, false)?;
     state.session = Some(session);
     state.last = 0;
     Ok(())
@@ -1106,17 +1110,28 @@ fn initialize_panel(
 fn set_panel_open(
     window: tauri::WebviewWindow,
     sequence: State<'_, Mutex<WindowSequence>>,
+    store: State<'_, Mutex<Store>>,
     session: Uuid,
     open: bool,
     tall: bool,
     focus: bool,
     seq: u64,
 ) -> Result<(), String> {
+    if window.label() != "main" {
+        return Err("Only the notch can resize the panel".into());
+    }
     let mut state = sequence.lock().map_err(|_| "Window state unavailable")?;
     if state.session != Some(session) || seq <= state.last {
         return Ok(());
     }
-    resize_panel(&window, open, tall)?;
+    let preferences = store
+        .lock()
+        .map_err(|_| "Storage unavailable")?
+        .data
+        .settings
+        .panel
+        .clone();
+    apply_panel_preferences(&window, &mut state, &preferences, open, tall)?;
     if open && focus {
         window.set_focus().map_err(|e| e.to_string())?;
     }
@@ -1204,6 +1219,17 @@ fn main() {
         .setup(|app| {
             let path = app.path().app_data_dir()?.join("data.json");
             let store = Store::open(path).map_err(std::io::Error::other)?;
+            let mut sequence = WindowSequence::default();
+            if let Some(window) = app.get_webview_window("main") {
+                apply_panel_preferences(
+                    &window,
+                    &mut sequence,
+                    &store.data.settings.panel,
+                    false,
+                    false,
+                )
+                .map_err(std::io::Error::other)?;
+            }
             app.manage(Mutex::new(store));
             app.manage(Mutex::new(control::ControlState::default()));
             app.manage(Mutex::new(screentime::Tracker::default()));
@@ -1213,7 +1239,7 @@ fn main() {
                 system,
                 last_cpu_sample: std::time::Instant::now(),
             }));
-            app.manage(Mutex::new(WindowSequence::default()));
+            app.manage(Mutex::new(sequence));
             app.manage(ShortcutStatus(
                 app.global_shortcut().register("Alt+N").is_ok(),
             ));
@@ -1229,14 +1255,6 @@ fn main() {
                 }
                 std::thread::sleep(std::time::Duration::from_secs(15));
             });
-            if let Some(window) = app.get_webview_window("main") {
-                if let Some(monitor) = window.current_monitor()? {
-                    let size = window.outer_size()?;
-                    let x = monitor.position().x
-                        + (monitor.size().width.saturating_sub(size.width) / 2) as i32;
-                    window.set_position(tauri::PhysicalPosition::new(x, monitor.position().y))?;
-                }
-            }
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

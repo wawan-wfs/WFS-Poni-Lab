@@ -190,6 +190,9 @@
 .settings-preset-form .settings-text { width: 70px; }
 .settings-presets { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 10px; }
 .settings-presets .settings-button { margin: 0; }
+.settings-position-presets { display: flex; justify-content: end; gap: 5px; padding: 6px 10px; border-bottom: 1px solid var(--settings-line); }
+.settings-position-presets .settings-button { margin: 0; }
+.settings-position-presets [aria-pressed="true"] { border-color: var(--settings-accent); }
 
 .settings-button:not(:disabled):hover { background: #39393a; }
 .settings-button + .settings-button { margin-inline-start: 5px; }

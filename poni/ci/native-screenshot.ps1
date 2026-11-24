@@ -9,6 +9,8 @@ public static class CursorPosition {
     [DllImport("user32.dll")] public static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
     [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(System.IntPtr window, out Rect rect);
+    [DllImport("user32.dll")] public static extern bool GetClientRect(System.IntPtr window, out Rect rect);
+    [DllImport("user32.dll")] public static extern bool GetWindowDisplayAffinity(System.IntPtr window, out uint affinity);
     [DllImport("user32.dll", EntryPoint="FindWindowW", CharSet=CharSet.Unicode, ExactSpelling=true)] private static extern IntPtr FindWindow(string className, string title);
     public static IntPtr FindWindowByTitle(string title) => FindWindow(null, title);
     [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(System.IntPtr window, out uint processId);
@@ -83,7 +85,7 @@ try {
     $moduleHeight = $moduleRect.Bottom - $moduleRect.Top
     $homeHeight = $rect.Bottom - $rect.Top
     Save-Screen 'currency.png'
-    if ($moduleHeight -lt $homeHeight + 100) { throw "Module did not expand the panel; heights were $homeHeight/$moduleHeight pixels." }
+    if ($moduleHeight -le $homeHeight) { throw "Module did not expand the panel; heights were $homeHeight/$moduleHeight pixels." }
     foreach ($module in @('chat', 'bluetooth', 'ai-usage')) {
         [CursorPosition]::keybd_event(0x25, 0, 0, [UIntPtr]::Zero)
         [CursorPosition]::keybd_event(0x25, 0, 2, [UIntPtr]::Zero)
@@ -150,6 +152,7 @@ try {
     $settingsWidth = $settingsRect.Right - $settingsRect.Left
     $screenTimeChecked = $false
     $pomodoroChecked = $false
+    $geometryChecked = $false
     if ($bounds.Width -eq 1024 -and $bounds.Height -eq 768) {
         function Find-Setting([string]$text) {
             Click-Point ($settingsRect.Left + 102) ($settingsRect.Top + 98)
@@ -164,6 +167,48 @@ try {
             [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
             Start-Sleep -Milliseconds 400
         }
+
+        $closedRect = [CursorPosition+Rect]::new()
+        if (![CursorPosition]::GetWindowRect($mainHandle, [ref]$closedRect)) { throw 'Could not inspect the closed notch.' }
+        Find-Setting 'closed notch width'
+        [System.Windows.Forms.SendKeys]::SendWait('{END}')
+        Start-Sleep -Seconds 2
+        Find-Setting 'gap from the top edge'
+        [System.Windows.Forms.SendKeys]::SendWait('{END}')
+        Start-Sleep -Seconds 2
+        Find-Setting 'position along the top'
+        [System.Windows.Forms.SendKeys]::SendWait('{END}')
+        Start-Sleep -Seconds 2
+        $newRect = [CursorPosition+Rect]::new()
+        $clientRect = [CursorPosition+Rect]::new()
+        if (![CursorPosition]::GetWindowRect($mainHandle, [ref]$newRect) -or
+            ![CursorPosition]::GetClientRect($mainHandle, [ref]$clientRect)) {
+            throw 'Could not read the resized notch.'
+        }
+        Save-Screen 'settings-notch-geometry.png'
+        $newWidth = $clientRect.Right - $clientRect.Left
+        $movedDown = $newRect.Top - $closedRect.Top
+        if ($newWidth -ne 320 -or $movedDown -ne 120 -or $newRect.Left -le $closedRect.Left) {
+            throw "Notch geometry did not take effect. Width: $newWidth, moved down: $movedDown, X: $($closedRect.Left) to $($newRect.Left)."
+        }
+
+        Find-Setting 'show poni in screenshots'
+        [System.Windows.Forms.SendKeys]::SendWait(' ')
+        Start-Sleep -Seconds 2
+        $affinity = [uint32]0
+        $protected = [CursorPosition]::GetWindowDisplayAffinity($mainHandle, [ref]$affinity) -and ($affinity -band 1) -ne 0
+        $protectedAffinity = $affinity
+        [System.Windows.Forms.SendKeys]::SendWait(' ')
+        Start-Sleep -Seconds 2
+        $restored = [CursorPosition]::GetWindowDisplayAffinity($mainHandle, [ref]$affinity) -and $affinity -eq 0
+        @{
+            closed_width = $newWidth; moved_down = $movedDown; original_x = $closedRect.Left; new_x = $newRect.Left
+            protected_affinity = $protectedAffinity; restored_affinity = $affinity
+        } | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'notch-geometry.json') -Encoding UTF8
+        if (!$protected -or !$restored) {
+            throw "Windows did not apply and clear the display affinity. Protected: $protectedAffinity, restored: $affinity."
+        }
+        $geometryChecked = $true
 
         Find-Setting 'stop counting after idle'
         [System.Windows.Forms.SendKeys]::SendWait('{END}')
@@ -223,7 +268,7 @@ try {
     if ($process.HasExited -or [CursorPosition]::FindWindowByTitle('Poni Settings') -ne [IntPtr]::Zero) {
         throw 'Closing Settings did not leave the notch running independently.'
     }
-    @{ process_id = $process.Id; main_window_handle = $mainHandle.ToInt64(); screenshot = 'desktop.png'; width_after_shortcut = $windowWidth; module_height = $moduleHeight; settings_width = $settingsWidth; settings_window_handle = $settingsHandle.ToInt64(); settings_closed_independently = $true; screen_time_saved = $screenTimeChecked; pomodoro_saved = $pomodoroChecked; weather_attempted = ($bounds.Width -eq 1024 -and $bounds.Height -eq 768) } |
+    @{ process_id = $process.Id; main_window_handle = $mainHandle.ToInt64(); screenshot = 'desktop.png'; width_after_shortcut = $windowWidth; module_height = $moduleHeight; settings_width = $settingsWidth; settings_window_handle = $settingsHandle.ToInt64(); settings_closed_independently = $true; geometry_checked = $geometryChecked; screen_time_saved = $screenTimeChecked; pomodoro_saved = $pomodoroChecked; weather_attempted = ($bounds.Width -eq 1024 -and $bounds.Height -eq 768) } |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'observation.json') -Encoding UTF8
 } finally {
     if (!$process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }

@@ -16,6 +16,8 @@ FIXTURE = """
     mirror_enabled:true, mirror_shape:'rounded',
     calendar_enabled:true, meeting_reminder_minutes:5, week_start:'windows',
     timer_presets:[], timer_remember:true, timer_then_break:false,
+    panel:{ direction:'auto', top_gap:0, position:50, width:200, height:32, opacity:100,
+      expanded_width:680, expanded_height:196, tall_height:268, show_in_screenshots:true },
   };
   const read = () => JSON.parse(localStorage.getItem('test-settings')) || structuredClone(defaults);
   const save = value => localStorage.setItem('test-settings', JSON.stringify(value));
@@ -79,7 +81,9 @@ FIXTURE = """
         available:true, enabled:readScreenTime().enabled, apps:[], hours:Array(24).fill(0), total:0, switches:0,
       };
       if (command === 'set_poni_settings') {
-        Object.assign(settings, args.patch);
+        const { panel, ...patch } = args.patch;
+        Object.assign(settings, patch);
+        if (panel) Object.assign(settings.panel, panel);
         settings.timer_presets.sort((a,b) => a-b);
         if (settings.hidden_modules.includes(settings.default_module)) {
           settings.default_module = settings.module_order.find(id => !settings.hidden_modules.includes(id));
@@ -124,11 +128,42 @@ def test_settings(page):
     popup, settings = open_settings(page)
 
     search = settings.get_by_role('searchbox', name='Search settings')
+    search.fill('closed notch width')
+    search.press('Enter')
+    width = settings.locator('#settings-notch-width')
+    expect(width).to_be_focused()
+    expect(width).to_have_attribute('min', '80')
+    width.fill('250')
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    expect(page.locator('#closed')).to_have_css('width', '250px')
+    settings.locator('#settings-notch-height').fill('40')
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    expect(page.locator('#closed')).to_have_css('height', '40px')
+    settings.locator('#settings-notch-opacity').fill('45')
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    expect(page.locator('#closed')).to_have_css('opacity', '0.45')
+    settings.locator('#settings-notch-top-gap').fill('24')
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    expect(page.locator('#closed')).to_have_css('border-top-left-radius', '999px')
+    settings.get_by_role('button', name='Right', exact=True).click()
+    expect(settings.locator('#settings-notch-position')).to_have_value('94')
+    settings.locator('#settings-show-in-screenshots').uncheck()
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    settings.locator('#settings-layout-direction').select_option('rtl')
+    expect(page.locator('html')).to_have_attribute('dir', 'rtl')
+    expect(popup.locator('html')).to_have_attribute('dir', 'rtl')
+    settings.locator('#settings-layout-direction').select_option('ltr')
+    expect(page.locator('html')).to_have_attribute('dir', 'ltr')
+
     search.fill('hover delay')
     settings.get_by_role('button', name='Hover delay', exact=False).click()
     expect(settings.locator('#settings-hover-delay')).to_be_focused()
     settings.locator('#settings-hover-delay').fill('620')
     expect(settings.locator('#settings-hover-delay')).to_have_value('620')
+    expect(settings.locator('#settings-notch-width')).to_have_value('250')
+    expect(settings.locator('#settings-notch-top-gap')).to_have_value('24')
+    expect(settings.locator('#settings-notch-position')).to_have_value('94')
+    expect(settings.locator('#settings-show-in-screenshots')).not_to_be_checked()
     expect(settings.get_by_role('status')).to_have_text('Saved')
 
     settings.locator('#settings-clock-format').select_option('h24')
