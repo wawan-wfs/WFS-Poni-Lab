@@ -493,7 +493,7 @@ function liveCountdown(ms) {
     ':' + String(seconds % 60).padStart(2, '0');
 }
 
-function renderLiveActivities(now = Date.now()) {
+function renderLiveActivities(now = Date.now(), advance = false) {
   const settings = preferences.live;
   const candidates = [];
   if (settings.enabled && open.hidden) {
@@ -535,7 +535,10 @@ function renderLiveActivities(now = Date.now()) {
       });
     }
   }
-  currentLive = candidates[(settings.rotate ? liveIndex : 0) % candidates.length] || null;
+  if (advance && candidates.length > 1) liveIndex++;
+  currentLive = candidates.length
+    ? candidates[(settings.rotate ? liveIndex : 0) % candidates.length]
+    : null;
   liveActivity.hidden = !currentLive;
   closed.classList.toggle('has-live', !!currentLive);
   if (currentLive) {
@@ -579,9 +582,8 @@ updateClock();
 setInterval(updateClock, 1000);
 setInterval(() => {
   if (!open.hidden || !preferences.live.rotate || closed.matches(':hover') ||
-      bedtimeNotice || timerNotice || healthNotice || reminderTask) return;
-  liveIndex++;
-  renderLiveActivities();
+      closed.classList.contains('battery-alert') || bedtimeNotice || timerNotice || healthNotice || reminderTask) return;
+  renderLiveActivities(Date.now(), true);
 }, 6000);
 
 function mutate(command, args) {

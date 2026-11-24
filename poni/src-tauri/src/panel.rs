@@ -153,24 +153,24 @@ impl Preferences {
         let (size, gap) = self.fit(dimensions, monitor.work_area().size, monitor.scale_factor());
         let offset = self.horizontal_offset(monitor.size().width, size.width);
         window.set_size(size).map_err(|error| error.to_string())?;
-        let outer = window.outer_position().map_err(|error| error.to_string())?;
-        let inner = window.inner_position().map_err(|error| error.to_string())?;
         let position = PhysicalPosition::new(
-            monitor
-                .position()
-                .x
-                .saturating_add(offset)
-                .saturating_sub(inner.x.saturating_sub(outer.x)),
-            monitor
-                .position()
-                .y
-                .saturating_add(gap as i32)
-                .saturating_sub(inner.y.saturating_sub(outer.y)),
+            monitor.position().x.saturating_add(offset),
+            monitor.position().y.saturating_add(gap as i32),
         );
-        window
-            .set_position(position)
-            .map_err(|error| error.to_string())
+        position_client(window, position).map_err(|error| error.to_string())
     }
+}
+
+pub(super) fn position_client(
+    window: &WebviewWindow,
+    position: PhysicalPosition<i32>,
+) -> tauri::Result<()> {
+    let outer = window.outer_position()?;
+    let inner = window.inner_position()?;
+    window.set_position(PhysicalPosition::new(
+        position.x.saturating_sub(inner.x.saturating_sub(outer.x)),
+        position.y.saturating_sub(inner.y.saturating_sub(outer.y)),
+    ))
 }
 
 #[cfg(test)]

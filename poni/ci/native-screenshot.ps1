@@ -512,9 +512,12 @@ try {
             Start-Sleep -Milliseconds 300
         } while ([DateTimeOffset]::UtcNow -lt $eyeDeadline)
         $eyeRect = [CursorPosition+Rect]::new()
+        $eyeOrigin = [CursorPosition+Point]::new()
         if ($eyeWindow -eq [IntPtr]::Zero -or
             ![CursorPosition]::GetClientRect($eyeWindow, [ref]$eyeRect) -or
-            $eyeRect.Right -lt $bounds.Width -or $eyeRect.Bottom -lt $bounds.Height) {
+            ![CursorPosition]::ClientToScreen($eyeWindow, [ref]$eyeOrigin) -or
+            $eyeOrigin.X -ne $bounds.Left -or $eyeOrigin.Y -ne $bounds.Top -or
+            $eyeRect.Right -ne $bounds.Width -or $eyeRect.Bottom -ne $bounds.Height) {
             throw 'The manual eye break did not cover the runner display.'
         }
         Start-Sleep -Seconds 2
@@ -524,7 +527,7 @@ try {
         if ([CursorPosition]::FindWindowByTitle('Poni Eye Break') -ne [IntPtr]::Zero) {
             throw 'Escape did not dismiss the eye break.'
         }
-        @{ covered_display = $true; dismissed_with_escape = $true } |
+        @{ covered_display = $true; aligned_to_screen_edges = $true; dismissed_with_escape = $true } |
             ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'eye-break-observation.json') -Encoding UTF8
     }
     @{ process_id = $observedPid; main_window_handle = $mainHandle.ToInt64(); screenshot = 'desktop.png'; width_after_shortcut = $windowWidth; module_height = $moduleHeight; settings_width = $settingsWidth; settings_window_handle = $settingsHandle.ToInt64(); settings_closed_independently = $true; geometry_checked = $geometryChecked; screen_time_saved = $screenTimeChecked; pomodoro_saved = $pomodoroChecked; todo_checked = $todoChecked; weather_attempted = ($bounds.Width -eq 1024 -and $bounds.Height -eq 768) } |

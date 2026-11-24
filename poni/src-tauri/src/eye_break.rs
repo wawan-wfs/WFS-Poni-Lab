@@ -71,6 +71,7 @@ fn open(app: &AppHandle, duration: u8) -> Result<(), String> {
                     if let Err(error) = window
                         .set_position(*monitor.position())
                         .and_then(|()| window.set_size(*monitor.size()))
+                        .and_then(|()| crate::panel::position_client(&window, *monitor.position()))
                     {
                         let _ = window.destroy();
                         return Err(error);
