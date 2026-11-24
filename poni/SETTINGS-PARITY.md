@@ -42,6 +42,8 @@ Runner Windows memeriksa lebar notch 320 px, perubahan jarak 120 px, dan perataa
 
 Ketiga kontrol Todo yang aktif di Poni 1.8.1 kini punya padanan. Pengaturan menentukan kapan tugas terlambat berpindah ke Done, berapa lama snooze memindahkan tenggat, dan berapa hari Trash menyimpan tugas. Tugas dapat menimpa aturan keterlambatan, dan snooze tersedia di tab Todo serta pengingat notch tertutup. Trash memisahkan tugas terhapus dari agenda dan daftar aktif serta memungkinkan pemulihan. Tersisa **152 dari 201 kontrol standar** tanpa padanan.
 
+Settings Day Progress kini memakai jam mulai dan jam tidur yang sama dengan tab Day Progress. Dua kontrol baru mengaktifkan pengingat tidur 15 detik dan mengizinkan chime saat Windows melaporkan bahwa interupsi sedang dibatasi. Pengingat dapat ditunda dengan durasi snooze Todo. Deteksi Windows memakai status notifikasi Shell, sehingga perilakunya pada setiap mode Do not disturb dan keluaran speaker masih perlu dibandingkan. Tersisa **150 dari 201 kontrol standar** tanpa padanan.
+
 | Jenis kontrol | Deklarasi | Masuk katalog build |
 | --- | ---: | ---: |
 | Sakelar | 115 | 115 |

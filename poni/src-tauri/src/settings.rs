@@ -74,6 +74,8 @@ pub(super) struct PoniSettings {
     pub(super) timer_then_break: bool,
     pub(super) panel: panel::Preferences,
     pub(super) todo: todo::Preferences,
+    pub(super) bedtime_reminder: bool,
+    pub(super) bedtime_chime_dnd: bool,
     module_order: Vec<String>,
     hidden_modules: Vec<String>,
     default_module: String,
@@ -100,6 +102,8 @@ impl Default for PoniSettings {
             timer_then_break: false,
             panel: panel::Preferences::default(),
             todo: todo::Preferences::default(),
+            bedtime_reminder: false,
+            bedtime_chime_dnd: false,
             module_order: MODULES.iter().map(|id| (*id).to_string()).collect(),
             hidden_modules: Vec::new(),
             default_module: "home".into(),
@@ -128,6 +132,8 @@ pub(super) struct SettingsPatch {
     timer_then_break: Option<bool>,
     panel: Option<panel::Patch>,
     todo: Option<todo::Patch>,
+    bedtime_reminder: Option<bool>,
+    bedtime_chime_dnd: Option<bool>,
     module_order: Option<Vec<String>>,
     hidden_modules: Option<Vec<String>>,
     default_module: Option<String>,
@@ -259,6 +265,8 @@ impl PoniSettings {
         self.week_start = patch.week_start.unwrap_or(self.week_start);
         self.timer_remember = patch.timer_remember.unwrap_or(self.timer_remember);
         self.timer_then_break = patch.timer_then_break.unwrap_or(self.timer_then_break);
+        self.bedtime_reminder = patch.bedtime_reminder.unwrap_or(self.bedtime_reminder);
+        self.bedtime_chime_dnd = patch.bedtime_chime_dnd.unwrap_or(self.bedtime_chime_dnd);
         self.remember_module = patch.remember_module.unwrap_or(self.remember_module);
         self.normalize();
         Ok(())

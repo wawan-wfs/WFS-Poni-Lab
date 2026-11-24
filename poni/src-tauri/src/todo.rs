@@ -36,6 +36,10 @@ pub(super) struct Patch {
 }
 
 impl Preferences {
+    pub(super) fn snooze_minutes(&self) -> u16 {
+        self.snooze_minutes
+    }
+
     pub(super) fn apply(&mut self, patch: Patch) -> Result<(), String> {
         validate_late(patch.late_minutes)?;
         if patch

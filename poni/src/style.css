@@ -141,6 +141,8 @@ textarea { resize: vertical; min-height: 55px; }
 .timer-presets button[aria-pressed="true"] { border-color: var(--accent, #4da3ff); }
 .todo-reminder { display: flex; align-items: center; justify-content: space-between; gap: 6px; height: 36px; max-width: 320px; margin: 4px auto 0; padding: 4px 9px; border-radius: 12px; background: #1c1a18; font-size: 12px; }
 .todo-reminder span { min-width: 0; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #ffb859; }
+.bedtime-reminder span { color: #c4bdff; }
+.panel-open .bedtime-reminder { position: absolute; z-index: 2; inset-inline: 12px; inset-block-end: 7px; border: 1px solid #56528d; }
 .todo-reminder button, .task-views button { border: 1px solid #333; border-radius: 6px; padding: 3px 7px; background: #232325; color: #eee; font-size: 12px; }
 .task-views { display: flex; gap: 5px; padding-block: 5px; }
 .task-views [aria-pressed="true"] { background: #444; color: #fff; }

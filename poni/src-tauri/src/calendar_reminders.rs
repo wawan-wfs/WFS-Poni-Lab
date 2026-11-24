@@ -57,7 +57,10 @@ fn as_utc(ms: u64) -> Option<DateTime<Utc>> {
     DateTime::from_timestamp_millis(i64::try_from(ms).ok()?)
 }
 
-fn resolve_local<Tz: TimeZone>(zone: &Tz, wall_time: NaiveDateTime) -> Option<DateTime<Tz>> {
+pub(super) fn resolve_local<Tz: TimeZone>(
+    zone: &Tz,
+    wall_time: NaiveDateTime,
+) -> Option<DateTime<Tz>> {
     if let Some(instant) = zone.from_local_datetime(&wall_time).earliest() {
         return Some(instant);
     }

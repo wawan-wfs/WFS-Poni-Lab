@@ -265,6 +265,13 @@ try {
         [System.Windows.Forms.SendKeys]::SendWait('{END}')
         Start-Sleep -Seconds 2
         Save-Screen 'settings-todo.png'
+        Find-Setting 'remind me at bedtime'
+        [System.Windows.Forms.SendKeys]::SendWait(' ')
+        Start-Sleep -Seconds 2
+        Find-Setting 'chime even in do not disturb'
+        [System.Windows.Forms.SendKeys]::SendWait(' ')
+        Start-Sleep -Seconds 2
+        Save-Screen 'settings-day-progress.png'
 
         Find-Setting 'focus sessions before a long break'
         [System.Windows.Forms.SendKeys]::SendWait('{END}')
@@ -299,6 +306,9 @@ try {
             throw ('Unexpected Pomodoro settings after native input: ' + ($observed | ConvertTo-Json -Compress))
         }
         if ($profile.settings.todo.trash_days -ne 30) { throw 'Todo Trash retention did not save from Settings.' }
+        if (!$profile.settings.bedtime_reminder -or !$profile.settings.bedtime_chime_dnd) {
+            throw 'Bedtime reminder and chime settings did not save.'
+        }
         $pomodoroChecked = $true
     }
     [CursorPosition]::PostMessage($settingsHandle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
@@ -319,6 +329,11 @@ try {
         $seed.settings.panel.width = 200
         $seed.settings.todo.late_minutes = 3
         $seed.settings.todo.snooze_minutes = 15
+        $localNow = [DateTimeOffset]::Now
+        $bedAt = $localNow.AddMinutes(1).AddSeconds(-$localNow.Second).AddMilliseconds(-$localNow.Millisecond)
+        if (($bedAt - $localNow).TotalSeconds -lt 45) { $bedAt = $bedAt.AddMinutes(1) }
+        $seed.bed_minute = $bedAt.Hour * 60 + $bedAt.Minute
+        $seed.bedtime_notified_at_ms = $null
         $now = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
         $snoozeId = [Guid]::NewGuid().ToString()
         $lateId = [Guid]::NewGuid().ToString()
@@ -362,6 +377,29 @@ try {
             throw ('Unexpected Todo state after restart: ' + ($todoResult | ConvertTo-Json -Compress))
         }
         $todoChecked = $true
+
+        $bedCheckUntil = [DateTimeOffset]::UtcNow.AddSeconds(115)
+        $bedtimeChecked = $false
+        do {
+            $updated = Get-Content -Raw -LiteralPath $dataPath | ConvertFrom-Json
+            if ($updated.bedtime_notified_at_ms -ge $bedAt.ToUnixTimeMilliseconds() -and
+                [CursorPosition]::GetClientRect($todoWindow, [ref]$todoClient) -and $todoClient.Bottom -ge 76) {
+                $bedtimeChecked = $true
+                break
+            }
+            Start-Sleep -Seconds 1
+        } while ([DateTimeOffset]::UtcNow -lt $bedCheckUntil)
+        if (!$bedtimeChecked) { throw 'The scheduled bedtime reminder did not appear on the notch.' }
+        Save-Screen 'bedtime-reminder.png'
+        $bedOrigin = [CursorPosition+Point]::new()
+        if (![CursorPosition]::ClientToScreen($todoWindow, [ref]$bedOrigin)) { throw 'Could not locate the bedtime reminder.' }
+        Click-Point ($bedOrigin.X + $todoClient.Right - 90) ($bedOrigin.Y + 54)
+        Start-Sleep -Seconds 2
+        if (![CursorPosition]::GetClientRect($todoWindow, [ref]$todoClient) -or $todoClient.Bottom -ge 76) {
+            throw 'The bedtime reminder did not close after acknowledgement.'
+        }
+        @{ reminder_appeared = $true; acknowledged = $true } |
+            ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'bedtime-observation.json') -Encoding UTF8
     }
     @{ process_id = $observedPid; main_window_handle = $mainHandle.ToInt64(); screenshot = 'desktop.png'; width_after_shortcut = $windowWidth; module_height = $moduleHeight; settings_width = $settingsWidth; settings_window_handle = $settingsHandle.ToInt64(); settings_closed_independently = $true; geometry_checked = $geometryChecked; screen_time_saved = $screenTimeChecked; pomodoro_saved = $pomodoroChecked; todo_checked = $todoChecked; weather_attempted = ($bounds.Width -eq 1024 -and $bounds.Height -eq 768) } |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'observation.json') -Encoding UTF8

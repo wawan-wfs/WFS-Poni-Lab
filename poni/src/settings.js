@@ -59,6 +59,10 @@
     ['todo', 'Mark late tasks as done', 'automatic overdue tasks selesai terlambat', 'todo-late'],
     ['todo', 'Snooze a due task for', 'postpone due reminder tunda tugas', 'todo-snooze'],
     ['todo', 'Keep deleted tasks in Trash for', 'retention days deleted task hapus sampah', 'todo-trash-days'],
+    ['dayprogress', 'Day starts', 'day progress wake time mulai bangun', 'day-wake'],
+    ['dayprogress', 'Bedtime', 'day progress sleep time jadwal tidur', 'day-bed'],
+    ['dayprogress', 'Remind me at bedtime', 'day progress reminder pengingat tidur', 'bedtime-reminder'],
+    ['dayprogress', 'Chime even in Do not disturb', 'day progress dnd sound bunyi tidur', 'bedtime-chime-dnd'],
     ['general', 'Clock format', '12 hour 24 hour region time', 'clock-format'],
     ['general', 'Time at the top of the open Poni', 'header clock', 'header-clock'],
     ['general', 'Open on hover', 'mouse click to open', 'open-on-hover'],
@@ -120,6 +124,7 @@
   let screenTime = null;
   let pomo = null;
   let launchAtLogin = null;
+  let daySchedule = null;
   let active = 'general';
   let busy = false;
   let loading = false;
@@ -147,6 +152,9 @@
         screenTime = await window.__TAURI__.core.invoke('set_screentime_preferences', { patch });
       } else if (source === 'startup') {
         launchAtLogin = await window.__TAURI__.core.invoke('set_poni_startup', { enabled: patch.launch_at_login });
+      } else if (source === 'dayprogress') {
+        const saved = await window.__TAURI__.core.invoke('set_day_schedule', patch);
+        daySchedule = { wake_minute: saved.wake_minute, bed_minute: saved.bed_minute };
       } else if (source === 'pomodoro') {
         const timer = await window.__TAURI__.core.invoke('pomodoro_settings', { settings: patch });
         pomo = timer.settings;
@@ -336,6 +344,29 @@
       [5, 10, 15, 30, 60].map(value => [value, minutes(value)]), false, 'todo');
     range(controls, 'todo-trash-days', 'Keep deleted tasks in Trash for', 'trash_days',
       { min: 1, max: 30, step: 1, unit: 'days', spokenUnit: 'days', source: 'todo' });
+  }
+
+  function dayProgress(content) {
+    const controls = group(content);
+    for (const [key, label] of [['wake', 'Day starts'], ['bed', 'Bedtime']]) {
+      const time = create('input', 'settings-text');
+      const id = 'day-' + key;
+      time.id = 'settings-' + id;
+      time.type = 'time';
+      time.required = true;
+      const value = daySchedule[key + '_minute'];
+      time.value = [Math.floor(value / 60), value % 60].map(value => String(value).padStart(2, '0')).join(':');
+      time.addEventListener('change', () => {
+        if (!time.validity.valid) return;
+        const [hour, minute] = time.value.split(':').map(Number);
+        void change({ [key]: hour * 60 + minute }, id, 'dayprogress');
+      });
+      row(controls, label, null, time);
+    }
+    toggle(controls, 'bedtime-reminder', 'Remind me at bedtime',
+      'Show a 15-second reminder while Poni is running.', 'bedtime_reminder');
+    toggle(controls, 'bedtime-chime-dnd', 'Chime even in Do not disturb',
+      'Play the bedtime chime even when Windows is suppressing interruptions.', 'bedtime_chime_dnd');
   }
 
   function calendar(content) {
@@ -593,6 +624,7 @@
         if (active === 'general') general(controls);
         else if (active === 'modules') modules(controls);
         else if (active === 'todo') todo(controls);
+        else if (active === 'dayprogress' && daySchedule) dayProgress(controls);
         else if (active === 'mirror') mirror(controls);
         else if (active === 'calendar') calendar(controls);
         else if (active === 'screentime' && screenTime) screenTimeControls(controls);
@@ -611,9 +643,10 @@
     updateBusy();
     try {
       const invoke = window.__TAURI__.core.invoke;
-      [settings, screenTime, pomo, launchAtLogin] = await Promise.all([
+      [settings, screenTime, pomo, launchAtLogin, daySchedule] = await Promise.all([
         invoke('get_poni_settings'), invoke('get_screentime_preferences'), invoke('get_pomodoro_settings'),
         invoke('get_poni_startup').catch(() => null),
+        invoke('get_day_schedule').catch(() => null),
       ]);
       broadcast();
     } catch (error) {
@@ -658,6 +691,10 @@
     banner.setAttribute('role', 'status');
     content.append(panel, banner);
     root.append(sidebar, content);
+    window.__TAURI__.event.listen('poni-day-schedule-changed', event => {
+      daySchedule = event.payload;
+      if (active === 'dayprogress' && !busy && !loading) render(true);
+    }).catch(error => { banner.textContent = String(error); });
     window.__TAURI__.event.listen('poni-screentime-changed', event => {
       screenTime = event.payload;
       const toggle = document.getElementById('settings-screen-time-enabled');

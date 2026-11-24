@@ -18,6 +18,7 @@ FIXTURE = """
     calendar_enabled:true, meeting_reminder_minutes:5, week_start:'windows',
     timer_presets:[], timer_remember:true, timer_then_break:false,
     todo: {late_minutes:0, snooze_minutes:10, trash_days:7},
+    bedtime_reminder:false, bedtime_chime_dnd:false,
     panel:{ direction:'auto', top_gap:0, position:50, width:200, height:32, opacity:100,
       expanded_width:680, expanded_height:196, tall_height:268, show_in_screenshots:true,
       warm_night:false, warmth:60 },
@@ -26,6 +27,9 @@ FIXTURE = """
   const save = value => localStorage.setItem('test-settings', JSON.stringify(value));
   const readScreenTime = () => JSON.parse(localStorage.getItem('test-screen-time')) || {
     enabled:false, idle_seconds:120, excluded_apps:[],
+  };
+  const readSchedule = () => JSON.parse(localStorage.getItem('test-day-schedule')) || {
+    wake_minute:420, bed_minute:1380,
   };
   const readPomodoro = () => JSON.parse(localStorage.getItem('test-pomodoro')) || {
     focus_minutes:25, short_minutes:5, long_minutes:15, cycle_length:4, auto_break:false, auto_focus:false,
@@ -46,6 +50,9 @@ FIXTURE = """
       if (!listeners.has(name)) listeners.set(name, new Set());
       listeners.get(name).add(handler);
       if (name === 'poni-toggle') window.testShortcut = () => handler({payload:null});
+      if (name === 'poni-bedtime') window.testBedtime = () => handler({payload:{
+        scheduled_for_ms:Date.now(), expires_at_ms:Date.now()+15000,
+      }});
       return () => listeners.get(name).delete(handler);
     } },
     core: { invoke: async (command, args = {}) => {
@@ -60,6 +67,11 @@ FIXTURE = """
         return;
       }
       if (command === 'get_poni_settings') return settings;
+      if (command === 'get_day_schedule') return readSchedule();
+      if (command === 'bedtime_action') {
+        localStorage.setItem('test-bedtime-action', args.action);
+        return;
+      }
       if (command === 'get_poni_startup') return localStorage.getItem('test-launch-at-login') === 'true';
       if (command === 'set_poni_startup') {
         localStorage.setItem('test-launch-at-login', args.enabled);
@@ -114,11 +126,20 @@ FIXTURE = """
         return settings;
       }
       if (command === 'shortcut_status') return true;
-      if (command === 'get_data') return {
-        settings, tasks: [], notes: [], world_clocks: [], calendar_events: [],
-        timer:{total_ms:1500000,remaining_ms:1500000,ends_at_ms:null},
-        stopwatch:{elapsed_ms:0,started_at_ms:null,laps:[]},
-      };
+      if (command === 'get_data' || command === 'set_day_schedule') {
+        const schedule = readSchedule();
+        if (command === 'set_day_schedule') {
+          schedule.wake_minute = args.wake ?? schedule.wake_minute;
+          schedule.bed_minute = args.bed ?? schedule.bed_minute;
+          localStorage.setItem('test-day-schedule', JSON.stringify(schedule));
+          bus.postMessage({name:'poni-day-schedule-changed',payload:schedule});
+        }
+        return {
+          ...schedule, settings, tasks: [], notes: [], world_clocks: [], calendar_events: [],
+          timer:{total_ms:1500000,remaining_ms:1500000,ends_at_ms:null},
+          stopwatch:{elapsed_ms:0,started_at_ms:null,laps:[]},
+        };
+      }
       if (command === 'set_panel_open') return;
       if (command === 'current_media') return null;
       if (command === 'calendar_first_weekday') return 0;
@@ -151,6 +172,28 @@ def test_settings(page):
     expect(settings.get_by_role('status')).to_have_text('Saved')
     settings.locator('#settings-todo-trash-days').fill('12')
     expect(settings.get_by_role('status')).to_have_text('Saved')
+
+    settings.locator('[data-section="dayprogress"]').click()
+    expect(settings.locator('#settings-day-wake')).to_have_value('07:00')
+    settings.locator('#settings-day-bed').fill('22:30')
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    settings.locator('#settings-bedtime-reminder').check()
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    settings.locator('#settings-bedtime-chime-dnd').check()
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    page.evaluate('window.testBedtime()')
+    expect(page.locator('#bedtime-reminder')).to_be_visible()
+    page.locator('#bedtime-snooze').click()
+    expect(page.locator('#bedtime-reminder')).to_be_hidden()
+    assert page.evaluate("localStorage.getItem('test-bedtime-action')") == 'snooze'
+    page.evaluate('window.testShortcut()')
+    page.locator('[data-page="dayprogress"]').click()
+    expect(page.locator('#day-bed-label')).to_have_text('22:30')
+    page.locator('#day-wake').fill('06:15')
+    page.locator('#day-schedule button[type="submit"]').click()
+    expect(settings.locator('#settings-day-wake')).to_have_value('06:15')
+    page.evaluate('window.testShortcut()')
+    expect(page.locator('#closed')).to_be_visible()
     search.fill('closed notch width')
     search.press('Enter')
     width = settings.locator('#settings-notch-width')

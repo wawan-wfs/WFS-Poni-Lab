@@ -9,6 +9,7 @@ use tempfile::NamedTempFile;
 use uuid::Uuid;
 
 mod aiusage;
+mod bedtime;
 mod bluetooth;
 mod bookmarks;
 mod calendar_reminders;
@@ -306,6 +307,7 @@ struct AppData {
     hijri_offset: i8,
     wake_minute: Option<u16>,
     bed_minute: Option<u16>,
+    bedtime_notified_at_ms: Option<u64>,
 }
 
 struct Store {
@@ -391,21 +393,28 @@ fn set_hijri_offset(store: State<'_, Mutex<Store>>, offset: i8) -> Result<AppDat
 
 #[tauri::command]
 fn set_day_schedule(
+    app: tauri::AppHandle,
     store: State<'_, Mutex<Store>>,
-    wake: u16,
-    bed: u16,
+    wake: Option<u16>,
+    bed: Option<u16>,
 ) -> Result<AppData, String> {
-    if wake >= 1440 || bed >= 1440 || wake == bed {
-        return Err("Choose two different valid times".into());
-    }
-    store
+    let result = store
         .lock()
         .map_err(|_| "Storage unavailable")?
         .update(|data| {
+            let current = bedtime::Schedule::from_saved(data.wake_minute, data.bed_minute);
+            let wake = wake.unwrap_or(current.wake_minute);
+            let bed = bed.unwrap_or(current.bed_minute);
+            if wake >= 1440 || bed >= 1440 || wake == bed {
+                return Err("Choose two different valid times".into());
+            }
             data.wake_minute = Some(wake);
             data.bed_minute = Some(bed);
             Ok(())
-        })
+        })?;
+    let schedule = bedtime::Schedule::from_saved(result.wake_minute, result.bed_minute);
+    let _ = app.emit("poni-day-schedule-changed", schedule);
+    Ok(result)
 }
 
 #[tauri::command]
@@ -1268,6 +1277,7 @@ fn main() {
             app.manage(Mutex::new(store));
             app.manage(Mutex::new(control::ControlState::default()));
             app.manage(Mutex::new(screentime::Tracker::default()));
+            app.manage(Mutex::new(bedtime::Tracker::default()));
             let mut system = sysinfo::System::new();
             system.refresh_cpu_usage();
             app.manage(Mutex::new(SystemMonitor {
@@ -1285,6 +1295,7 @@ fn main() {
                     let now_ms = now.as_millis() as u64;
                     notify_due(&handle, now_ms);
                     todo::tick(&handle, now_ms);
+                    bedtime::tick(&handle, now_ms);
                     pomodoro::tick(&handle, now_ms);
                     calendar_reminders::tick(&handle, now_ms);
                     screentime::sample(&handle);
@@ -1361,6 +1372,8 @@ fn main() {
             get_data,
             set_hijri_offset,
             set_day_schedule,
+            bedtime::get_day_schedule,
+            bedtime::bedtime_action,
             system_snapshot,
             search_weather_city,
             weather_forecast,
