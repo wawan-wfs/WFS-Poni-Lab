@@ -49,6 +49,7 @@
   <script src="mirror.js" defer></script>
   <script src="ics-import.js" defer></script>
   <script src="night-warmth.js" defer></script>
+  <script src="todo-language.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -107,6 +108,10 @@
         <section id="page-tasks" class="page" hidden>
           <form id="task-form">
             <div class="entry"><input id="task-input" aria-label="Task" maxlength="500" placeholder="Add a task" required><input id="task-due" type="datetime-local" aria-label="Due date"><button id="task-submit" type="submit">Add</button><button type="button" id="task-cancel" hidden>Cancel</button></div>
+            <div id="task-language-preview" class="task-language-preview" hidden>
+              <span id="task-language-text" aria-live="polite"></span>
+              <button type="button" id="task-language-ignore">Keep text as typed</button>
+            </div>
             <textarea id="task-description" maxlength="10000" aria-label="Task description" placeholder="Details" hidden></textarea>
             <details id="task-repeat"><summary>Repeat</summary><div id="task-repeat-days"></div><label>Repeat time <input id="task-repeat-time" type="time"></label></details>
             <label class="task-late">Done if late

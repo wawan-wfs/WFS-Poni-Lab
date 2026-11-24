@@ -9,6 +9,7 @@ const todoReminder = document.querySelector('#todo-reminder');
 const bedtimeReminder = document.querySelector('#bedtime-reminder');
 let data = { tasks: [], notes: [], timer: { total_ms: 1500000, remaining_ms: 1500000, ends_at_ms: null }, stopwatch: { elapsed_ms: 0, started_at_ms: null, laps: [] }, weather_location: null, world_clocks: [], calendar_events: [] };
 let editingTask = null;
+let ignoreTaskLanguage = false;
 let taskView = 'active';
 let reminderTask = null;
 let reminderBusy = false;
@@ -647,6 +648,7 @@ function renderTasks() {
     const edit = action('Edit', () => {
       editingTask = task.id;
       document.querySelector('#task-form').hidden = false;
+      document.querySelector('#task-language-preview').hidden = true;
       document.querySelector('#task-input').value = task.text;
       document.querySelector('#task-late').value = task.late_minutes ?? '';
       const due = document.querySelector('#task-due');
@@ -963,8 +965,35 @@ const repeatDays = taskDayNames.map((name, day) => {
 const taskTimeLabel = minute => [Math.floor(minute / 60), minute % 60]
   .map(part => String(part).padStart(2, '0')).join(':');
 
+function parseTaskInput() {
+  const input = document.querySelector('#task-input').value;
+  if (!input.trim()) ignoreTaskLanguage = false;
+  if (editingTask || ignoreTaskLanguage || document.querySelector('#task-due').value ||
+      repeatDays.some(day => day.checked)) return null;
+  return window.poniTodoLanguage.parse(input);
+}
+
+function renderTaskLanguage() {
+  const preview = document.querySelector('#task-language-preview');
+  const result = parseTaskInput();
+  preview.hidden = !result;
+  if (!result) return;
+  const schedule = result.repeat
+    ? `Every ${result.repeat.days.map(day => taskDayNames[day]).join(', ')} · ${result.repeat.time}`
+    : new Intl.DateTimeFormat(undefined, {dateStyle:'medium', timeStyle:'short'}).format(result.due);
+  document.querySelector('#task-language-text').textContent = `${result.text} · ${schedule}`;
+}
+
+document.querySelector('#task-form').addEventListener('input', renderTaskLanguage);
+document.querySelector('#task-language-ignore').addEventListener('click', () => {
+  ignoreTaskLanguage = true;
+  renderTaskLanguage();
+  document.querySelector('#task-input').focus();
+});
+
 function resetTaskForm() {
   editingTask = null;
+  ignoreTaskLanguage = false;
   document.querySelector('#task-form').reset();
   document.querySelector('#task-form').hidden = taskView !== 'active';
   document.querySelector('#task-description').hidden = true;
@@ -972,6 +1001,7 @@ function resetTaskForm() {
   document.querySelector('#task-submit').textContent = 'Add';
   document.querySelector('#task-repeat').open = false;
   repeatDays.forEach(input => { input.disabled = false; });
+  renderTaskLanguage();
 }
 document.querySelector('#task-form').addEventListener('submit', async event => {
   event.preventDefault();
@@ -982,9 +1012,15 @@ document.querySelector('#task-form').addEventListener('submit', async event => {
   const days = repeatDays.filter(box => box.checked).map(box => Number(box.value));
   if (days.length && !repeatTime.value) { status.textContent = 'Choose a repeat time.'; return; }
   const [hour, minute] = repeatTime.value.split(':').map(Number);
-  const repeat = days.length ? {days, minute: hour * 60 + minute} : null;
+  let repeat = days.length ? {days, minute: hour * 60 + minute} : null;
+  const parsed = parseTaskInput();
+  if (parsed?.repeat) {
+    const [hour, minute] = parsed.repeat.time.split(':').map(Number);
+    repeat = {days: parsed.repeat.days, minute: hour * 60 + minute};
+  }
   const late = document.querySelector('#task-late').value;
-  const args = { text: input.value, dueAtMs, repeat, lateMinutes: late === '' ? null : Number(late) };
+  const args = { text: parsed?.text ?? input.value, dueAtMs: parsed?.due ?? dueAtMs,
+    repeat, lateMinutes: late === '' ? null : Number(late) };
   if (editingTask) Object.assign(args, { id: editingTask, description: document.querySelector('#task-description').value });
   if (await mutate(editingTask ? 'update_task' : 'add_task', args)) resetTaskForm();
 });

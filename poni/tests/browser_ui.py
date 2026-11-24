@@ -223,6 +223,26 @@ with sync_playwright() as pw:
       return item.late_minutes === 0 && item.due_at_ms > Date.now() + 590000;
     }""")
     page.evaluate('window.poniTestShortcut()')
+    page.locator('[data-page="tasks"]').click()
+    page.locator('#task-input').fill('Rapat besok jam 3 sore')
+    expect(page.locator('#task-language-text')).to_contain_text('Rapat ·')
+    page.locator('#task-submit').click()
+    assert page.evaluate("""() => {
+      const due = new Date(data.tasks.find(t => t.text === 'Rapat').due_at_ms);
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      return due.getDate() === tomorrow.getDate() && due.getHours() === 15;
+    }""")
+    page.locator('#task-input').fill('Walk every Monday and Thursday at 7am')
+    expect(page.locator('#task-language-text')).to_contain_text('Every Mon, Thu · 07:00')
+    page.locator('#task-submit').click()
+    expect(page.get_by_text('Repeats Mon, Thu · 07:00', exact=True)).to_be_visible()
+    page.locator('#task-input').fill('Call mom in 15 minutes')
+    expect(page.locator('#task-language-preview')).to_be_visible()
+    page.locator('#task-language-ignore').click()
+    expect(page.locator('#task-language-preview')).to_be_hidden()
+    page.locator('#task-submit').click()
+    expect(page.get_by_text('Call mom in 15 minutes', exact=True)).to_be_visible()
     test_notes(page)
     page.locator('[data-page="timer"]').click()
     page.locator('#timer-minutes').fill('5')
