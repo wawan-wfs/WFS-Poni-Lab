@@ -562,8 +562,12 @@ mod tests {
         fs::write(&source, "sample").unwrap();
         let first = copy_to_onedrive(std::slice::from_ref(&source), &root).unwrap();
         let second = copy_to_onedrive(std::slice::from_ref(&source), &root).unwrap();
-        assert_eq!(first[0].parent().unwrap(), root.join("Poni"));
+        let destination = dunce::canonicalize(root.join("Poni")).unwrap();
+        assert_eq!(first[0].parent().unwrap(), destination);
+        assert_eq!(second[0].parent().unwrap(), destination);
         assert_ne!(first, second);
+        assert_eq!(fs::read_to_string(&first[0]).unwrap(), "sample");
+        assert_eq!(fs::read_to_string(&second[0]).unwrap(), "sample");
         assert_eq!(fs::read_to_string(source).unwrap(), "sample");
     }
 }
