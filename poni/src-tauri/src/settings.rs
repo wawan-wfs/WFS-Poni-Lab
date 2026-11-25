@@ -1,4 +1,4 @@
-use crate::{battery, health, panel, todo, Store};
+use crate::{battery, health, panel, shelf, todo, Store};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, sync::Mutex};
 use tauri::{AppHandle, Emitter, State};
@@ -29,6 +29,7 @@ const MODULES: &[&str] = &[
     "aiusage",
     "bluetooth",
     "chat",
+    "shelf",
     "currency",
 ];
 
@@ -119,6 +120,7 @@ pub(super) struct PoniSettings {
     pub(super) health: health::Preferences,
     battery: battery::Preferences,
     live: LiveActivities,
+    pub(super) shelf: shelf::Preferences,
     pub(super) bedtime_reminder: bool,
     pub(super) bedtime_chime_dnd: bool,
     module_order: Vec<String>,
@@ -150,6 +152,7 @@ impl Default for PoniSettings {
             health: health::Preferences::default(),
             battery: battery::Preferences::default(),
             live: LiveActivities::default(),
+            shelf: shelf::Preferences::default(),
             bedtime_reminder: false,
             bedtime_chime_dnd: false,
             module_order: MODULES.iter().map(|id| (*id).to_string()).collect(),
@@ -183,6 +186,7 @@ pub(super) struct SettingsPatch {
     health: Option<health::Patch>,
     battery: Option<battery::Patch>,
     live: Option<LiveActivitiesPatch>,
+    shelf: Option<shelf::PreferencesPatch>,
     bedtime_reminder: Option<bool>,
     bedtime_chime_dnd: Option<bool>,
     module_order: Option<Vec<String>>,
@@ -222,7 +226,7 @@ impl PoniSettings {
                 self.module_order.push((*id).into());
             }
         }
-        if self.hidden_modules.len() == MODULES.len() {
+        if !MODULES.iter().any(|id| self.visible(id)) {
             self.hidden_modules.retain(|id| id != "home");
         }
         if !self.visible(&self.default_module) {
@@ -244,7 +248,9 @@ impl PoniSettings {
     }
 
     pub(super) fn visible(&self, id: &str) -> bool {
-        known(id) && self.hidden_modules.iter().all(|hidden| hidden != id)
+        known(id)
+            && (id != "shelf" || self.shelf.enabled)
+            && self.hidden_modules.iter().all(|hidden| hidden != id)
     }
 
     fn apply(&mut self, patch: SettingsPatch) -> Result<(), String> {
@@ -309,6 +315,9 @@ impl PoniSettings {
         }
         if let Some(live) = patch.live {
             self.live.apply(live);
+        }
+        if let Some(shelf) = patch.shelf {
+            self.shelf.apply(shelf);
         }
         self.clock_format = patch.clock_format.unwrap_or(self.clock_format);
         self.header_clock = patch.header_clock.unwrap_or(self.header_clock);

@@ -19,7 +19,7 @@ pub(crate) struct BookmarkData {
     categories: Vec<String>,
 }
 
-fn web_url(input: &str) -> Result<Url, String> {
+pub(super) fn web_url(input: &str) -> Result<Url, String> {
     let input = input.trim();
     let input = input
         .strip_prefix('<')

@@ -8,7 +8,7 @@
     dashboard: 'Dashboard', health: 'Health', control: 'Control', github: 'GitHub',
     notifs: 'Notifications', prayer: 'Prayer Times', radio: 'Radio', screentime: 'Screen Time',
     support: 'Support', translate: 'Translate', aiusage: 'AI Usage', bluetooth: 'Bluetooth & Wi-Fi',
-    chat: 'AI Chat', currency: 'Currency',
+    chat: 'AI Chat', currency: 'Currency', shelf: 'Shelf',
   };
 
   const categories = [
@@ -45,8 +45,7 @@
         hint: 'Dock settings will be available when the Dock is implemented.' },
       { id: 'buddy', title: 'Buddy', icon: '♢', color: 'orange',
         hint: 'Buddy settings will be available when the Buddy is implemented.' },
-      { id: 'shelf', title: 'Drop Actions & Shelf', icon: '↧', color: 'orange',
-        hint: 'Drop Actions and Shelf settings are not available yet.' },
+      { id: 'shelf', title: 'Drop Actions & Shelf', icon: '↧', color: 'orange', link: 'shelf' },
     ] },
     { group: 'Integrations', pages: [
       { id: 'chat', title: 'AI Chat & Translate', icon: '✦', color: 'purple', link: 'chat',
@@ -110,6 +109,9 @@
     ['live', 'Pomodoro, timer and stopwatch', 'live clocks countdown activity', 'live-timers'],
     ['live', 'Events starting within 15 minutes', 'live calendar event activity', 'live-calendar'],
     ['live', 'Todo deadlines', 'live upcoming tasks hour deadline tunda tugas', 'live-todo'],
+    ['shelf', 'Shelf tab', 'shelf files folders show tab rak file', 'shelf-enabled'],
+    ['shelf', 'Open the shelf when dragging files', 'shelf open drag file buka seret', 'shelf-open-on-drag'],
+    ['shelf', 'Remove from shelf after dragging out', 'shelf drag remove references lepas seret', 'shelf-remove-after-drag'],
     ['calendar', 'Show calendar', 'calendar visibility home kalender', 'calendar-enabled'],
     ['calendar', 'Meeting reminder', 'calendar notification event minutes pertemuan pengingat', 'meeting-reminder'],
     ['calendar', 'Week starts on', 'calendar first day monday sunday minggu senin awal pekan', 'week-start'],
@@ -188,7 +190,7 @@
           window.poniFocusPlayback.previewSettings(timer);
         }
       } else {
-        const update = ['panel', 'todo', 'health', 'battery', 'live'].includes(source) ? { [source]: patch } : patch;
+        const update = ['panel', 'todo', 'health', 'battery', 'live', 'shelf'].includes(source) ? { [source]: patch } : patch;
         settings = await window.__TAURI__.core.invoke('set_poni_settings', { patch: update });
         broadcast();
       }
@@ -233,7 +235,7 @@
 
   function values(source) {
     if (source === 'pomodoro') return pomo;
-    if (['panel', 'todo', 'health', 'battery', 'live'].includes(source)) return settings[source];
+    if (['panel', 'todo', 'health', 'battery', 'live', 'shelf'].includes(source)) return settings[source];
     if (source === 'startup') return { launch_at_login: launchAtLogin };
     return active === 'screentime' ? screenTime : settings;
   }
@@ -366,6 +368,18 @@
     toggle(controls, 'live-calendar', 'Events starting within 15 minutes', null, 'calendar', 'live');
     toggle(controls, 'live-todo', 'Todo deadlines',
       'Counts down the next task due within an hour.', 'todo', 'live');
+  }
+
+  function shelf(content) {
+    const controls = group(content, 'Shelf');
+    toggle(controls, 'shelf-enabled', 'Shelf tab', null, 'enabled', 'shelf');
+    toggle(controls, 'shelf-open-on-drag', 'Open the shelf when dragging files', null, 'open_on_drag', 'shelf');
+    toggle(controls, 'shelf-remove-after-drag', 'Remove from shelf after dragging out',
+      'Removes the Shelf reference after a successful drop.', 'remove_after_drag', 'shelf');
+    content.append(create('p', 'settings-lead', 'The Shelf remembers where files are.'));
+    if (settings.shelf.enabled && !settings.hidden_modules.includes('shelf')) {
+      content.append(button('Open Shelf', () => void openLink('shelf')));
+    }
   }
 
   function battery(content) {
@@ -718,6 +732,7 @@
         if (active === 'general') general(controls);
         else if (active === 'modules') modules(controls);
         else if (active === 'live' && settings.live) liveActivities(controls);
+        else if (active === 'shelf' && settings.shelf) shelf(controls);
         else if (active === 'todo') todo(controls);
         else if (active === 'dayprogress' && daySchedule) dayProgress(controls);
         else if (active === 'health' && settings.health) health(controls);

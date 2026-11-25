@@ -153,6 +153,7 @@ public static class PoniPointer {
                         screentime = 'Track screen time'
                         'day-progress' = 'Remind me at bedtime'
                         battery = 'Low battery warning at'
+                        shelf = 'Drop actions shelf clipboard'
                         health = 'Track health'
                         pomodoro = 'Focus sessions before a long break'
                         weather = 'Weather city celsius'

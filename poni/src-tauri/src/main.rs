@@ -31,6 +31,7 @@ mod prayer;
 mod radio;
 mod screentime;
 mod settings;
+mod shelf;
 mod sound;
 mod startup;
 mod support;
@@ -308,6 +309,7 @@ impl Timer {
 struct AppData {
     calendar_reminder_ledger: calendar_reminders::ReminderLedger,
     settings: settings::PoniSettings,
+    shelf: shelf::Shelf,
     ai_usage: aiusage::AiUsage,
     chat: chat::ChatData,
     github_login: Option<String>,
@@ -1324,6 +1326,7 @@ fn main() {
             app.manage(Mutex::new(bedtime::Tracker::default()));
             app.manage(Mutex::new(health::Tracker::default()));
             app.manage(Mutex::new(eye_break::Overlay::default()));
+            app.manage(shelf::Dragging::default());
             let mut system = sysinfo::System::new();
             system.refresh_cpu_usage();
             app.manage(Mutex::new(SystemMonitor {
@@ -1355,6 +1358,13 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             settings::get_poni_settings,
+            shelf::shelf_items,
+            shelf::shelf_add,
+            shelf::shelf_pick,
+            shelf::shelf_paste,
+            shelf::shelf_remove,
+            shelf::shelf_item_action,
+            shelf::shelf_drag,
             battery::get_battery,
             startup::get_poni_startup,
             startup::set_poni_startup,

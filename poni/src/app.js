@@ -60,6 +60,7 @@ let preferences = {
   todo: { late_minutes: 0, snooze_minutes: 10, trash_days: 7 },
   bedtime_reminder: false,
   live: { enabled:true, rotate:true, timers:true, calendar:true, todo:true },
+  shelf: { enabled:true, open_on_drag:true, remove_after_drag:false },
   panel: { direction: 'auto', top_gap: 0, position: 50, width: 200, height: 32, opacity: 100,
     expanded_width: 680, expanded_height: 196, tall_height: 268, show_in_screenshots: true },
 };
@@ -136,10 +137,11 @@ function applyPreferences(value) {
   for (const id of order) {
     const tab = moduleTabs.get(id);
     if (tab) {
-      tab.hidden = hidden.has(id);
+      tab.hidden = hidden.has(id) || (id === 'shelf' && !preferences.shelf.enabled);
       navigation.append(tab);
     }
   }
+  window.poniShelf?.configure(preferences.shelf, !moduleTabs.get('shelf').hidden);
   if (moduleTabs.get(activePage)?.hidden) {
     if (!selectModule(preferences.default_module)) navigation.querySelector('.tab:not([hidden])')?.click();
   }
@@ -283,7 +285,7 @@ surface.addEventListener('pointerenter', () => clearTimeout(closeTimer));
 surface.addEventListener('pointerleave', () => {
   clearTimeout(closeTimer);
   closeTimer = setTimeout(() => {
-    if (!keyboardOpen && !surface.matches(':hover') && !document.activeElement.matches('input, textarea, select, [contenteditable="true"]')) setOpen(false);
+    if (!keyboardOpen && !window.poniShelf?.keepOpen() && !surface.matches(':hover') && !document.activeElement.matches('input, textarea, select, [contenteditable="true"]')) setOpen(false);
   }, preferences.close_delay);
 });
 window.__TAURI__.event.listen('poni-toggle', () => {
@@ -1367,3 +1369,12 @@ queue = invoke('get_data').then(saved => {
   if (data.weather_location) void loadWeather(data.weather_location);
 }).catch(error => { status.textContent = String(error); });
 window.poniIcsImport?.mount(document.getElementById('calendar-import'), importCalendarFile);
+window.poniShelf?.connect({
+  isOpen: () => !open.hidden,
+  isShelf: () => activePage === 'shelf' && !open.hidden,
+  open() {
+    clearTimeout(closeTimer);
+    setOpen(true);
+    selectModule('shelf');
+  },
+});

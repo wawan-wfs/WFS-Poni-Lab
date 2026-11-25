@@ -51,6 +51,8 @@
   <script src="night-warmth.js" defer></script>
   <script src="todo-language.js" defer></script>
   <script src="battery.js" defer></script>
+  <link rel="stylesheet" href="shelf.css">
+  <script src="shelf.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -108,6 +110,7 @@
           <button class="tab" data-page="aiusage" title="AI Usage" aria-label="AI Usage">◕ <span>AI Usage</span></button>
           <button class="tab" data-page="bluetooth" title="Bluetooth" aria-label="Bluetooth">ᛒ <span>Bluetooth</span></button>
           <button class="tab" data-page="chat" title="Chat" aria-label="Chat">◫ <span>Chat</span></button>
+          <button class="tab" data-page="shelf" title="Shelf" aria-label="Shelf">▰ <span>Shelf</span><b id="shelf-count" hidden></b></button>
           <button class="tab" data-page="currency" title="Currency" aria-label="Currency">¤ <span>Currency</span></button>
         </nav>
         <time class="clock" id="header-clock">--:--</time>
@@ -186,6 +189,7 @@
         <section id="page-control" class="page" hidden></section>
         <section id="page-github" class="page" hidden></section>
         <section id="page-notifs" class="page" hidden></section>
+        <section id="page-shelf" class="page" hidden></section>
         <section id="page-prayer" class="page" hidden></section>
         <section id="page-radio" class="page" hidden></section>
         <section id="page-screentime" class="page" hidden></section>

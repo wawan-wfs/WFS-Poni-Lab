@@ -30,6 +30,29 @@ with sync_playwright() as pw:
         if (command === 'system_snapshot') return {cpu_percent: 32.5, memory_used: 2147483648, memory_total: 8589934592};
         if (command === 'shortcut_status') return true;
         if (command === 'get_battery') return null;
+        const shelf = JSON.parse(localStorage.getItem('test-shelf') || '[]');
+        if (command === 'shelf_items') return shelf;
+        if (command === 'shelf_add') {
+          for (const input of args.items) {
+            const isLink = input.text?.startsWith('https://') || input.text?.startsWith('http://');
+            const card = input.kind === 'file' ? {name:input.path.split('/').pop(),size:20,path:input.path,kind:'file'}
+              : {name:isLink?input.text.split('://')[1]:input.text,text:input.text,kind:isLink?'link':'text'};
+            shelf.push({...card,id:crypto.randomUUID()});
+          }
+          localStorage.setItem('test-shelf', JSON.stringify(shelf));
+          return shelf;
+        }
+        if (command === 'shelf_pick') return window.__TAURI__.core.invoke('shelf_add',
+          {items:[{kind:'file',path:'/tests/example.txt'}]});
+        if (command === 'shelf_remove') {
+          const kept = args.ids == null ? [] : shelf.filter(item => !args.ids.includes(item.id));
+          localStorage.setItem('test-shelf', JSON.stringify(kept));
+          return kept;
+        }
+        if (command === 'shelf_item_action') {
+          localStorage.setItem('last-shelf-action', args.action);
+          return;
+        }
         if (command === 'set_panel_open' && typeof args.focus !== 'boolean') throw new Error('focus is required');
         if (command === 'search_weather_city') return [{name:'Jakarta', admin1:'Jakarta', country:'Indonesia', latitude:-6.2, longitude:106.8}];
         if (command === 'weather_forecast') return {current:{temperature_2m:30, relative_humidity_2m:70, weather_code:2, wind_speed_10m:10}, daily:{time:['2026-11-22'], temperature_2m_max:[32], temperature_2m_min:[25], weather_code:[2]}};
@@ -111,6 +134,27 @@ with sync_playwright() as pw:
     page.goto(f'http://127.0.0.1:{server.server_port}/index.html')
     page.evaluate('window.poniTestShortcut()')
     expect(page.locator('#open')).to_be_visible()
+    page.get_by_role('button', name='Shelf', exact=True).click()
+    expect(page.get_by_text('Drop files here')).to_be_visible()
+    page.get_by_role('button', name='Add files').click()
+    item = page.get_by_role('button', name='example.txt', exact=True)
+    expect(item).to_be_visible()
+    item.click()
+    page.get_by_role('button', name='Copy path').click()
+    expect(page.locator('.shelf-status')).to_have_text('Copied to clipboard')
+    page.evaluate("""() => {
+      const drop = new DataTransfer();
+      drop.setData('text/plain','https://example.org/manual');
+      document.querySelector('#page-shelf').dispatchEvent(new DragEvent('drop',{bubbles:true,cancelable:true,dataTransfer:drop}));
+    }""")
+    link = page.get_by_role('button', name='example.org/manual', exact=True)
+    expect(link).to_be_visible()
+    link.dblclick()
+    page.wait_for_function("localStorage.getItem('last-shelf-action') === 'open'")
+    page.get_by_role('button', name='Clear shelf').click()
+    page.get_by_role('button', name='Clear all').click()
+    expect(page.get_by_text('Drop files here')).to_be_visible()
+    page.locator('[data-page="home"]').click()
     page.keyboard.press('ArrowRight')
     expect(page.locator('#page-tasks')).to_be_visible()
     page.keyboard.press('Escape')
