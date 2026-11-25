@@ -5,6 +5,10 @@
   const surface = document.querySelector('#surface');
   const badge = document.querySelector('#shelf-count');
   const dropPanel = document.querySelector('#file-drop-actions');
+  const videoPanel = document.querySelector('#video-shrink');
+  const videoStatus = document.querySelector('#video-shrink-status');
+  const videoProgress = document.querySelector('#video-shrink-progress');
+  const videoCancel = document.querySelector('#video-shrink-cancel');
   const dropTiles = new Map(window.poniDropCatalog.map(tile => [tile.id, tile]));
   const defaults = { enabled: true, open_on_drag: true, clipboard_enabled: false,
     drop_enabled: true, tiles: [...dropTiles.keys()] };
@@ -21,6 +25,8 @@
   let confirming = false;
   let clipboardView = false;
   let queue = Promise.resolve();
+  let videoNotice;
+  let videoPending = false;
 
   function formatBytes(size) {
     if (size == null) return 'File';
@@ -271,7 +277,57 @@
     return document.elementFromPoint(position.x / scale, position.y / scale)?.closest('#file-drop-actions [data-tile]')?.dataset.tile || null;
   }
 
+  function showVideoProgress(progress) {
+    if (!progress) return;
+    clearTimeout(videoNotice);
+    const reveal = videoPanel.hidden;
+    videoPanel.hidden = false;
+    videoCancel.hidden = false;
+    videoProgress.hidden = false;
+    videoProgress.value = progress.percent;
+    const position = progress.total > 1 ? ` ${progress.index}/${progress.total}` : '';
+    videoStatus.textContent = `Shrinking video${position} · ${progress.percent}%`;
+    if (reveal) hooks.refreshSize();
+  }
+
+  function showVideoResult(message) {
+    clearTimeout(videoNotice);
+    videoStatus.textContent = message;
+    videoProgress.hidden = true;
+    videoCancel.hidden = true;
+    if (videoPanel.hidden) {
+      videoPanel.hidden = false;
+      hooks.refreshSize();
+    }
+    videoNotice = setTimeout(() => {
+      videoPanel.hidden = true;
+      hooks.refreshSize();
+    }, 5000);
+  }
+
+  async function processVideo(paths) {
+    if (videoPending) {
+      status('Poni is already shrinking a video');
+      return;
+    }
+    videoPending = true;
+    videoCancel.disabled = false;
+    try {
+      const result = await invoke('run_drop_action', {action: 'shrink_video', paths});
+      const count = result.paths.length;
+      const saved = count === 1 ? 'Saved 1 video' : `Saved ${count} videos`;
+      const message = result.cancelled ? (count ? `${saved} before cancelling` : 'Video compression cancelled')
+        : count ? saved : 'No smaller video could be made';
+      showVideoResult(result.failed ? `${message} · ${result.failed} failed` : message);
+    } catch (error) {
+      showVideoResult(String(error));
+    } finally {
+      videoPending = false;
+    }
+  }
+
   async function processFiles(tile, paths) {
+    if (tile === 'shrink_video') return processVideo(paths);
     picking = ['share', 'copy', 'move', 'open_with', 'recycle'].includes(tile);
     try {
       status('Working…');
@@ -355,11 +411,21 @@
       hooks = configuration;
       surface.addEventListener('dragover', handleTextDrop);
       surface.addEventListener('drop', handleTextDrop);
+      videoCancel.addEventListener('click', async () => {
+        videoCancel.disabled = true;
+        try {
+          if (!await invoke('cancel_video_shrink')) videoCancel.disabled = false;
+        } catch (error) {
+          videoCancel.disabled = false;
+          status(String(error));
+        }
+      });
       try {
         const event = window.__TAURI__.event;
         await Promise.all([
           event.listen('poni-shelf-items', ({payload}) => update(payload)),
           event.listen('poni-shelf-drag-error', ({payload}) => status(payload)),
+          event.listen('poni-video-progress', ({payload}) => showVideoProgress(payload)),
           window.__TAURI__.webview?.getCurrentWebview().onDragDropEvent(({payload}) => handleNativeDrag(payload)),
         ]);
         await run('shelf_items');

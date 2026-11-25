@@ -1,4 +1,4 @@
-use crate::{drop_images, drop_ocr, drop_pdf, drop_share, drop_windows, shelf, Store};
+use crate::{drop_images, drop_ocr, drop_pdf, drop_share, drop_video, drop_windows, shelf, Store};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
@@ -25,6 +25,7 @@ pub(super) enum Tile {
     Copy,
     ShrinkPdf,
     ShrinkImage,
+    ShrinkVideo,
     Convert,
     Ocr,
     Move,
@@ -34,12 +35,13 @@ pub(super) enum Tile {
 }
 
 impl Tile {
-    pub(super) const ALL: [Self; 13] = [
+    pub(super) const ALL: [Self; 14] = [
         Self::Shelf,
         Self::Share,
         Self::Zip,
         Self::ShrinkPdf,
         Self::ShrinkImage,
+        Self::ShrinkVideo,
         Self::Extract,
         Self::Convert,
         Self::Ocr,
@@ -54,14 +56,27 @@ impl Tile {
 #[derive(Serialize)]
 #[serde(rename_all = "snake_case", tag = "kind")]
 pub(super) enum Outcome {
-    Saved { paths: Vec<PathBuf> },
-    Moved { count: usize },
-    Recycled { count: usize },
+    Saved {
+        paths: Vec<PathBuf>,
+    },
+    Moved {
+        count: usize,
+    },
+    Recycled {
+        count: usize,
+    },
     Opened,
     Cancelled,
     AlreadySmall,
-    TextCopied { preview: String },
+    TextCopied {
+        preview: String,
+    },
     NoText,
+    Video {
+        paths: Vec<PathBuf>,
+        cancelled: bool,
+        failed: usize,
+    },
 }
 
 fn saved(paths: Vec<PathBuf>) -> Outcome {
@@ -483,6 +498,7 @@ pub(super) async fn run_drop_action(
             .collect::<Result<Vec<_>, _>>()?;
         match action {
             Tile::Share => drop_share::show(&window, owner, &paths).map(|()| Outcome::Opened),
+            Tile::ShrinkVideo => drop_video::shrink(&window, &paths, quality),
             Tile::Zip => make_zip(&paths).map(|output| saved(vec![output])),
             Tile::ShrinkImage | Tile::ShrinkPdf => {
                 let paths = match action {

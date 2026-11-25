@@ -25,6 +25,7 @@ mod drop_images;
 mod drop_ocr;
 mod drop_pdf;
 mod drop_share;
+mod drop_video;
 mod drop_windows;
 mod eye_break;
 mod github;
@@ -1334,6 +1335,7 @@ fn main() {
             app.manage(Mutex::new(health::Tracker::default()));
             app.manage(Mutex::new(eye_break::Overlay::default()));
             app.manage(shelf::Dragging::default());
+            app.manage(drop_video::VideoJob::default());
             app.manage(Mutex::new(clipboard::History::open(profile)));
             let mut system = sysinfo::System::new();
             system.refresh_cpu_usage();
@@ -1379,6 +1381,7 @@ fn main() {
             shelf::shelf_item_action,
             shelf::shelf_drag,
             drop_actions::run_drop_action,
+            drop_video::cancel_video_shrink,
             clipboard::clipboard_history,
             clipboard::clipboard_history_action,
             clipboard::clipboard_image,

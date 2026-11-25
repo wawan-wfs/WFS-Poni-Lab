@@ -100,7 +100,8 @@ function updatePanelSize(isOpen, focus = false) {
   const tall = isOpen && isTallPage(activePage);
   open.classList.toggle('tall', tall);
   const seq = ++panelSequence;
-  const taskAlert = !isOpen && (!todoReminder.hidden || !bedtimeReminder.hidden || !timerReminder.hidden || !healthReminder.hidden);
+  const taskAlert = !isOpen && (!todoReminder.hidden || !bedtimeReminder.hidden || !timerReminder.hidden ||
+    !healthReminder.hidden || !document.getElementById('video-shrink').hidden);
   panelReady.then(() => invoke('set_panel_open', { session: panelSession, open: isOpen, tall, focus, seq, taskAlert }))
     .catch(error => { status.textContent = String(error); });
 }
@@ -1381,4 +1382,5 @@ window.poniShelf?.connect({
     clearTimeout(closeTimer);
     setOpen(true);
   },
+  refreshSize() { updatePanelSize(!open.hidden); },
 });

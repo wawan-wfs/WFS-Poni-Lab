@@ -111,7 +111,7 @@
     ['live', 'Todo deadlines', 'live upcoming tasks hour deadline tunda tugas', 'live-todo'],
     ['shelf', 'Shelf tab', 'shelf files folders show tab rak file', 'shelf-enabled'],
     ['shelf', 'Drop actions', 'drop file tiles zip extract copy seret', 'shelf-drop-enabled'],
-    ['shelf', 'Shrink PDF and image quality', 'compress PDF photo sharpest medium smallest kompres foto', 'shelf-quality'],
+    ['shelf', 'Shrink PDFs, images and videos', 'compress PDF photo video sharpest medium smallest kompres foto', 'shelf-quality'],
     ['shelf', 'Open the shelf when dragging files', 'shelf open drag file buka seret', 'shelf-open-on-drag'],
     ['shelf', 'Remove from shelf after dragging out', 'shelf drag remove references lepas seret', 'shelf-remove-after-drag'],
     ['shelf', 'Remember what you copy', 'clipboard history pin riwayat salin tempel', 'shelf-clipboard-enabled'],
@@ -409,8 +409,8 @@
       node.append(name, controls);
       tiles.append(node);
     }
-    select(group(content), 'shelf-quality', 'Shrink PDF and image quality',
-      'Shrink photos and pictures inside PDFs. PDF text and drawings stay as they are.', 'quality',
+    select(group(content), 'shelf-quality', 'Shrink PDFs, images and videos',
+      'Shrink photos, pictures inside PDFs, and videos. MP4 copies are at most 1920, 1280, or 854 px wide.', 'quality',
       [['light', 'Light: sharpest'], ['medium', 'Medium'], ['strong', 'Strong: smallest']], false, 'shelf');
     const controls = group(content, 'Shelf');
     toggle(controls, 'shelf-enabled', 'Shelf tab', null, 'enabled', 'shelf');

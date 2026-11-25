@@ -4,6 +4,7 @@
   const zip = /\.zip$/i;
   const photo = /\.(png|jpe?g|jfif|webp|bmp|tiff?)$/i;
   const conversion = /\.(png|jpe?g|jfif)$/i;
+  const video = /\.(mp4|m4v|mov|wmv|avi|mkv|webm|3gp|3g2|mts|m2ts|ts|mpg|mpeg)$/i;
 
   window.poniDropCatalog = [
     {id: 'shelf', label: 'Shelf', icon: '▰', description: 'Keep files on Poni’s Shelf'},
@@ -13,6 +14,8 @@
       accepts: paths => paths.every(path => /\.pdf$/i.test(path))},
     {id: 'shrink_image', label: 'Shrink image', icon: '▧', description: 'Make photos smaller in a copy next to each',
       accepts: paths => paths.every(path => photo.test(path))},
+    {id: 'shrink_video', label: 'Shrink video', icon: '▶', description: 'Make a smaller MP4 next to the original',
+      accepts: paths => paths.every(path => video.test(path))},
     {id: 'extract', label: 'Extract', icon: '⇩', description: 'Extract ZIP files into folders',
       accepts: paths => paths.every(path => zip.test(path))},
     {id: 'convert', label: 'Convert', icon: '⇄', description: 'Convert between PNG and JPG next to the original',

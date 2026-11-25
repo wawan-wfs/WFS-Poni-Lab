@@ -24,6 +24,7 @@ with sync_playwright() as pw:
         if (name === 'poni-timer-completed') window.poniTestTimer = listener;
         if (name === 'poni-battery-changed') window.poniTestBattery = payload => listener({payload});
         if (name === 'poni-toggle') window.poniTestShortcut = listener;
+        if (name === 'poni-video-progress') window.poniTestVideo = payload => listener({payload});
       }}, webview:{getCurrentWebview:()=>({
         onDragDropEvent:async callback => { window.testShelfDrag = payload => callback({payload}); },
       })}, core: { invoke: async (command, args = {}) => {
@@ -60,11 +61,19 @@ with sync_playwright() as pw:
           if (args.action === 'move') return {kind:'moved',count:args.paths.length};
           if (args.action === 'ocr') return {kind:'text_copied',preview:'Poni fixture'};
           if (args.action === 'shrink_pdf') return {kind:'saved',paths:['/tests/report (smaller).pdf']};
+          if (args.action === 'shrink_video') {
+            window.poniTestVideo({index:1,total:1,percent:37});
+            return new Promise(resolve => { window.poniFinishVideo = resolve; });
+          }
           if (args.action === 'share') {
             localStorage.setItem('share-paths', JSON.stringify(args.paths));
             return {kind:'opened'};
           }
           return {kind:'saved',paths:['/tests/example.zip']};
+        }
+        if (command === 'cancel_video_shrink') {
+          window.poniFinishVideo({kind:'video',paths:[],cancelled:true,failed:0});
+          return true;
         }
         if (command?.startsWith('clipboard_history')) {
           const clips = JSON.parse(localStorage.getItem('test-clips') || 'null') ||
@@ -197,7 +206,7 @@ with sync_playwright() as pw:
     expect(drop).to_be_hidden()
     expect(page.locator('.shelf-status')).to_have_text('Saved example.zip')
     assert page.evaluate("localStorage.getItem('last-drop-action')") == 'zip'
-    page.evaluate("""window.poniShelf.configure({tiles:['move','open_with','ocr','shrink_pdf','share']},true);
+    page.evaluate("""window.poniShelf.configure({tiles:['move','open_with','ocr','shrink_pdf','share','shrink_video']},true);
         window.testShelfDrag({type:'enter',paths:['/tests/one.txt','/tests/two.txt']})""")
     expect(drop.locator('[data-action="open_with"]')).to_have_class('file-drop-tile file-drop-unavailable')
     tile = drop.locator('[data-tile="move"]').bounding_box()
@@ -224,6 +233,18 @@ with sync_playwright() as pw:
       [tile['x'] + tile['width'] / 2, tile['y'] + tile['height'] / 2])
     expect(page.locator('.shelf-status')).to_be_empty()
     assert page.evaluate("JSON.parse(localStorage.getItem('share-paths'))") == ['/tests/share-one.txt', '/tests/share-two.pdf']
+    page.evaluate("window.testShelfDrag({type:'enter',paths:['/tests/clip.MP4']})")
+    tile = drop.locator('[data-tile="shrink_video"]').bounding_box()
+    page.evaluate("""([x,y]) => window.testShelfDrag(
+      {type:'drop',paths:['/tests/clip.MP4'],position:{x,y}})""",
+      [tile['x'] + tile['width'] / 2, tile['y'] + tile['height'] / 2])
+    expect(page.locator('#video-shrink-progress')).to_have_attribute('value', '37')
+    page.locator('#close').click()
+    expect(page.locator('#video-shrink')).to_be_visible()
+    page.locator('#video-shrink-cancel').click()
+    expect(page.locator('#video-shrink-status')).to_have_text('Video compression cancelled')
+    expect(page.locator('#video-shrink')).to_be_hidden(timeout=6500)
+    page.evaluate('window.poniTestShortcut()')
     page.locator('[data-page="home"]').click()
     page.keyboard.press('ArrowRight')
     expect(page.locator('#page-tasks')).to_be_visible()

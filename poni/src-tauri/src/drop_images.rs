@@ -33,6 +33,15 @@ impl Quality {
             Self::Strong => (1024, 58),
         }
     }
+
+    #[cfg(any(windows, test))]
+    pub(super) fn video(self) -> (u32, u32, u32) {
+        match self {
+            Self::Light => (1920, 6_000_000, 128_000),
+            Self::Medium => (1280, 3_000_000, 96_000),
+            Self::Strong => (854, 1_500_000, 80_000),
+        }
+    }
 }
 
 pub(super) fn decode(path: &Path) -> Result<(DynamicImage, ImageFormat), String> {
