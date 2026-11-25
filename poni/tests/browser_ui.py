@@ -69,6 +69,7 @@ with sync_playwright() as pw:
             localStorage.setItem('share-paths', JSON.stringify(args.paths));
             return {kind:'opened'};
           }
+          if (args.action === 'eject') return {kind:'eject_requested',drive:'E:'};
           return {kind:'saved',paths:['/tests/example.zip']};
         }
         if (command === 'cancel_video_shrink') {
@@ -199,6 +200,7 @@ with sync_playwright() as pw:
     expect(drop.locator('[data-action="extract"]')).to_have_class('file-drop-tile file-drop-unavailable')
     expect(drop.locator('[data-action="convert"]')).to_have_class('file-drop-tile file-drop-unavailable')
     expect(drop.locator('[data-action="shrink_pdf"]')).to_have_class('file-drop-tile file-drop-unavailable')
+    expect(drop.locator('[data-action="eject"]')).to_have_class('file-drop-tile file-drop-unavailable')
     tile = drop.locator('[data-tile="zip"]').bounding_box()
     page.evaluate("""([x,y]) => window.testShelfDrag(
       {type:'drop',paths:['/tests/example.txt'],position:{x,y}})""",
@@ -206,7 +208,7 @@ with sync_playwright() as pw:
     expect(drop).to_be_hidden()
     expect(page.locator('.shelf-status')).to_have_text('Saved example.zip')
     assert page.evaluate("localStorage.getItem('last-drop-action')") == 'zip'
-    page.evaluate("""window.poniShelf.configure({tiles:['move','open_with','ocr','shrink_pdf','share','shrink_video']},true);
+    page.evaluate("""window.poniShelf.configure({tiles:['move','open_with','ocr','shrink_pdf','share','shrink_video','eject']},true);
         window.testShelfDrag({type:'enter',paths:['/tests/one.txt','/tests/two.txt']})""")
     expect(drop.locator('[data-action="open_with"]')).to_have_class('file-drop-tile file-drop-unavailable')
     tile = drop.locator('[data-tile="move"]').bounding_box()
@@ -233,6 +235,12 @@ with sync_playwright() as pw:
       [tile['x'] + tile['width'] / 2, tile['y'] + tile['height'] / 2])
     expect(page.locator('.shelf-status')).to_be_empty()
     assert page.evaluate("JSON.parse(localStorage.getItem('share-paths'))") == ['/tests/share-one.txt', '/tests/share-two.pdf']
+    page.evaluate("window.testShelfDrag({type:'enter',paths:['E:/']})")
+    tile = drop.locator('[data-tile="eject"]').bounding_box()
+    page.evaluate("""([x,y]) => window.testShelfDrag(
+      {type:'drop',paths:['E:/'],position:{x,y}})""",
+      [tile['x'] + tile['width'] / 2, tile['y'] + tile['height'] / 2])
+    expect(page.locator('.shelf-status')).to_contain_text('Eject requested for E:')
     page.evaluate("window.testShelfDrag({type:'enter',paths:['/tests/clip.MP4']})")
     tile = drop.locator('[data-tile="shrink_video"]').bounding_box()
     page.evaluate("""([x,y]) => window.testShelfDrag(

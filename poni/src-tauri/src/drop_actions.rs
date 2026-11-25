@@ -32,10 +32,11 @@ pub(super) enum Tile {
     Onedrive,
     OpenWith,
     Recycle,
+    Eject,
 }
 
 impl Tile {
-    pub(super) const ALL: [Self; 14] = [
+    pub(super) const ALL: [Self; 15] = [
         Self::Shelf,
         Self::Share,
         Self::Zip,
@@ -50,6 +51,7 @@ impl Tile {
         Self::Onedrive,
         Self::OpenWith,
         Self::Recycle,
+        Self::Eject,
     ];
 }
 
@@ -72,6 +74,9 @@ pub(super) enum Outcome {
         preview: String,
     },
     NoText,
+    EjectRequested {
+        drive: String,
+    },
     Video {
         paths: Vec<PathBuf>,
         cancelled: bool,
@@ -539,6 +544,7 @@ pub(super) async fn run_drop_action(
             Tile::Onedrive => copy_to_onedrive(&paths, &onedrive_root()?).map(saved),
             Tile::OpenWith => drop_windows::open_with(owner, &paths),
             Tile::Recycle => drop_windows::recycle(owner, &paths),
+            Tile::Eject => drop_windows::eject(owner, &paths),
             Tile::Shelf => Err("Drop files on the Shelf to keep their references".into()),
         }
     })

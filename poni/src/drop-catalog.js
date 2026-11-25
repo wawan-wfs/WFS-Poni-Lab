@@ -28,5 +28,7 @@
     {id: 'open_with', label: 'Open with', icon: '↗', description: 'Choose an app to open a file',
       accepts: paths => paths.length === 1},
     {id: 'recycle', label: 'Trash', icon: '♜', description: 'Send items to the Windows Recycle Bin'},
+    {id: 'eject', label: 'Eject', icon: '⏏', description: 'Safely remove a drive dropped from This PC',
+      accepts: paths => paths.length === 1 && /^[a-z]:[\\/]$/i.test(paths[0])},
   ];
 })();

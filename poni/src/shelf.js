@@ -328,7 +328,7 @@
 
   async function processFiles(tile, paths) {
     if (tile === 'shrink_video') return processVideo(paths);
-    picking = ['share', 'copy', 'move', 'open_with', 'recycle'].includes(tile);
+    picking = ['share', 'copy', 'move', 'open_with', 'recycle', 'eject'].includes(tile);
     try {
       status('Working…');
       const result = await invoke('run_drop_action', {action: tile, paths});
@@ -343,6 +343,9 @@
           break;
         case 'recycled':
           status(`Sent ${result.count} ${result.count === 1 ? 'item' : 'items'} to the Recycle Bin`);
+          break;
+        case 'eject_requested':
+          status(`Eject requested for ${result.drive}. Wait for Windows before unplugging it.`);
           break;
         case 'already_small':
           status(tile === 'shrink_pdf' ? 'No smaller PDF could be made' : 'These photos are already smaller');
