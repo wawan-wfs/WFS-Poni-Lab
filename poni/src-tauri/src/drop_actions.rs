@@ -1,4 +1,4 @@
-use crate::{drop_images, drop_windows, shelf, Store};
+use crate::{drop_images, drop_ocr, drop_windows, shelf, Store};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
@@ -24,6 +24,7 @@ pub(super) enum Tile {
     Copy,
     ShrinkImage,
     Convert,
+    Ocr,
     Move,
     Onedrive,
     OpenWith,
@@ -31,12 +32,13 @@ pub(super) enum Tile {
 }
 
 impl Tile {
-    pub(super) const ALL: [Self; 10] = [
+    pub(super) const ALL: [Self; 11] = [
         Self::Shelf,
         Self::Zip,
         Self::ShrinkImage,
         Self::Extract,
         Self::Convert,
+        Self::Ocr,
         Self::Copy,
         Self::Move,
         Self::Onedrive,
@@ -54,6 +56,8 @@ pub(super) enum Outcome {
     Opened,
     Cancelled,
     AlreadySmall,
+    TextCopied { preview: String },
+    NoText,
 }
 
 fn saved(paths: Vec<PathBuf>) -> Outcome {
@@ -483,6 +487,7 @@ pub(super) async fn run_drop_action(
                 }
             }),
             Tile::Convert => drop_images::convert(&paths).map(saved),
+            Tile::Ocr => drop_ocr::copy_recognized_text(&paths),
             Tile::Extract => {
                 if !paths.iter().all(|path| {
                     path.extension()

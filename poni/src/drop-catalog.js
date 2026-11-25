@@ -14,6 +14,8 @@
       accepts: paths => paths.every(path => zip.test(path))},
     {id: 'convert', label: 'Convert', icon: '⇄', description: 'Convert between PNG and JPG next to the original',
       accepts: paths => paths.every(path => conversion.test(path))},
+    {id: 'ocr', label: 'Text from image', icon: 'Aa', description: 'Copy the text in a picture',
+      accepts: paths => paths.every(path => photo.test(path))},
     {id: 'copy', label: 'Copy', icon: '▤', description: 'Copy into a folder you pick'},
     {id: 'move', label: 'Move', icon: '↳', description: 'Move into a folder you pick'},
     {id: 'onedrive', label: 'OneDrive', icon: '☁', description: 'Copy into the Poni folder in OneDrive'},

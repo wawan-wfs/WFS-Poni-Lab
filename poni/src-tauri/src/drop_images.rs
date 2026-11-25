@@ -35,7 +35,7 @@ impl Quality {
     }
 }
 
-fn decode(path: &Path) -> Result<(DynamicImage, ImageFormat), String> {
+pub(super) fn decode(path: &Path) -> Result<(DynamicImage, ImageFormat), String> {
     if path.metadata().map_err(|error| error.to_string())?.len() > MAX_INPUT_BYTES {
         return Err("Choose an image file no larger than 64 MB".into());
     }
@@ -68,7 +68,7 @@ fn decode(path: &Path) -> Result<(DynamicImage, ImageFormat), String> {
     Ok((image, format))
 }
 
-fn jpg_pixels(source: DynamicImage) -> image::RgbImage {
+pub(super) fn jpg_pixels(source: DynamicImage) -> image::RgbImage {
     if !source.color().has_alpha() {
         return source.into_rgb8();
     }

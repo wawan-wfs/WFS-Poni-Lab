@@ -291,6 +291,12 @@
         case 'already_small':
           status('These photos are already smaller');
           break;
+        case 'text_copied':
+          status(`Text copied · ${result.preview}`);
+          break;
+        case 'no_text':
+          status('No text found');
+          break;
         default:
           status('');
       }
