@@ -28,7 +28,7 @@ with ThreadingHTTPServer(('127.0.0.1', 0), handler) as server:
             }
           };
           window.__TAURI__ = {
-            event: {listen: async (_, callback) => { window.poniTestShortcut = callback; }},
+            event: {listen: async (name, callback) => { if (name === 'poni-toggle') window.poniTestShortcut = callback; }},
             core: {invoke: async (command, args = {}) => {
               if (command === 'shortcut_status') return true;
               if (command === 'get_data') return {

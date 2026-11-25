@@ -112,6 +112,8 @@
     ['shelf', 'Shelf tab', 'shelf files folders show tab rak file', 'shelf-enabled'],
     ['shelf', 'Open the shelf when dragging files', 'shelf open drag file buka seret', 'shelf-open-on-drag'],
     ['shelf', 'Remove from shelf after dragging out', 'shelf drag remove references lepas seret', 'shelf-remove-after-drag'],
+    ['shelf', 'Remember what you copy', 'clipboard history pin riwayat salin tempel', 'shelf-clipboard-enabled'],
+    ['shelf', 'Keep the last copies', 'clipboard history limit retention salin', 'shelf-clipboard-limit'],
     ['calendar', 'Show calendar', 'calendar visibility home kalender', 'calendar-enabled'],
     ['calendar', 'Meeting reminder', 'calendar notification event minutes pertemuan pengingat', 'meeting-reminder'],
     ['calendar', 'Week starts on', 'calendar first day monday sunday minggu senin awal pekan', 'week-start'],
@@ -377,6 +379,26 @@
     toggle(controls, 'shelf-remove-after-drag', 'Remove from shelf after dragging out',
       'Removes the Shelf reference after a successful drop.', 'remove_after_drag', 'shelf');
     content.append(create('p', 'settings-lead', 'The Shelf remembers where files are.'));
+    const history = group(content, 'Clipboard');
+    toggle(history, 'shelf-clipboard-enabled', 'Remember what you copy',
+      'Show copied text, links and pictures on the Shelf. Pinned entries stay when history is turned off.',
+      'clipboard_enabled', 'shelf');
+    const count = create('input', 'settings-text');
+    count.id = 'settings-shelf-clipboard-limit';
+    count.type = 'number';
+    count.min = 5;
+    count.max = 100;
+    count.step = 1;
+    count.required = true;
+    count.value = settings.shelf.clipboard_limit;
+    count.addEventListener('change', () => {
+      if (count.validity.valid) void change({ clipboard_limit: count.valueAsNumber }, 'shelf-clipboard-limit', 'shelf');
+      else count.value = settings.shelf.clipboard_limit;
+    });
+    count.addEventListener('keydown', event => {
+      if (event.key === 'Enter') count.blur();
+    });
+    row(history, 'Keep the last copies', 'Pinned ones don’t count.', count);
     if (settings.shelf.enabled && !settings.hidden_modules.includes('shelf')) {
       content.append(button('Open Shelf', () => void openLink('shelf')));
     }

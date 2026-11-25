@@ -366,6 +366,16 @@ try {
         if ($live.rotate -ne $false -or !$live.enabled -or !$live.timers) {
             throw ('Unexpected Live Activities settings after native input: ' + ($live | ConvertTo-Json -Compress))
         }
+        Find-Setting 'remove from shelf after dragging out'
+        [System.Windows.Forms.SendKeys]::SendWait(' ')
+        Start-Sleep -Seconds 2
+        Find-Setting 'remember what you copy'
+        [System.Windows.Forms.SendKeys]::SendWait(' ')
+        Start-Sleep -Seconds 2
+        $shelf = (Get-Content -Raw -LiteralPath $dataPath | ConvertFrom-Json).settings.shelf
+        if (!$shelf.enabled -or !$shelf.remove_after_drag -or !$shelf.clipboard_enabled) {
+            throw ('Unexpected Shelf settings after native input: ' + ($shelf | ConvertTo-Json -Compress))
+        }
     }
     [CursorPosition]::PostMessage($settingsHandle, 0x0010, [IntPtr]::Zero, [IntPtr]::Zero) | Out-Null
     Start-Sleep -Seconds 2
@@ -529,6 +539,7 @@ try {
         }
         @{ covered_display = $true; aligned_to_screen_edges = $true; dismissed_with_escape = $true } |
             ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'eye-break-observation.json') -Encoding UTF8
+        & (Join-Path $PSScriptRoot 'shelf-native.ps1') -Notch $todoWindow -DataPath $dataPath -OutputDir $outputDir
     }
     @{ process_id = $observedPid; main_window_handle = $mainHandle.ToInt64(); screenshot = 'desktop.png'; width_after_shortcut = $windowWidth; module_height = $moduleHeight; settings_width = $settingsWidth; settings_window_handle = $settingsHandle.ToInt64(); settings_closed_independently = $true; geometry_checked = $geometryChecked; screen_time_saved = $screenTimeChecked; pomodoro_saved = $pomodoroChecked; todo_checked = $todoChecked; weather_attempted = ($bounds.Width -eq 1024 -and $bounds.Height -eq 768) } |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'observation.json') -Encoding UTF8

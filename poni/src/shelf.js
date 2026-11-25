@@ -4,7 +4,7 @@
   const invoke = (command, args) => window.__TAURI__.core.invoke(command, args);
   const surface = document.querySelector('#surface');
   const badge = document.querySelector('#shelf-count');
-  const defaults = { enabled: true, open_on_drag: true };
+  const defaults = { enabled: true, open_on_drag: true, clipboard_enabled: false };
   let preferences = defaults;
   let visible = true;
   let page;
@@ -15,6 +15,7 @@
   let picking = false;
   let draggingIn = false;
   let confirming = false;
+  let clipboardView = false;
   let queue = Promise.resolve();
 
   function formatBytes(size) {
@@ -178,16 +179,41 @@
     }
   }
 
+  function updateView() {
+    if (!page) return;
+    const showClipboard = preferences.clipboard_enabled && clipboardView;
+    page.querySelector('.shelf-file-view').hidden = showClipboard;
+    page.querySelector('#clipboard-view').hidden = !showClipboard;
+    page.querySelector('.shelf-view-switch').hidden = !preferences.clipboard_enabled;
+    for (const control of page.querySelectorAll('.shelf-view-switch button')) {
+      control.setAttribute('aria-pressed', String(control.dataset.view === (showClipboard ? 'clipboard' : 'files')));
+    }
+    window.poniClipboard?.show(showClipboard && Boolean(hooks?.isShelf()));
+  }
+
   function mount(container) {
     page = container;
     page.innerHTML = `
-      <div class="shelf-body">
-        <div class="shelf-items" aria-label="Shelf items" hidden></div>
-        <div class="shelf-empty"><span aria-hidden="true">⇩</span><strong>Drop files here</strong></div>
-        <div class="shelf-controls"></div>
+      <div class="shelf-view-switch" aria-label="Shelf views" hidden></div>
+      <div class="shelf-file-view">
+        <div class="shelf-body">
+          <div class="shelf-items" aria-label="Shelf items" hidden></div>
+          <div class="shelf-empty"><span aria-hidden="true">⇩</span><strong>Drop files here</strong></div>
+          <div class="shelf-controls"></div>
+        </div>
+        <div class="shelf-selection" aria-label="Selected items"></div>
+        <div class="shelf-status" role="status"></div>
       </div>
-      <div class="shelf-selection" aria-label="Selected items"></div>
-      <div class="shelf-status" role="status"></div>`;
+      <div id="clipboard-view" hidden></div>`;
+    const views = page.querySelector('.shelf-view-switch');
+    for (const [view, title] of [['files', 'Files'], ['clipboard', 'Clipboard']]) {
+      const control = button(title, () => {
+        clipboardView = view === 'clipboard';
+        updateView();
+      });
+      control.dataset.view = view;
+      views.append(control);
+    }
     const controls = page.querySelector('.shelf-controls');
     controls.append(
       button('Add files', () => void pick(false)),
@@ -195,6 +221,8 @@
       button('Paste text or link', () => void run('shelf_paste')),
       part('div', 'shelf-clear'),
     );
+    window.poniClipboard?.mount(page.querySelector('#clipboard-view'));
+    updateView();
     render();
   }
 
@@ -209,6 +237,7 @@
     if (type === 'enter' && paths.length) {
       draggingIn = true;
       surface.classList.add('shelf-dragging');
+      if (clipboardView) { clipboardView = false; updateView(); }
       if (hooks.isOpen() || preferences.open_on_drag) hooks.open();
     } else if (type === 'drop') {
       endDrag();
@@ -228,6 +257,8 @@
       .split(/\r?\n/).find(line => line && !line.startsWith('#'));
     if (!text?.trim()) return;
     hooks.open();
+    clipboardView = false;
+    updateView();
     void run('shelf_add', {items: [{kind: 'text', text}]});
   }
 
@@ -252,10 +283,16 @@
       preferences = { ...defaults, ...value };
       visible = available && preferences.enabled;
       if (!visible) endDrag();
+      if (!preferences.clipboard_enabled) clipboardView = false;
+      updateView();
       render();
     },
     keepOpen: () => picking || draggingIn,
   };
   window.poniModules ||= {};
-  window.poniModules.shelf = { mount, show: () => run('shelf_items') };
+  window.poniModules.shelf = {
+    mount,
+    show() { updateView(); return run('shelf_items'); },
+    hide() { window.poniClipboard?.show(false); },
+  };
 })();

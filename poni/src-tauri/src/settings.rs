@@ -317,7 +317,7 @@ impl PoniSettings {
             self.live.apply(live);
         }
         if let Some(shelf) = patch.shelf {
-            self.shelf.apply(shelf);
+            self.shelf.apply(shelf)?;
         }
         self.clock_format = patch.clock_format.unwrap_or(self.clock_format);
         self.header_clock = patch.header_clock.unwrap_or(self.header_clock);
@@ -362,6 +362,7 @@ pub(super) fn set_poni_settings(
         .update(|data| data.settings.apply(patch))?
         .settings;
     let _ = app.emit_to("main", "poni-settings-changed", &result);
+    crate::clipboard::reconcile(&app);
     Ok(result)
 }
 

@@ -53,6 +53,15 @@ with sync_playwright() as pw:
           localStorage.setItem('last-shelf-action', args.action);
           return;
         }
+        if (command?.startsWith('clipboard_history')) {
+          const clips = JSON.parse(localStorage.getItem('test-clips') || 'null') ||
+            [{id:'test-clip',kind:'text',text:'Clipboard fixture',copied_at_ms:Date.now(),pinned:false}];
+          if (command === 'clipboard_history') return clips;
+          if (args.action === 'pin') clips[0].pinned = true;
+          if (args.action === 'copy') localStorage.setItem('last-clipboard-copy', clips[0].text);
+          localStorage.setItem('test-clips', JSON.stringify(clips));
+          return;
+        }
         if (command === 'set_panel_open' && typeof args.focus !== 'boolean') throw new Error('focus is required');
         if (command === 'search_weather_city') return [{name:'Jakarta', admin1:'Jakarta', country:'Indonesia', latitude:-6.2, longitude:106.8}];
         if (command === 'weather_forecast') return {current:{temperature_2m:30, relative_humidity_2m:70, weather_code:2, wind_speed_10m:10}, daily:{time:['2026-11-22'], temperature_2m_max:[32], temperature_2m_min:[25], weather_code:[2]}};
@@ -154,6 +163,14 @@ with sync_playwright() as pw:
     page.get_by_role('button', name='Clear shelf').click()
     page.get_by_role('button', name='Clear all').click()
     expect(page.get_by_text('Drop files here')).to_be_visible()
+    page.evaluate('window.poniShelf.configure({clipboard_enabled:true},true)')
+    page.get_by_role('button', name='Clipboard', exact=True).click()
+    page.get_by_role('button', name='Copy Clipboard fixture').click()
+    expect(page.locator('.clip-status')).to_have_text('Copied to clipboard')
+    assert page.evaluate("localStorage.getItem('last-clipboard-copy')") == 'Clipboard fixture'
+    page.get_by_role('button', name='Pin', exact=True).click()
+    expect(page.get_by_role('button', name='Unpin', exact=True)).to_be_visible()
+    page.get_by_role('button', name='Files', exact=True).click()
     page.locator('[data-page="home"]').click()
     page.keyboard.press('ArrowRight')
     expect(page.locator('#page-tasks')).to_be_visible()

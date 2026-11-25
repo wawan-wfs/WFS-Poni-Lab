@@ -18,7 +18,7 @@ with ThreadingHTTPServer(('127.0.0.1', 0), handler) as server:
         browser = pw.chromium.launch(**launch_options, headless=True, args=['--no-sandbox'])
         page = browser.new_page(viewport={'width': 680, 'height': 230}, timezone_id='UTC')
         page.add_init_script("""
-          window.__TAURI__ = { event: { listen: async (_, handler) => { window.poniTestShortcut = handler; } },
+          window.__TAURI__ = { event: { listen: async (name, handler) => { if (name === 'poni-toggle') window.poniTestShortcut = handler; } },
             core: { invoke: async (command, args = {}) => {
               if (command === 'shortcut_status') return true;
               if (command === 'get_data') return {

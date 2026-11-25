@@ -16,6 +16,7 @@ mod bluetooth;
 mod bookmarks;
 mod calendar_reminders;
 mod chat;
+mod clipboard;
 mod control;
 mod currency;
 mod dashboard;
@@ -1306,8 +1307,8 @@ fn main() {
                 .build(),
         )
         .setup(|app| {
-            let path = app.path().app_data_dir()?.join("data.json");
-            let store = Store::open(path).map_err(std::io::Error::other)?;
+            let profile = app.path().app_data_dir()?;
+            let store = Store::open(profile.join("data.json")).map_err(std::io::Error::other)?;
             let mut sequence = WindowSequence::default();
             if let Some(window) = app.get_webview_window("main") {
                 apply_panel_preferences(
@@ -1327,6 +1328,7 @@ fn main() {
             app.manage(Mutex::new(health::Tracker::default()));
             app.manage(Mutex::new(eye_break::Overlay::default()));
             app.manage(shelf::Dragging::default());
+            app.manage(Mutex::new(clipboard::History::open(profile)));
             let mut system = sysinfo::System::new();
             system.refresh_cpu_usage();
             app.manage(Mutex::new(SystemMonitor {
@@ -1340,6 +1342,11 @@ fn main() {
             let handle = app.handle().clone();
             let power_handle = handle.clone();
             std::thread::spawn(move || battery::monitor(power_handle));
+            #[cfg(windows)]
+            {
+                let clipboard_handle = handle.clone();
+                std::thread::spawn(move || clipboard::monitor(clipboard_handle));
+            }
             std::thread::spawn(move || loop {
                 if let Ok(now) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
                 {
@@ -1365,6 +1372,9 @@ fn main() {
             shelf::shelf_remove,
             shelf::shelf_item_action,
             shelf::shelf_drag,
+            clipboard::clipboard_history,
+            clipboard::clipboard_history_action,
+            clipboard::clipboard_image,
             battery::get_battery,
             startup::get_poni_startup,
             startup::set_poni_startup,

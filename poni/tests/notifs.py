@@ -24,7 +24,7 @@ with ThreadingHTTPServer(('127.0.0.1', 0), handler) as server:
             {id:'2', source:'timer', title:'Timer expired', body:'Time is up', created_at_ms:now - 86400000, read:false},
             {id:'3', source:'todo', title:'Task due', body:'<b>Book tickets</b>', created_at_ms:now - 86400000, read:false}
           ];
-          window.__TAURI__ = { event: { listen: async (_, handler) => { window.poniTestShortcut = handler; } },
+          window.__TAURI__ = { event: { listen: async (name, handler) => { if (name === 'poni-toggle') window.poniTestShortcut = handler; } },
             core: { invoke: async (command, args = {}) => {
               if (command === 'shortcut_status') return true;
               if (command === 'get_data') return {

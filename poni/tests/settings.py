@@ -22,6 +22,7 @@ FIXTURE = """
       break_reminders:true, break_interval:50, water_reminders:false, water_interval:60, eye_breaks:false, eye_interval:20},
     battery:{enabled:true,show_percentage:true,icon:'bar',charging_activity:true,low_threshold:20},
     live:{enabled:true,rotate:true,timers:true,calendar:true,todo:true},
+    shelf:{enabled:true,open_on_drag:true,remove_after_drag:false,clipboard_enabled:false,clipboard_limit:30},
     bedtime_reminder:false, bedtime_chime_dnd:false,
     panel:{ direction:'auto', top_gap:0, position:50, width:200, height:32, opacity:100,
       expanded_width:680, expanded_height:196, tall_height:268, show_in_screenshots:true,
@@ -111,13 +112,14 @@ FIXTURE = """
         available:true, enabled:readScreenTime().enabled, apps:[], hours:Array(24).fill(0), total:0, switches:0,
       };
       if (command === 'set_poni_settings') {
-        const { panel, todo, health, battery, live, ...patch } = args.patch;
+        const { panel, todo, health, battery, live, shelf, ...patch } = args.patch;
         Object.assign(settings, patch);
         if (panel) Object.assign(settings.panel, panel);
         if (todo) Object.assign(settings.todo, todo);
         if (health) Object.assign(settings.health, health);
         if (battery) Object.assign(settings.battery, battery);
         if (live) Object.assign(settings.live, live);
+        if (shelf) Object.assign(settings.shelf, shelf);
         settings.timer_presets.sort((a,b) => a-b);
         if (settings.hidden_modules.includes(settings.default_module)) {
           settings.default_module = settings.module_order.find(id => !settings.hidden_modules.includes(id));
@@ -456,6 +458,19 @@ def test_settings(page):
     expect(settings.locator('#settings-live-rotate')).not_to_be_checked()
     expect(settings.locator('#settings-live-calendar')).not_to_be_checked()
     expect(settings.locator('#settings-live-timers')).to_be_checked()
+    settings.get_by_role('button', name='Drop Actions & Shelf', exact=True).click()
+    settings.locator('#settings-shelf-remove-after-drag').check()
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    settings.locator('#settings-shelf-clipboard-enabled').check()
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    limit = settings.locator('#settings-shelf-clipboard-limit')
+    limit.fill('52')
+    limit.press('Enter')
+    page.wait_for_function("JSON.parse(localStorage.getItem('test-settings')).shelf.clipboard_limit === 52")
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    settings.get_by_role('button', name='Open Shelf', exact=True).click()
+    expect(page.get_by_role('button', name='Clipboard', exact=True)).to_be_visible()
+    page.locator('#close').click()
 
     settings.get_by_role('button', name='Modules', exact=True).click()
     settings.locator('#settings-remember-module').check()

@@ -19,6 +19,8 @@ pub(super) struct Preferences {
     pub(super) enabled: bool,
     open_on_drag: bool,
     remove_after_drag: bool,
+    pub(super) clipboard_enabled: bool,
+    pub(super) clipboard_limit: u8,
 }
 
 impl Default for Preferences {
@@ -27,6 +29,8 @@ impl Default for Preferences {
             enabled: true,
             open_on_drag: true,
             remove_after_drag: false,
+            clipboard_enabled: false,
+            clipboard_limit: 30,
         }
     }
 }
@@ -37,13 +41,22 @@ pub(super) struct PreferencesPatch {
     enabled: Option<bool>,
     open_on_drag: Option<bool>,
     remove_after_drag: Option<bool>,
+    clipboard_enabled: Option<bool>,
+    clipboard_limit: Option<u8>,
 }
 
 impl Preferences {
-    pub(super) fn apply(&mut self, patch: PreferencesPatch) {
+    pub(super) fn apply(&mut self, patch: PreferencesPatch) -> Result<(), String> {
+        let limit = patch.clipboard_limit.unwrap_or(self.clipboard_limit);
+        if !(5..=100).contains(&limit) {
+            return Err("Keep between 5 and 100 recent copies".into());
+        }
         self.enabled = patch.enabled.unwrap_or(self.enabled);
         self.open_on_drag = patch.open_on_drag.unwrap_or(self.open_on_drag);
         self.remove_after_drag = patch.remove_after_drag.unwrap_or(self.remove_after_drag);
+        self.clipboard_enabled = patch.clipboard_enabled.unwrap_or(self.clipboard_enabled);
+        self.clipboard_limit = limit;
+        Ok(())
     }
 }
 
@@ -347,12 +360,12 @@ pub(super) async fn shelf_item_action(
 }
 
 #[cfg(windows)]
-fn copy_to_clipboard(text: &str) -> Result<(), String> {
+pub(super) fn copy_to_clipboard(text: &str) -> Result<(), String> {
     clipboard_win::set_clipboard_string(text).map_err(|_| "Could not write to the clipboard".into())
 }
 
 #[cfg(not(windows))]
-fn copy_to_clipboard(_text: &str) -> Result<(), String> {
+pub(super) fn copy_to_clipboard(_text: &str) -> Result<(), String> {
     Err("The native Shelf clipboard is available on Windows".into())
 }
 
