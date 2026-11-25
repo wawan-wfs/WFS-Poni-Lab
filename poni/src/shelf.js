@@ -272,13 +272,28 @@
   }
 
   async function processFiles(tile, paths) {
-    picking = tile === 'copy';
+    picking = ['copy', 'move', 'open_with', 'recycle'].includes(tile);
     try {
       status('Working…');
-      const outputs = await invoke('run_drop_action', {action: tile, paths});
-      if (!outputs.length) status(tile === 'shrink_image' ? 'These photos are already smaller' : '');
-      else if (outputs.length === 1) status(`Saved ${outputs[0].split(/[\\/]/).pop()}`);
-      else status(`Saved ${outputs.length} items`);
+      const result = await invoke('run_drop_action', {action: tile, paths});
+      switch (result.kind) {
+        case 'saved':
+          status(result.paths.length === 1
+            ? `Saved ${result.paths[0].split(/[\\/]/).pop()}`
+            : `Saved ${result.paths.length} items`);
+          break;
+        case 'moved':
+          status(`Moved ${result.count} ${result.count === 1 ? 'item' : 'items'}`);
+          break;
+        case 'recycled':
+          status(`Sent ${result.count} ${result.count === 1 ? 'item' : 'items'} to the Recycle Bin`);
+          break;
+        case 'already_small':
+          status('These photos are already smaller');
+          break;
+        default:
+          status('');
+      }
     } catch (error) {
       status(String(error));
     } finally {

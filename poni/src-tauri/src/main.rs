@@ -22,6 +22,7 @@ mod currency;
 mod dashboard;
 mod drop_actions;
 mod drop_images;
+mod drop_windows;
 mod eye_break;
 mod github;
 mod health;

@@ -1,4 +1,4 @@
-use crate::{drop_images, shelf, Store};
+use crate::{drop_images, drop_windows, shelf, Store};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
@@ -24,17 +24,40 @@ pub(super) enum Tile {
     Copy,
     ShrinkImage,
     Convert,
+    Move,
+    Onedrive,
+    OpenWith,
+    Recycle,
 }
 
 impl Tile {
-    pub(super) const ALL: [Self; 6] = [
+    pub(super) const ALL: [Self; 10] = [
         Self::Shelf,
         Self::Zip,
         Self::ShrinkImage,
         Self::Extract,
         Self::Convert,
         Self::Copy,
+        Self::Move,
+        Self::Onedrive,
+        Self::OpenWith,
+        Self::Recycle,
     ];
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case", tag = "kind")]
+pub(super) enum Outcome {
+    Saved { paths: Vec<PathBuf> },
+    Moved { count: usize },
+    Recycled { count: usize },
+    Opened,
+    Cancelled,
+    AlreadySmall,
+}
+
+fn saved(paths: Vec<PathBuf>) -> Outcome {
+    Outcome::Saved { paths }
 }
 
 fn alternate(name: &OsStr, number: u16) -> std::ffi::OsString {
@@ -365,12 +388,55 @@ fn copy_to(paths: &[PathBuf], destination: &Path) -> Result<Vec<PathBuf>, String
     Ok(outputs)
 }
 
+fn copy_to_onedrive(paths: &[PathBuf], root: &Path) -> Result<Vec<PathBuf>, String> {
+    let root = dunce::canonicalize(root).map_err(|error| error.to_string())?;
+    let destination = root.join("Poni");
+    for path in paths {
+        if path.is_dir() && destination.starts_with(path) {
+            return Err("Choose a folder outside the Poni copy destination".into());
+        }
+    }
+    fs::create_dir_all(&destination).map_err(|error| error.to_string())?;
+    let resolved = dunce::canonicalize(&destination).map_err(|error| error.to_string())?;
+    if resolved == root || !resolved.starts_with(&root) {
+        return Err("The Poni folder is outside the configured OneDrive folder".into());
+    }
+    copy_to(paths, &resolved)
+}
+
+fn onedrive_root() -> Result<PathBuf, String> {
+    ["OneDrive", "OneDriveConsumer", "OneDriveCommercial"]
+        .into_iter()
+        .filter_map(std::env::var_os)
+        .map(PathBuf::from)
+        .find(|path| path.is_absolute() && path.is_dir())
+        .ok_or_else(|| "Set up a synced OneDrive folder in Windows first".into())
+}
+
+fn checked_source(action: Tile, path: PathBuf) -> Result<PathBuf, String> {
+    if matches!(action, Tile::Move | Tile::Recycle) && path.is_absolute() {
+        let metadata = fs::symlink_metadata(&path).map_err(|error| error.to_string())?;
+        #[cfg(windows)]
+        let is_linked = {
+            use std::os::windows::fs::MetadataExt;
+            use windows_sys::Win32::Storage::FileSystem::FILE_ATTRIBUTE_REPARSE_POINT;
+            metadata.file_attributes() & FILE_ATTRIBUTE_REPARSE_POINT != 0
+        };
+        #[cfg(not(windows))]
+        let is_linked = metadata.is_symlink();
+        if is_linked {
+            return Err("Choose the original file or folder in Explorer".into());
+        }
+    }
+    shelf::checked_path(path)
+}
+
 #[tauri::command]
 pub(super) async fn run_drop_action(
     window: WebviewWindow,
     action: Tile,
     paths: Vec<PathBuf>,
-) -> Result<Vec<PathBuf>, String> {
+) -> Result<Outcome, String> {
     if paths.is_empty() || paths.len() > 200 {
         return Err("Drop between 1 and 200 files or folders".into());
     }
@@ -384,7 +450,7 @@ pub(super) async fn run_drop_action(
         }
         preferences.quality
     };
-    let folder = if action == Tile::Copy {
+    let folder = if matches!(action, Tile::Copy | Tile::Move) {
         #[cfg(windows)]
         {
             let selected = rfd::AsyncFileDialog::new()
@@ -392,7 +458,7 @@ pub(super) async fn run_drop_action(
                 .pick_folder()
                 .await;
             let Some(selected) = selected else {
-                return Ok(Vec::new());
+                return Ok(Outcome::Cancelled);
             };
             Some(selected.path().to_owned())
         }
@@ -401,15 +467,22 @@ pub(super) async fn run_drop_action(
     } else {
         None
     };
+    let owner = drop_windows::owner(&window)?;
     tauri::async_runtime::spawn_blocking(move || {
         let paths = paths
             .into_iter()
-            .map(shelf::checked_path)
+            .map(|path| checked_source(action, path))
             .collect::<Result<Vec<_>, _>>()?;
         match action {
-            Tile::Zip => make_zip(&paths).map(|output| vec![output]),
-            Tile::ShrinkImage => drop_images::shrink(&paths, quality),
-            Tile::Convert => drop_images::convert(&paths),
+            Tile::Zip => make_zip(&paths).map(|output| saved(vec![output])),
+            Tile::ShrinkImage => drop_images::shrink(&paths, quality).map(|paths| {
+                if paths.is_empty() {
+                    Outcome::AlreadySmall
+                } else {
+                    saved(paths)
+                }
+            }),
+            Tile::Convert => drop_images::convert(&paths).map(saved),
             Tile::Extract => {
                 if !paths.iter().all(|path| {
                     path.extension()
@@ -417,12 +490,25 @@ pub(super) async fn run_drop_action(
                 }) {
                     return Err("Drop ZIP files to extract them".into());
                 }
-                paths.iter().map(|path| extract_zip(path)).collect()
+                paths
+                    .iter()
+                    .map(|path| extract_zip(path))
+                    .collect::<Result<Vec<_>, _>>()
+                    .map(saved)
             }
             Tile::Copy => copy_to(
                 &paths,
                 &shelf::checked_path(folder.ok_or("No destination chosen")?)?,
+            )
+            .map(saved),
+            Tile::Move => drop_windows::move_items(
+                owner,
+                &paths,
+                &shelf::checked_path(folder.ok_or("No destination chosen")?)?,
             ),
+            Tile::Onedrive => copy_to_onedrive(&paths, &onedrive_root()?).map(saved),
+            Tile::OpenWith => drop_windows::open_with(owner, &paths),
+            Tile::Recycle => drop_windows::recycle(owner, &paths),
             Tile::Shelf => Err("Drop files on the Shelf to keep their references".into()),
         }
     })
@@ -460,5 +546,19 @@ mod tests {
         assert!(
             safe_archive_path("child.txt:alternate", Some("child.txt:alternate".into())).is_err()
         );
+    }
+
+    #[test]
+    fn onedrive_copies_into_poni_and_preserves_both_originals_and_collisions() {
+        let stage = tempfile::tempdir().unwrap();
+        let source = stage.path().join("example.txt");
+        let root = stage.path().join("sync");
+        fs::create_dir(&root).unwrap();
+        fs::write(&source, "sample").unwrap();
+        let first = copy_to_onedrive(std::slice::from_ref(&source), &root).unwrap();
+        let second = copy_to_onedrive(std::slice::from_ref(&source), &root).unwrap();
+        assert_eq!(first[0].parent().unwrap(), root.join("Poni"));
+        assert_ne!(first, second);
+        assert_eq!(fs::read_to_string(source).unwrap(), "sample");
     }
 }

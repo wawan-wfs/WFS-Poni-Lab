@@ -57,7 +57,8 @@ with sync_playwright() as pw:
         }
         if (command === 'run_drop_action') {
           localStorage.setItem('last-drop-action', args.action);
-          return ['/tests/example.zip'];
+          if (args.action === 'move') return {kind:'moved',count:args.paths.length};
+          return {kind:'saved',paths:['/tests/example.zip']};
         }
         if (command?.startsWith('clipboard_history')) {
           const clips = JSON.parse(localStorage.getItem('test-clips') || 'null') ||
@@ -189,6 +190,14 @@ with sync_playwright() as pw:
     expect(drop).to_be_hidden()
     expect(page.locator('.shelf-status')).to_have_text('Saved example.zip')
     assert page.evaluate("localStorage.getItem('last-drop-action')") == 'zip'
+    page.evaluate("""window.poniShelf.configure({tiles:['move','open_with']},true);
+        window.testShelfDrag({type:'enter',paths:['/tests/one.txt','/tests/two.txt']})""")
+    expect(drop.locator('[data-action="open_with"]')).to_have_class('file-drop-tile file-drop-unavailable')
+    tile = drop.locator('[data-tile="move"]').bounding_box()
+    page.evaluate("""([x,y]) => window.testShelfDrag(
+      {type:'drop',paths:['/tests/one.txt','/tests/two.txt'],position:{x,y}})""",
+      [tile['x'] + tile['width'] / 2, tile['y'] + tile['height'] / 2])
+    expect(page.locator('.shelf-status')).to_have_text('Moved 2 items')
     page.locator('[data-page="home"]').click()
     page.keyboard.press('ArrowRight')
     expect(page.locator('#page-tasks')).to_be_visible()

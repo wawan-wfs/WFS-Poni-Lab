@@ -15,5 +15,10 @@
     {id: 'convert', label: 'Convert', icon: '⇄', description: 'Convert between PNG and JPG next to the original',
       accepts: paths => paths.every(path => conversion.test(path))},
     {id: 'copy', label: 'Copy', icon: '▤', description: 'Copy into a folder you pick'},
+    {id: 'move', label: 'Move', icon: '↳', description: 'Move into a folder you pick'},
+    {id: 'onedrive', label: 'OneDrive', icon: '☁', description: 'Copy into the Poni folder in OneDrive'},
+    {id: 'open_with', label: 'Open with', icon: '↗', description: 'Choose an app to open a file',
+      accepts: paths => paths.length === 1},
+    {id: 'recycle', label: 'Trash', icon: '♜', description: 'Send items to the Windows Recycle Bin'},
   ];
 })();
