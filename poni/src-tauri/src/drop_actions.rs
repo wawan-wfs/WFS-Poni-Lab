@@ -1,4 +1,4 @@
-use crate::{drop_images, drop_ocr, drop_pdf, drop_windows, shelf, Store};
+use crate::{drop_images, drop_ocr, drop_pdf, drop_share, drop_windows, shelf, Store};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
@@ -19,6 +19,7 @@ const MAX_EXTRACT_BYTES: u64 = 8 * 1024 * 1024 * 1024;
 #[serde(rename_all = "snake_case")]
 pub(super) enum Tile {
     Shelf,
+    Share,
     Zip,
     Extract,
     Copy,
@@ -33,8 +34,9 @@ pub(super) enum Tile {
 }
 
 impl Tile {
-    pub(super) const ALL: [Self; 12] = [
+    pub(super) const ALL: [Self; 13] = [
         Self::Shelf,
+        Self::Share,
         Self::Zip,
         Self::ShrinkPdf,
         Self::ShrinkImage,
@@ -480,6 +482,7 @@ pub(super) async fn run_drop_action(
             .map(|path| checked_source(action, path))
             .collect::<Result<Vec<_>, _>>()?;
         match action {
+            Tile::Share => drop_share::show(&window, owner, &paths).map(|()| Outcome::Opened),
             Tile::Zip => make_zip(&paths).map(|output| saved(vec![output])),
             Tile::ShrinkImage | Tile::ShrinkPdf => {
                 let paths = match action {

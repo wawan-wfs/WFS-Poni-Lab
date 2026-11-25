@@ -272,7 +272,7 @@
   }
 
   async function processFiles(tile, paths) {
-    picking = ['copy', 'move', 'open_with', 'recycle'].includes(tile);
+    picking = ['share', 'copy', 'move', 'open_with', 'recycle'].includes(tile);
     try {
       status('Working…');
       const result = await invoke('run_drop_action', {action: tile, paths});

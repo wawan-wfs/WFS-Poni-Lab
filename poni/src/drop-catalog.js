@@ -7,6 +7,7 @@
 
   window.poniDropCatalog = [
     {id: 'shelf', label: 'Shelf', icon: '▰', description: 'Keep files on Poni’s Shelf'},
+    {id: 'share', label: 'Share', icon: '⇧', description: 'Windows Share: Nearby sharing, Mail, apps'},
     {id: 'zip', label: 'ZIP', icon: '▣', description: 'Make a ZIP next to the files'},
     {id: 'shrink_pdf', label: 'Shrink PDF', icon: '▧', description: 'Make the pictures in a PDF smaller in a copy next to it',
       accepts: paths => paths.every(path => /\.pdf$/i.test(path))},

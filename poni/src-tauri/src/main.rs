@@ -24,6 +24,7 @@ mod drop_actions;
 mod drop_images;
 mod drop_ocr;
 mod drop_pdf;
+mod drop_share;
 mod drop_windows;
 mod eye_break;
 mod github;
