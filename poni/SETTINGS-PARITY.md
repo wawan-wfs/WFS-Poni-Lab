@@ -64,6 +64,8 @@ Runner Windows memeriksa bahwa **+5 min** memulai ulang hitung mundur tanpa meng
 
 Panel **Drop Actions & Shelf** kini mengatur tab Shelf, pembukaan saat drag, penghapusan referensi setelah drop sukses, riwayat clipboard, batas 5–100 salinan terbaru, dan pengurutan ubin aktif. Drop Actions menyediakan Shelf, ZIP, Extract, dan Copy. Shelf menyimpan referensi bersama profil di `data.json`. Clipboard menyimpan daftar dan gambar secara terpisah di profil Windows. Penghitungan kontrol standar tetap **73 dari 201 (36,3%)**, karena pengaturan panel ini berasal dari renderer kustom. [Tangkapan Drop Actions & Shelf asli](https://github.com/wawan-wfs/WFS-Poni-Lab/actions/runs/45552684411/artifacts/14994816094)
 
+Empat dari 15 ubin Drop Actions dalam inventaris memiliki implementasi. Runner Windows menguji seret file dari aplikasi lain ke Shelf, seret keluar, serta penghapusan referensi dengan file asli tetap ada. Runner juga menguji pencatatan teks dan gambar dan melewatkan salinan dengan penanda privat Windows. Tes Rust memeriksa isi ZIP, ekstraksi, penyalinan, serta nama hasil ketika tujuan sudah ada. Chromium memeriksa pemilihan ubin berdasarkan lokasi drop dan perubahan urutannya. [Hasil runner Windows](https://github.com/wawan-wfs/WFS-Poni-Lab/actions/runs/45554674232)
+
 | Jenis kontrol | Deklarasi | Masuk katalog build |
 | --- | ---: | ---: |
 | Sakelar | 115 | 115 |
