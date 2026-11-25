@@ -22,55 +22,86 @@ public static class CursorPosition {
 '@
 $outputDir = Join-Path $env:GITHUB_WORKSPACE 'native-observation'
 New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
-$env:APPDATA = Join-Path $env:RUNNER_TEMP 'poni-rebuild-profile'
+$env:APPDATA = Join-Path $env:RUNNER_TEMP "poni-rebuild-profile-${env:GITHUB_RUN_ID}-${env:GITHUB_RUN_ATTEMPT}"
 New-Item -ItemType Directory -Force -Path $env:APPDATA | Out-Null
 $exe = Join-Path $env:GITHUB_WORKSPACE 'poni/src-tauri/target/release/poni-rebuild.exe'
-$process = Start-Process -FilePath $exe -PassThru
+$bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+
+function Save-Screen([string]$name) {
+    $bitmap = [System.Drawing.Bitmap]::new($bounds.Width, $bounds.Height)
+    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+    try {
+        $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+        $bitmap.Save((Join-Path $outputDir $name), [System.Drawing.Imaging.ImageFormat]::Png)
+    } finally { $graphics.Dispose(); $bitmap.Dispose() }
+}
+
+function Get-PoniRect([Diagnostics.Process]$child) {
+    $child.Refresh()
+    if ($child.HasExited) { throw "Application exited with code $($child.ExitCode)" }
+    $geometry = [CursorPosition+Rect]::new()
+    if ([CursorPosition]::GetWindowRect($child.MainWindowHandle, [ref]$geometry)) { return $geometry }
+}
+
+function Press-PoniShortcut {
+    [CursorPosition]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero)
+    try {
+        Start-Sleep -Milliseconds 100
+        [CursorPosition]::keybd_event(0x4E, 0, 0, [UIntPtr]::Zero)
+        Start-Sleep -Milliseconds 100
+    } finally {
+        [CursorPosition]::keybd_event(0x4E, 0, 2, [UIntPtr]::Zero)
+        [CursorPosition]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
+    }
+}
+
+$process = $null
 try {
-    Start-Sleep -Seconds 15
-    $process.Refresh()
-    if ($process.HasExited) { throw "Application exited with code $($process.ExitCode)" }
-    $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+    $ready = $false
+    $center = $bounds.Left + $bounds.Width / 2
+    for ($launch = 1; $launch -le 2 -and !$ready; $launch++) {
+        $env:WEBVIEW2_USER_DATA_FOLDER = Join-Path $env:APPDATA "webview-$launch"
+        $process = Start-Process -FilePath $exe -PassThru
+        $startupDeadline = [DateTimeOffset]::UtcNow.AddSeconds(40)
+        do {
+            $position = Get-PoniRect $process
+            if ($position -and [Math]::Abs(($position.Left + $position.Right) / 2 - $center) -lt 32 -and
+                [Math]::Abs($position.Top - $bounds.Top) -lt 32) {
+                $ready = $true
+                break
+            }
+            Start-Sleep -Milliseconds 500
+        } while ([DateTimeOffset]::UtcNow -lt $startupDeadline)
+        if (!$ready) {
+            Save-Screen "startup-attempt-$launch.png"
+            Write-Warning "Launch $launch did not place the notch at the top center of the display."
+            Stop-Process -Id $process.Id -Force
+            $process.WaitForExit(5000) | Out-Null
+        }
+    }
+    if (!$ready) { throw 'Poni did not initialize its notch window after two launches.' }
     [CursorPosition]::SetCursorPos([int]($bounds.X + $bounds.Width / 2), [int]($bounds.Y + 12)) | Out-Null
     Start-Sleep -Seconds 5
-    $hoverImage = [System.Drawing.Bitmap]::new($bounds.Width, $bounds.Height)
-    $hoverGraphics = [System.Drawing.Graphics]::FromImage($hoverImage)
-    try {
-        $hoverGraphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
-        $hoverImage.Save((Join-Path $outputDir 'home-hover.png'), [System.Drawing.Imaging.ImageFormat]::Png)
-    } finally { $hoverGraphics.Dispose(); $hoverImage.Dispose() }
+    Save-Screen 'home-hover.png'
     [CursorPosition]::SetCursorPos([int]($bounds.X + 10), [int]($bounds.Y + $bounds.Height - 10)) | Out-Null
     Start-Sleep -Seconds 2
-    $process.Refresh()
-    $before = [CursorPosition+Rect]::new()
-    if (![CursorPosition]::GetWindowRect($process.MainWindowHandle, [ref]$before)) { throw 'Could not inspect the initial Poni window.' }
+    $before = Get-PoniRect $process
+    if (!$before) { throw 'Could not inspect the initial Poni window.' }
     $beforeWidth = $before.Right - $before.Left
+    if ($beforeWidth -ge 500) { throw 'The notch stayed open after the pointer left it.' }
     # Alt+N should open the compact window even when the pointer is elsewhere.
-    [CursorPosition]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero)
-    [CursorPosition]::keybd_event(0x4E, 0, 0, [UIntPtr]::Zero)
-    [CursorPosition]::keybd_event(0x4E, 0, 2, [UIntPtr]::Zero)
-    [CursorPosition]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
-    Start-Sleep -Seconds 3
-    $process.Refresh()
-    $rect = [CursorPosition+Rect]::new()
-    if (![CursorPosition]::GetWindowRect($process.MainWindowHandle, [ref]$rect)) { throw 'Could not inspect the Poni window.' }
-    $windowWidth = $rect.Right - $rect.Left
+    $windowWidth = $beforeWidth
+    Press-PoniShortcut
+    $shortcutDeadline = [DateTimeOffset]::UtcNow.AddSeconds(8)
+    do {
+        $rect = Get-PoniRect $process
+        if ($rect) { $windowWidth = $rect.Right - $rect.Left }
+        if ($windowWidth -ge 500) { break }
+        Start-Sleep -Milliseconds 250
+    } while ([DateTimeOffset]::UtcNow -lt $shortcutDeadline)
     if ($windowWidth -lt 500) {
-        $failedImage = [System.Drawing.Bitmap]::new($bounds.Width, $bounds.Height)
-        $failedGraphics = [System.Drawing.Graphics]::FromImage($failedImage)
-        try {
-            $failedGraphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
-            $failedImage.Save((Join-Path $outputDir 'shortcut-failure.png'), [System.Drawing.Imaging.ImageFormat]::Png)
-        } finally { $failedGraphics.Dispose(); $failedImage.Dispose() }
+        Save-Screen 'shortcut-failure.png'
         throw "Alt+N did not open the panel; widths before/after were $beforeWidth/$windowWidth pixels."
-    }
-    function Save-Screen([string]$name) {
-        $bitmap = [System.Drawing.Bitmap]::new($bounds.Width, $bounds.Height)
-        $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
-        try {
-            $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
-            $bitmap.Save((Join-Path $outputDir $name), [System.Drawing.Imaging.ImageFormat]::Png)
-        } finally { $graphics.Dispose(); $bitmap.Dispose() }
     }
     function Click-Point([int]$x, [int]$y) {
         [CursorPosition]::SetCursorPos($x, $y) | Out-Null
@@ -544,5 +575,5 @@ try {
     @{ process_id = $observedPid; main_window_handle = $mainHandle.ToInt64(); screenshot = 'desktop.png'; width_after_shortcut = $windowWidth; module_height = $moduleHeight; settings_width = $settingsWidth; settings_window_handle = $settingsHandle.ToInt64(); settings_closed_independently = $true; geometry_checked = $geometryChecked; screen_time_saved = $screenTimeChecked; pomodoro_saved = $pomodoroChecked; todo_checked = $todoChecked; weather_attempted = ($bounds.Width -eq 1024 -and $bounds.Height -eq 768) } |
         ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'observation.json') -Encoding UTF8
 } finally {
-    if (!$process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
+    if ($process -and !$process.HasExited) { Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue }
 }

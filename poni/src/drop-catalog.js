@@ -8,6 +8,8 @@
   window.poniDropCatalog = [
     {id: 'shelf', label: 'Shelf', icon: '▰', description: 'Keep files on Poni’s Shelf'},
     {id: 'zip', label: 'ZIP', icon: '▣', description: 'Make a ZIP next to the files'},
+    {id: 'shrink_pdf', label: 'Shrink PDF', icon: '▧', description: 'Make the pictures in a PDF smaller in a copy next to it',
+      accepts: paths => paths.every(path => /\.pdf$/i.test(path))},
     {id: 'shrink_image', label: 'Shrink image', icon: '▧', description: 'Make photos smaller in a copy next to each',
       accepts: paths => paths.every(path => photo.test(path))},
     {id: 'extract', label: 'Extract', icon: '⇩', description: 'Extract ZIP files into folders',

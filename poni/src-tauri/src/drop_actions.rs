@@ -1,4 +1,4 @@
-use crate::{drop_images, drop_ocr, drop_windows, shelf, Store};
+use crate::{drop_images, drop_ocr, drop_pdf, drop_windows, shelf, Store};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
@@ -22,6 +22,7 @@ pub(super) enum Tile {
     Zip,
     Extract,
     Copy,
+    ShrinkPdf,
     ShrinkImage,
     Convert,
     Ocr,
@@ -32,9 +33,10 @@ pub(super) enum Tile {
 }
 
 impl Tile {
-    pub(super) const ALL: [Self; 11] = [
+    pub(super) const ALL: [Self; 12] = [
         Self::Shelf,
         Self::Zip,
+        Self::ShrinkPdf,
         Self::ShrinkImage,
         Self::Extract,
         Self::Convert,
@@ -479,13 +481,17 @@ pub(super) async fn run_drop_action(
             .collect::<Result<Vec<_>, _>>()?;
         match action {
             Tile::Zip => make_zip(&paths).map(|output| saved(vec![output])),
-            Tile::ShrinkImage => drop_images::shrink(&paths, quality).map(|paths| {
+            Tile::ShrinkImage | Tile::ShrinkPdf => {
+                let paths = match action {
+                    Tile::ShrinkImage => drop_images::shrink(&paths, quality)?,
+                    _ => drop_pdf::shrink(&paths, quality)?,
+                };
                 if paths.is_empty() {
-                    Outcome::AlreadySmall
+                    Ok(Outcome::AlreadySmall)
                 } else {
-                    saved(paths)
+                    Ok(saved(paths))
                 }
-            }),
+            }
             Tile::Convert => drop_images::convert(&paths).map(saved),
             Tile::Ocr => drop_ocr::copy_recognized_text(&paths),
             Tile::Extract => {

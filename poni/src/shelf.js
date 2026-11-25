@@ -289,7 +289,7 @@
           status(`Sent ${result.count} ${result.count === 1 ? 'item' : 'items'} to the Recycle Bin`);
           break;
         case 'already_small':
-          status('These photos are already smaller');
+          status(tile === 'shrink_pdf' ? 'No smaller PDF could be made' : 'These photos are already smaller');
           break;
         case 'text_copied':
           status(`Text copied · ${result.preview}`);

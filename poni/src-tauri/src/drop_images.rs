@@ -26,7 +26,7 @@ pub(super) enum Quality {
 }
 
 impl Quality {
-    fn photo(self) -> (u32, u8) {
+    pub(super) fn photo(self) -> (u32, u8) {
         match self {
             Self::Light => (2400, 86),
             Self::Medium => (1600, 74),

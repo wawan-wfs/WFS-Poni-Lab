@@ -59,6 +59,7 @@ with sync_playwright() as pw:
           localStorage.setItem('last-drop-action', args.action);
           if (args.action === 'move') return {kind:'moved',count:args.paths.length};
           if (args.action === 'ocr') return {kind:'text_copied',preview:'Poni fixture'};
+          if (args.action === 'shrink_pdf') return {kind:'saved',paths:['/tests/report (smaller).pdf']};
           return {kind:'saved',paths:['/tests/example.zip']};
         }
         if (command?.startsWith('clipboard_history')) {
@@ -184,6 +185,7 @@ with sync_playwright() as pw:
     expect(drop).to_be_visible()
     expect(drop.locator('[data-action="extract"]')).to_have_class('file-drop-tile file-drop-unavailable')
     expect(drop.locator('[data-action="convert"]')).to_have_class('file-drop-tile file-drop-unavailable')
+    expect(drop.locator('[data-action="shrink_pdf"]')).to_have_class('file-drop-tile file-drop-unavailable')
     tile = drop.locator('[data-tile="zip"]').bounding_box()
     page.evaluate("""([x,y]) => window.testShelfDrag(
       {type:'drop',paths:['/tests/example.txt'],position:{x,y}})""",
@@ -191,7 +193,7 @@ with sync_playwright() as pw:
     expect(drop).to_be_hidden()
     expect(page.locator('.shelf-status')).to_have_text('Saved example.zip')
     assert page.evaluate("localStorage.getItem('last-drop-action')") == 'zip'
-    page.evaluate("""window.poniShelf.configure({tiles:['move','open_with','ocr']},true);
+    page.evaluate("""window.poniShelf.configure({tiles:['move','open_with','ocr','shrink_pdf']},true);
         window.testShelfDrag({type:'enter',paths:['/tests/one.txt','/tests/two.txt']})""")
     expect(drop.locator('[data-action="open_with"]')).to_have_class('file-drop-tile file-drop-unavailable')
     tile = drop.locator('[data-tile="move"]').bounding_box()
@@ -205,6 +207,12 @@ with sync_playwright() as pw:
       {type:'drop',paths:['/tests/image.png'],position:{x,y}})""",
       [tile['x'] + tile['width'] / 2, tile['y'] + tile['height'] / 2])
     expect(page.locator('.shelf-status')).to_have_text('Text copied · Poni fixture')
+    page.evaluate("window.testShelfDrag({type:'enter',paths:['/tests/report.PDF']})")
+    tile = drop.locator('[data-tile="shrink_pdf"]').bounding_box()
+    page.evaluate("""([x,y]) => window.testShelfDrag(
+      {type:'drop',paths:['/tests/report.PDF'],position:{x,y}})""",
+      [tile['x'] + tile['width'] / 2, tile['y'] + tile['height'] / 2])
+    expect(page.locator('.shelf-status')).to_have_text('Saved report (smaller).pdf')
     page.locator('[data-page="home"]').click()
     page.keyboard.press('ArrowRight')
     expect(page.locator('#page-tasks')).to_be_visible()
