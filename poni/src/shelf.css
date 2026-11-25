@@ -98,5 +98,8 @@
 }
 
 .file-drop-tile span { color: #8dc9ff; font-size: 23px; }
+#file-drop-actions[data-rows="3"] { grid-template-rows: repeat(3, minmax(0, 1fr)); gap: 6px; }
+#file-drop-actions[data-rows="3"] .file-drop-tile { gap: 2px; border-radius: 9px; }
+#file-drop-actions[data-rows="3"] .file-drop-tile span { font-size: 16px; line-height: 1; }
 .file-drop-unavailable { opacity: .35; }
 .file-drop-over { border-color: #67b6ff; background: #17385b; }

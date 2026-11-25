@@ -264,6 +264,7 @@
       dropPanel.append(tile);
     }
     const rows = tiles.length > 14 ? 3 : tiles.length > 5 ? 2 : 1;
+    dropPanel.dataset.rows = String(rows);
     dropPanel.style.setProperty('--drop-columns', String(Math.max(5, Math.ceil(tiles.length / rows))));
     hooks.openActions();
     dropPanel.hidden = false;

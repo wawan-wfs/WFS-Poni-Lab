@@ -197,6 +197,12 @@ with sync_playwright() as pw:
     page.evaluate("window.testShelfDrag({type:'enter',paths:['/tests/example.txt']})")
     drop = page.locator('#file-drop-actions')
     expect(drop).to_be_visible()
+    expect(drop.locator('[data-action]')).to_have_count(15)
+    assert drop.evaluate("""panel => [...panel.querySelectorAll('.file-drop-tile strong')].every(label => {
+      const area = panel.getBoundingClientRect();
+      const bounds = label.getBoundingClientRect();
+      return bounds.top >= area.top && bounds.bottom <= area.bottom;
+    })""")
     expect(drop.locator('[data-action="extract"]')).to_have_class('file-drop-tile file-drop-unavailable')
     expect(drop.locator('[data-action="convert"]')).to_have_class('file-drop-tile file-drop-unavailable')
     expect(drop.locator('[data-action="shrink_pdf"]')).to_have_class('file-drop-tile file-drop-unavailable')
