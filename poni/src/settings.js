@@ -84,6 +84,14 @@
     ['general', 'Switch tabs with ← / →', 'arrows keyboard shortcuts', 'module-shortcuts'],
     ['general', 'Layout direction', 'right left rtl ltr writing arah tata letak', 'layout-direction'],
     ['general', 'Launch at login', 'windows startup sign in otomatis mulai masuk', 'launch-at-login'],
+    ['general', 'Show Poni (the notch)', 'hide disable tray tampil sembunyikan', 'notch-enabled'],
+    ['general', 'Show Poni on', 'display screen monitor cursor layar', 'notch-display'],
+    ['general', 'Lock position', 'stop notch drag kunci posisi', 'notch-lock-position'],
+    ['general', 'Hide when an app is fullscreen', 'games video presentation layar penuh', 'notch-fullscreen'],
+    ['general', 'Auto-hide', 'top edge mouse hidden sembunyi otomatis', 'notch-auto-hide'],
+    ['general', 'Come down when you’re idle', 'auto hide standby inactive diam', 'notch-standby'],
+    ['general', 'Idle for', 'standby delay inactive seconds detik', 'notch-standby-secs'],
+    ['general', 'Hide button', 'manual hide eye handle sembunyikan', 'notch-hide-button'],
     ['general', 'Position along the top', 'notch position left centre right posisi', 'notch-position'],
     ['general', 'Gap from the top edge', 'notch position floating distance jarak atas', 'notch-top-gap'],
     ['general', 'Show Poni in screenshots & recordings', 'share capture protection privacy rekaman', 'show-in-screenshots'],
@@ -157,6 +165,7 @@
   let batteryStatus = null;
   let launchAtLogin = null;
   let daySchedule = null;
+  let displays = [];
   let active = 'general';
   let busy = false;
   let loading = false;
@@ -305,6 +314,15 @@
     toggle(display, 'launch-at-login', 'Launch at login',
       launchAtLogin == null ? 'Startup settings are unavailable.' : 'Open Poni when you sign in to Windows.',
       'launch_at_login', 'startup', launchAtLogin == null);
+    toggle(display, 'notch-enabled', 'Show Poni (the notch)',
+      'You can also show Poni again from the system tray.', 'enabled', 'panel');
+    const displayOptions = [['primary', 'Primary display'], ['cursor', 'Display with the mouse cursor'],
+      ...displays.map(item => [item.id, item.label])];
+    const selectedDisplay = settings.panel.display || 'primary';
+    if (!displayOptions.some(([id]) => id === selectedDisplay)) {
+      displayOptions.push([selectedDisplay, 'Selected display unavailable']);
+    }
+    select(display, 'notch-display', 'Show Poni on', null, 'display', displayOptions, false, 'panel');
     range(display, 'notch-position', 'Position along the top', 'position',
       { max: 100, step: 1, unit: '%', spokenUnit: 'percent', source: 'panel', physical: true });
     const positions = create('div', 'settings-position-presets');
@@ -315,6 +333,29 @@
       positions.append(preset);
     }
     display.append(positions);
+    toggle(display, 'notch-lock-position', 'Lock position',
+      'Stop the notch from being dragged.', 'lock_position', 'panel');
+    toggle(display, 'notch-fullscreen', 'Hide when an app is fullscreen',
+      'Use Alt+N or Open Poni in the tray to bring it back for a moment.', 'hide_in_fullscreen', 'panel');
+    toggle(display, 'notch-auto-hide', 'Auto-hide',
+      'Move the mouse to the top edge to show Poni. Reminders still come down.', 'auto_hide', 'panel');
+    toggle(display, 'notch-standby', 'Come down when you’re idle',
+      'Show the closed notch after a period without mouse or keyboard input.', 'standby_show', 'panel', !settings.panel.auto_hide);
+    const standby = create('input', 'settings-text');
+    standby.id = 'settings-notch-standby-secs';
+    standby.type = 'number';
+    standby.min = 1;
+    standby.max = 3600;
+    standby.required = true;
+    standby.value = settings.panel.standby_secs ?? 12;
+    standby.disabled = !settings.panel.auto_hide || !settings.panel.standby_show;
+    standby.addEventListener('change', () => {
+      if (standby.validity.valid) void change({standby_secs: standby.valueAsNumber}, 'notch-standby-secs', 'panel');
+      else standby.value = settings.panel.standby_secs ?? 12;
+    });
+    row(display, 'Idle for', 'Seconds without mouse or keyboard input.', standby);
+    toggle(display, 'notch-hide-button', 'Hide button',
+      'Show a button in Poni that tucks it into a handle at the top edge.', 'hide_button', 'panel');
     const pixels = { unit: 'px', spokenUnit: 'pixels', source: 'panel' };
     range(display, 'notch-top-gap', 'Gap from the top edge', 'top_gap',
       { ...pixels, max: 120, step: 2, description: 'At 0, Poni stays attached to the top edge.' });
@@ -816,12 +857,14 @@
     updateBusy();
     try {
       const invoke = window.__TAURI__.core.invoke;
-      [settings, screenTime, pomo, launchAtLogin, daySchedule, batteryStatus] = await Promise.all([
+      [settings, screenTime, pomo, launchAtLogin, daySchedule, batteryStatus, displays] = await Promise.all([
         invoke('get_poni_settings'), invoke('get_screentime_preferences'), invoke('get_pomodoro_settings'),
         invoke('get_poni_startup').catch(() => null),
         invoke('get_day_schedule').catch(() => null),
         invoke('get_battery').catch(() => null),
+        invoke('panel_displays').then(value => Array.isArray(value) ? value : []).catch(() => []),
       ]);
+      settings.panel.display ||= 'primary';
       broadcast();
     } catch (error) {
       banner.textContent = String(error);
@@ -868,6 +911,12 @@
     window.__TAURI__.event.listen('poni-day-schedule-changed', event => {
       daySchedule = event.payload;
       if (active === 'dayprogress' && !busy && !loading) render(true);
+    }).catch(error => { banner.textContent = String(error); });
+    window.__TAURI__.event.listen('poni-settings-changed', event => {
+      if (busy || loading || !event.payload?.panel) return;
+      settings = event.payload;
+      broadcast();
+      render(true);
     }).catch(error => { banner.textContent = String(error); });
     window.__TAURI__.event.listen('poni-battery-changed', event => {
       batteryStatus = event.payload;

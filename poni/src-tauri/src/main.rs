@@ -355,9 +355,13 @@ struct WindowSequence {
     session: Option<Uuid>,
     last: u64,
     capture_protected: bool,
+    presentation: panel::Presentation,
 }
 
 struct ShortcutStatus(bool);
+
+#[cfg(windows)]
+struct NotchTray(tauri::menu::CheckMenuItem<tauri::Wry>);
 
 impl Store {
     fn open(path: PathBuf) -> Result<Self, String> {
@@ -1156,9 +1160,6 @@ fn apply_panel_preferences(
     window: &tauri::WebviewWindow,
     state: &mut WindowSequence,
     preferences: &panel::Preferences,
-    open: bool,
-    tall: bool,
-    task_alert: bool,
 ) -> Result<(), String> {
     let protect = !preferences.show_in_screenshots;
     if protect != state.capture_protected {
@@ -1168,7 +1169,101 @@ fn apply_panel_preferences(
             .map_err(|error| error.to_string())?;
         state.capture_protected = protect;
     }
-    preferences.apply_layout(window, open, tall, task_alert)
+    preferences.apply_layout(window, &mut state.presentation)
+}
+
+fn sync_panel(app: &tauri::AppHandle) {
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    let store = app.state::<Mutex<Store>>();
+    let Ok(preferences) = store.lock().map(|store| store.data.settings.panel.clone()) else {
+        return;
+    };
+    let sequence = app.state::<Mutex<WindowSequence>>();
+    if let Ok(mut state) = sequence.lock() {
+        let _ = apply_panel_preferences(&window, &mut state, &preferences);
+    }
+}
+
+fn shortcut_toggle(app: &tauri::AppHandle, force: bool) {
+    let store = app.state::<Mutex<Store>>();
+    let Ok(enabled) = store.lock().map(|store| store.data.settings.panel.enabled) else {
+        return;
+    };
+    if !enabled {
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move {
+            let _ = open_poni_settings(app).await;
+        });
+        return;
+    }
+    let sequence = app.state::<Mutex<WindowSequence>>();
+    let needs_reveal = sequence
+        .lock()
+        .map(|state| state.presentation.visible == Some(false))
+        .unwrap_or(false);
+    let _ = app.emit_to("main", "poni-toggle", force || needs_reveal);
+}
+
+#[cfg(windows)]
+fn install_tray(app: &tauri::App, enabled: bool) -> tauri::Result<()> {
+    use tauri::{
+        menu::{CheckMenuItem, Menu, MenuItem},
+        tray::TrayIconBuilder,
+    };
+    let open = MenuItem::with_id(app, "poni-open", "Open Poni", true, None::<&str>)?;
+    let visible = CheckMenuItem::with_id(
+        app,
+        "poni-visible",
+        "Show Poni (the notch)",
+        true,
+        enabled,
+        None::<&str>,
+    )?;
+    let settings = MenuItem::with_id(app, "poni-settings", "Settings", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "poni-quit", "Quit Poni", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&open, &visible, &settings, &quit])?;
+    let mut tray = TrayIconBuilder::with_id("poni")
+        .tooltip("Poni")
+        .menu(&menu)
+        .show_menu_on_left_click(true)
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "poni-open" => shortcut_toggle(app, true),
+            "poni-visible" => {
+                let store = app.state::<Mutex<Store>>();
+                let result = store.lock().ok().and_then(|mut store| {
+                    store
+                        .update(|data| {
+                            data.settings.panel.enabled = !data.settings.panel.enabled;
+                            Ok(())
+                        })
+                        .ok()
+                });
+                if let Some(data) = result {
+                    settings::publish(app, &data.settings);
+                } else if let Ok(store) = store.lock() {
+                    let _ = app
+                        .state::<NotchTray>()
+                        .0
+                        .set_checked(store.data.settings.panel.enabled);
+                }
+            }
+            "poni-settings" => {
+                let app = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    let _ = open_poni_settings(app).await;
+                });
+            }
+            "poni-quit" => app.exit(0),
+            _ => (),
+        });
+    if let Some(icon) = app.default_window_icon() {
+        tray = tray.icon(icon.clone());
+    }
+    tray.build(app)?;
+    app.manage(NotchTray(visible));
+    Ok(())
 }
 
 #[tauri::command]
@@ -1189,7 +1284,8 @@ fn initialize_panel(
         .settings
         .panel
         .clone();
-    apply_panel_preferences(&window, &mut state, &preferences, false, false, false)?;
+    state.presentation = panel::Presentation::default();
+    apply_panel_preferences(&window, &mut state, &preferences)?;
     state.session = Some(session);
     state.last = 0;
     Ok(())
@@ -1204,6 +1300,7 @@ fn set_panel_open(
     open: bool,
     tall: bool,
     task_alert: Option<bool>,
+    tucked: Option<bool>,
     focus: bool,
     seq: u64,
 ) -> Result<(), String> {
@@ -1221,18 +1318,57 @@ fn set_panel_open(
         .settings
         .panel
         .clone();
-    apply_panel_preferences(
-        &window,
-        &mut state,
-        &preferences,
-        open,
-        tall,
-        task_alert.unwrap_or(false),
-    )?;
-    if open && focus {
+    state.presentation.open = open;
+    state.presentation.tall = tall;
+    state.presentation.alert = task_alert.unwrap_or(false);
+    state.presentation.tucked = tucked.unwrap_or(false);
+    state.presentation.forced = open && (focus || state.presentation.forced);
+    apply_panel_preferences(&window, &mut state, &preferences)?;
+    if open && focus && state.presentation.visible == Some(true) {
         window.set_focus().map_err(|e| e.to_string())?;
     }
     state.last = seq;
+    Ok(())
+}
+
+#[tauri::command]
+fn move_panel(
+    window: tauri::WebviewWindow,
+    session: Uuid,
+    delta: Option<i32>,
+    save: bool,
+) -> Result<(), String> {
+    if window.label() != "main" {
+        return Err("Only the notch can move the panel".into());
+    }
+    let app = window.app_handle();
+    let store = app.state::<Mutex<Store>>();
+    let sequence = app.state::<Mutex<WindowSequence>>();
+    let mut state = sequence.lock().map_err(|_| "Window state unavailable")?;
+    if state.session != Some(session) {
+        return Ok(());
+    }
+    let mut store = store.lock().map_err(|_| "Storage unavailable")?;
+    let preferences = store.data.settings.panel.clone();
+    if preferences.lock_position || !preferences.enabled || delta.is_none() {
+        state.presentation.move_preview = None;
+        drop(store);
+        return apply_panel_preferences(&window, &mut state, &preferences);
+    }
+    let position = preferences.position_after_drag(&window, delta.unwrap_or_default())?;
+    if !save {
+        state.presentation.move_preview = Some(position);
+        drop(store);
+        return apply_panel_preferences(&window, &mut state, &preferences);
+    }
+    state.presentation.move_preview = None;
+    let updated = store.update(|data| {
+        data.settings.panel.position = position;
+        Ok(())
+    });
+    drop(store);
+    drop(state);
+    settings::publish(app, &updated?.settings);
     Ok(())
 }
 
@@ -1308,7 +1444,7 @@ fn main() {
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _, event| {
                     if event.state == ShortcutState::Pressed {
-                        let _ = app.emit("poni-toggle", ());
+                        shortcut_toggle(app, false);
                     }
                 })
                 .build(),
@@ -1317,16 +1453,11 @@ fn main() {
             let profile = app.path().app_data_dir()?;
             let store = Store::open(profile.join("data.json")).map_err(std::io::Error::other)?;
             let mut sequence = WindowSequence::default();
+            #[cfg(windows)]
+            let enabled = store.data.settings.panel.enabled;
             if let Some(window) = app.get_webview_window("main") {
-                apply_panel_preferences(
-                    &window,
-                    &mut sequence,
-                    &store.data.settings.panel,
-                    false,
-                    false,
-                    false,
-                )
-                .map_err(std::io::Error::other)?;
+                apply_panel_preferences(&window, &mut sequence, &store.data.settings.panel)
+                    .map_err(std::io::Error::other)?;
             }
             app.manage(Mutex::new(store));
             app.manage(Mutex::new(control::ControlState::default()));
@@ -1347,7 +1478,25 @@ fn main() {
             app.manage(ShortcutStatus(
                 app.global_shortcut().register("Alt+N").is_ok(),
             ));
+            #[cfg(windows)]
+            install_tray(app, enabled)?;
             let handle = app.handle().clone();
+            let panel_handle = handle.clone();
+            std::thread::spawn(move || loop {
+                std::thread::sleep(std::time::Duration::from_millis(100));
+                let (send, receive) = std::sync::mpsc::sync_channel(1);
+                let target = panel_handle.clone();
+                if panel_handle
+                    .run_on_main_thread(move || {
+                        sync_panel(&target);
+                        let _ = send.send(());
+                    })
+                    .is_err()
+                    || receive.recv().is_err()
+                {
+                    break;
+                }
+            });
             let power_handle = handle.clone();
             std::thread::spawn(move || battery::monitor(power_handle));
             #[cfg(windows)]
@@ -1373,6 +1522,8 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             settings::get_poni_settings,
+            panel::panel_displays,
+            move_panel,
             shelf::shelf_items,
             shelf::shelf_add,
             shelf::shelf_pick,

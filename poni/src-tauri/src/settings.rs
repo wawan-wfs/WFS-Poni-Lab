@@ -361,9 +361,18 @@ pub(super) fn set_poni_settings(
         .map_err(|_| "Storage unavailable")?
         .update(|data| data.settings.apply(patch))?
         .settings;
-    let _ = app.emit_to("main", "poni-settings-changed", &result);
+    publish(&app, &result);
     crate::clipboard::reconcile(&app);
     Ok(result)
+}
+
+pub(super) fn publish(app: &AppHandle, settings: &PoniSettings) {
+    #[cfg(windows)]
+    if let Some(tray) = tauri::Manager::try_state::<crate::NotchTray>(app) {
+        let _ = tray.0.set_checked(settings.panel.enabled);
+    }
+    crate::sync_panel(app);
+    let _ = app.emit("poni-settings-changed", settings);
 }
 
 #[tauri::command]

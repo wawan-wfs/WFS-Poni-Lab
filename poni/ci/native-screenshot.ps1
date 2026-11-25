@@ -9,6 +9,7 @@ public static class CursorPosition {
     [DllImport("user32.dll")] public static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
     [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
     [DllImport("user32.dll")] public static extern bool GetWindowRect(System.IntPtr window, out Rect rect);
+    [DllImport("user32.dll")] public static extern bool IsWindowVisible(System.IntPtr window);
     [DllImport("user32.dll")] public static extern bool GetClientRect(System.IntPtr window, out Rect rect);
     [DllImport("user32.dll")] public static extern bool ClientToScreen(System.IntPtr window, ref Point point);
     [DllImport("user32.dll")] public static extern bool GetWindowDisplayAffinity(System.IntPtr window, out uint affinity);
@@ -246,6 +247,42 @@ try {
             throw "Windows did not apply and clear the display affinity. Protected: $protectedAffinity, restored: $affinity."
         }
         $geometryChecked = $true
+
+        Find-Setting 'show poni the notch'
+        [System.Windows.Forms.SendKeys]::SendWait(' ')
+        Start-Sleep -Seconds 2
+        if ([CursorPosition]::IsWindowVisible($mainHandle) -or ![CursorPosition]::IsWindowVisible($settingsHandle)) {
+            throw 'Disabling the notch did not leave the Settings window accessible.'
+        }
+        [System.Windows.Forms.SendKeys]::SendWait(' ')
+        Start-Sleep -Seconds 2
+        $shown = [CursorPosition]::IsWindowVisible($mainHandle)
+        if (!$shown) { throw 'Re-enabling the notch did not restore its window.' }
+
+        Find-Setting 'auto-hide top edge mouse hidden'
+        [System.Windows.Forms.SendKeys]::SendWait(' ')
+        Start-Sleep -Seconds 2
+        $parked = [CursorPosition+Rect]::new()
+        $parkedOrigin = [CursorPosition+Point]::new()
+        if (![CursorPosition]::GetClientRect($mainHandle, [ref]$parked) -or
+            ![CursorPosition]::ClientToScreen($mainHandle, [ref]$parkedOrigin) -or
+            $parked.Bottom -ne 4 -or $parkedOrigin.Y -ne $bounds.Top) {
+            throw 'Auto-hide did not leave a four-pixel handle at the top edge.'
+        }
+        [CursorPosition]::SetCursorPos(($parkedOrigin.X + [int]($parked.Right / 2)), ($bounds.Top + 2)) | Out-Null
+        Start-Sleep -Seconds 2
+        $revealed = [CursorPosition+Rect]::new()
+        if (![CursorPosition]::GetClientRect($mainHandle, [ref]$revealed) -or $revealed.Bottom -lt 22) {
+            throw 'The pointer at the top edge did not bring the notch down.'
+        }
+        [CursorPosition]::SetCursorPos(($bounds.Left + 15), ($bounds.Bottom - 25)) | Out-Null
+        Start-Sleep -Seconds 2
+        Find-Setting 'auto-hide top edge mouse hidden'
+        [System.Windows.Forms.SendKeys]::SendWait(' ')
+        Start-Sleep -Seconds 2
+        @{ hidden_with_settings_available = $true; restored_from_settings = $shown
+            handle_height = $parked.Bottom; height_after_hover = $revealed.Bottom } |
+            ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'notch-visibility.json') -Encoding UTF8
 
         Find-Setting 'gap from the top edge'
         [System.Windows.Forms.SendKeys]::SendWait('{HOME}')

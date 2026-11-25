@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use tauri::{PhysicalPosition, PhysicalSize, WebviewWindow};
+use tauri::{Monitor, PhysicalPosition, PhysicalSize, WebviewWindow};
 
 #[derive(Clone, Copy, Default, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -15,7 +15,7 @@ enum LayoutDirection {
 pub(super) struct Preferences {
     direction: LayoutDirection,
     top_gap: u16,
-    position: u16,
+    pub(super) position: u16,
     width: u16,
     height: u16,
     expanded_width: u16,
@@ -25,6 +25,14 @@ pub(super) struct Preferences {
     pub(super) show_in_screenshots: bool,
     warm_night: bool,
     warmth: u16,
+    pub(super) enabled: bool,
+    display: String,
+    pub(super) lock_position: bool,
+    hide_in_fullscreen: bool,
+    auto_hide: bool,
+    standby_show: bool,
+    standby_secs: u16,
+    hide_button: bool,
 }
 
 impl Default for Preferences {
@@ -42,6 +50,14 @@ impl Default for Preferences {
             show_in_screenshots: true,
             warm_night: false,
             warmth: 60,
+            enabled: true,
+            display: "primary".into(),
+            lock_position: false,
+            hide_in_fullscreen: true,
+            auto_hide: false,
+            standby_show: false,
+            standby_secs: 12,
+            hide_button: false,
         }
     }
 }
@@ -61,6 +77,65 @@ pub(super) struct Patch {
     show_in_screenshots: Option<bool>,
     warm_night: Option<bool>,
     warmth: Option<u16>,
+    enabled: Option<bool>,
+    display: Option<String>,
+    lock_position: Option<bool>,
+    hide_in_fullscreen: Option<bool>,
+    auto_hide: Option<bool>,
+    standby_show: Option<bool>,
+    standby_secs: Option<u16>,
+    hide_button: Option<bool>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Layer {
+    Hidden,
+    Handle(u16),
+    Normal,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+struct Geometry {
+    size: PhysicalSize<u32>,
+    position: PhysicalPosition<i32>,
+}
+
+#[derive(Default)]
+pub(super) struct Presentation {
+    pub(super) open: bool,
+    pub(super) tall: bool,
+    pub(super) alert: bool,
+    pub(super) tucked: bool,
+    pub(super) forced: bool,
+    pub(super) visible: Option<bool>,
+    pub(super) move_preview: Option<u16>,
+    geometry: Option<Geometry>,
+    edge_revealed: bool,
+}
+
+#[derive(Serialize)]
+pub(super) struct DisplayOption {
+    id: String,
+    label: String,
+}
+
+#[tauri::command]
+pub(super) fn panel_displays(window: WebviewWindow) -> Result<Vec<DisplayOption>, String> {
+    let monitors = window
+        .available_monitors()
+        .map_err(|error| error.to_string())?;
+    Ok(monitors
+        .iter()
+        .enumerate()
+        .filter_map(|(index, monitor)| {
+            let name = monitor.name()?;
+            let size = monitor.size();
+            Some(DisplayOption {
+                id: format!("monitor:{name}"),
+                label: format!("Display {} · {} × {}", index + 1, size.width, size.height),
+            })
+        })
+        .collect())
 }
 
 impl Preferences {
@@ -75,12 +150,21 @@ impl Preferences {
             ("tall height", patch.tall_height, 220, 340, 2),
             ("opacity", patch.opacity, 20, 100, 5),
             ("night warmth", patch.warmth, 10, 100, 5),
+            ("standby time", patch.standby_secs, 1, 3600, 1),
         ] {
             if value.is_some_and(|value| {
                 !(minimum..=maximum).contains(&value) || (value - minimum) % step != 0
             }) {
                 return Err(format!("Choose a valid {name} within the displayed range"));
             }
+        }
+        if patch.display.as_ref().is_some_and(|display| {
+            !matches!(display.as_str(), "primary" | "cursor")
+                && !display.strip_prefix("monitor:").is_some_and(|name| {
+                    !name.is_empty() && name.len() <= 128 && !name.chars().any(char::is_control)
+                })
+        }) {
+            return Err("Choose a valid display".into());
         }
         self.direction = patch.direction.unwrap_or(self.direction);
         self.top_gap = patch.top_gap.unwrap_or(self.top_gap);
@@ -96,6 +180,16 @@ impl Preferences {
             .unwrap_or(self.show_in_screenshots);
         self.warm_night = patch.warm_night.unwrap_or(self.warm_night);
         self.warmth = patch.warmth.unwrap_or(self.warmth);
+        self.enabled = patch.enabled.unwrap_or(self.enabled);
+        if let Some(display) = patch.display {
+            self.display = display;
+        }
+        self.lock_position = patch.lock_position.unwrap_or(self.lock_position);
+        self.hide_in_fullscreen = patch.hide_in_fullscreen.unwrap_or(self.hide_in_fullscreen);
+        self.auto_hide = patch.auto_hide.unwrap_or(self.auto_hide);
+        self.standby_show = patch.standby_show.unwrap_or(self.standby_show);
+        self.standby_secs = patch.standby_secs.unwrap_or(self.standby_secs);
+        self.hide_button = patch.hide_button.unwrap_or(self.hide_button);
         Ok(())
     }
 
@@ -123,42 +217,214 @@ impl Preferences {
     }
 
     fn horizontal_offset(&self, display_width: u32, panel_width: u32) -> i32 {
+        Self::offset_for(self.position, display_width, panel_width)
+    }
+
+    fn offset_for(position: u16, display_width: u32, panel_width: u32) -> i32 {
         let travel = u64::from(display_width.saturating_sub(panel_width));
-        ((travel * u64::from(self.position.min(100)) + 50) / 100) as i32
+        ((travel * u64::from(position.min(100)) + 50) / 100) as i32
+    }
+
+    pub(super) fn position_after_drag(
+        &self,
+        window: &WebviewWindow,
+        delta: i32,
+    ) -> Result<u16, String> {
+        let monitor = window
+            .current_monitor()
+            .map_err(|error| error.to_string())?
+            .ok_or("The notch display is unavailable")?;
+        let width = window
+            .inner_size()
+            .map_err(|error| error.to_string())?
+            .width;
+        let travel = f64::from(monitor.size().width.saturating_sub(width));
+        Ok(self.drag_position(travel, f64::from(delta), monitor.scale_factor()))
+    }
+
+    fn drag_position(&self, travel: f64, delta: f64, scale: f64) -> u16 {
+        if travel <= 0.0 {
+            return self.position;
+        }
+        let target = (travel * f64::from(self.position) / 100.0 + delta * scale).clamp(0.0, travel);
+        if (target - travel / 2.0).abs() <= 10.0 * scale {
+            50
+        } else {
+            (target * 100.0 / travel).round() as u16
+        }
+    }
+
+    fn monitor(
+        &self,
+        window: &WebviewWindow,
+        open: bool,
+        cursor: Option<PhysicalPosition<f64>>,
+    ) -> Option<Monitor> {
+        let chosen = if self.display == "cursor" {
+            if open {
+                window.current_monitor().ok().flatten()
+            } else {
+                cursor.and_then(|point| window.monitor_from_point(point.x, point.y).ok().flatten())
+            }
+        } else {
+            self.display.strip_prefix("monitor:").and_then(|name| {
+                window
+                    .available_monitors()
+                    .ok()?
+                    .into_iter()
+                    .find(|monitor| monitor.name().is_some_and(|value| value == name))
+            })
+        };
+        chosen
+            .or_else(|| window.primary_monitor().ok().flatten())
+            .or_else(|| window.current_monitor().ok().flatten())
+    }
+
+    fn layer(&self, state: &Presentation, fullscreen: bool, idle_ms: Option<u32>) -> Layer {
+        if !self.enabled || (self.hide_in_fullscreen && fullscreen && !state.forced) {
+            return Layer::Hidden;
+        }
+        if state.open || state.alert {
+            return Layer::Normal;
+        }
+        if state.tucked {
+            return Layer::Handle(10);
+        }
+        let standby = self.standby_show
+            && idle_ms.is_some_and(|ms| ms >= u32::from(self.standby_secs) * 1000);
+        if self.auto_hide && !state.edge_revealed && !standby {
+            return Layer::Handle(4);
+        }
+        Layer::Normal
     }
 
     pub(super) fn apply_layout(
         &self,
         window: &WebviewWindow,
-        open: bool,
-        tall: bool,
-        task_alert: bool,
+        state: &mut Presentation,
     ) -> Result<(), String> {
-        let mut dimensions = self.dimensions(open, tall);
-        if !open && task_alert {
+        let mut dimensions = self.dimensions(state.open, state.tall);
+        if !state.open && state.alert {
             dimensions.0 = dimensions.0.max(320);
             dimensions.1 += 44;
         }
-        let monitor = window
-            .current_monitor()
-            .map_err(|error| error.to_string())?;
-        let Some(monitor) = monitor else {
-            return window
-                .set_size(tauri::LogicalSize::new(
-                    f64::from(dimensions.0),
-                    f64::from(dimensions.1),
-                ))
-                .map_err(|error| error.to_string());
+        let cursor = window.cursor_position().ok();
+        let monitor = self.monitor(window, state.open || state.move_preview.is_some(), cursor);
+        let fullscreen =
+            self.hide_in_fullscreen && monitor.as_ref().is_some_and(foreground_fullscreen);
+        let idle_ms = (self.auto_hide && self.standby_show)
+            .then(crate::activity::idle_millis)
+            .flatten();
+        let mut geometry = if let Some(monitor) = monitor {
+            let (size, gap) =
+                self.fit(dimensions, monitor.work_area().size, monitor.scale_factor());
+            let offset = match state.move_preview {
+                Some(position) if !self.lock_position => {
+                    Self::offset_for(position, monitor.size().width, size.width)
+                }
+                _ => self.horizontal_offset(monitor.size().width, size.width),
+            };
+            let x = monitor.position().x.saturating_add(offset);
+            let top = monitor.position().y;
+            let reach = if state.edge_revealed {
+                gap.saturating_add(size.height)
+            } else {
+                (6.0 * monitor.scale_factor()).ceil() as u32
+            };
+            state.edge_revealed = self.auto_hide
+                && cursor.is_some_and(|cursor| {
+                    cursor.x >= f64::from(x)
+                        && cursor.x < f64::from(x) + f64::from(size.width)
+                        && cursor.y >= f64::from(top)
+                        && cursor.y <= f64::from(top) + f64::from(reach)
+                });
+            let mut geometry = Geometry {
+                size,
+                position: PhysicalPosition::new(x, top.saturating_add(gap as i32)),
+            };
+            if let Layer::Handle(height) = self.layer(state, fullscreen, idle_ms) {
+                geometry.size.height = (f64::from(height) * monitor.scale_factor())
+                    .round()
+                    .max(1.0) as u32;
+                geometry.position.y = top;
+            }
+            Some(geometry)
+        } else {
+            None
         };
-        let (size, gap) = self.fit(dimensions, monitor.work_area().size, monitor.scale_factor());
-        let offset = self.horizontal_offset(monitor.size().width, size.width);
-        window.set_size(size).map_err(|error| error.to_string())?;
-        let position = PhysicalPosition::new(
-            monitor.position().x.saturating_add(offset),
-            monitor.position().y.saturating_add(gap as i32),
-        );
-        position_client(window, position).map_err(|error| error.to_string())
+        let visible = self.layer(state, fullscreen, idle_ms) != Layer::Hidden;
+        if !visible {
+            geometry = None;
+        }
+        if let Some(geometry) = geometry.filter(|geometry| Some(*geometry) != state.geometry) {
+            window
+                .set_size(geometry.size)
+                .map_err(|error| error.to_string())?;
+            position_client(window, geometry.position).map_err(|error| error.to_string())?;
+            state.geometry = Some(geometry);
+        }
+        if state.visible != Some(visible) {
+            if visible {
+                window.show()
+            } else {
+                window.hide()
+            }
+            .map_err(|error| error.to_string())?;
+            state.visible = Some(visible);
+        }
+        Ok(())
     }
+}
+
+#[cfg(windows)]
+fn foreground_fullscreen(monitor: &Monitor) -> bool {
+    use windows_sys::Win32::{
+        Foundation::RECT,
+        UI::WindowsAndMessaging::{
+            GetDesktopWindow, GetForegroundWindow, GetShellWindow, GetWindowLongW, GetWindowRect,
+            GetWindowThreadProcessId, IsIconic, IsWindowVisible, IsZoomed, GWL_STYLE, WS_CAPTION,
+        },
+    };
+    let position = monitor.position();
+    let size = monitor.size();
+    unsafe {
+        let front = GetForegroundWindow();
+        if front.is_null()
+            || front == GetDesktopWindow()
+            || front == GetShellWindow()
+            || IsIconic(front) != 0
+            || IsWindowVisible(front) == 0
+        {
+            return false;
+        }
+        let mut pid = 0;
+        GetWindowThreadProcessId(front, &mut pid);
+        if pid == std::process::id()
+            || (IsZoomed(front) != 0
+                && GetWindowLongW(front, GWL_STYLE) as u32 & WS_CAPTION == WS_CAPTION)
+        {
+            return false;
+        }
+        let mut rect = RECT::default();
+        GetWindowRect(front, &mut rect) != 0
+            && rect.left <= position.x.saturating_add(2)
+            && rect.top <= position.y.saturating_add(2)
+            && rect.right
+                >= position
+                    .x
+                    .saturating_add(size.width as i32)
+                    .saturating_sub(2)
+            && rect.bottom
+                >= position
+                    .y
+                    .saturating_add(size.height as i32)
+                    .saturating_sub(2)
+    }
+}
+
+#[cfg(not(windows))]
+fn foreground_fullscreen(_monitor: &Monitor) -> bool {
+    false
 }
 
 pub(super) fn position_client(
@@ -202,5 +468,44 @@ mod tests {
         let patch = serde_json::from_str(r#"{"width":250,"top_gap":3}"#).unwrap();
         assert!(preferences.apply(patch).is_err());
         assert_eq!(preferences.width, previous_width);
+    }
+
+    #[test]
+    fn auto_hide_standby_and_fullscreen_preserve_alerts_and_manual_opening() {
+        let mut preferences = Preferences::default();
+        preferences
+            .apply(
+                serde_json::from_str(r#"{"auto_hide":true,"standby_show":true,"standby_secs":4}"#)
+                    .unwrap(),
+            )
+            .unwrap();
+        let mut state = Presentation::default();
+        assert_eq!(
+            preferences.layer(&state, false, Some(3_999)),
+            Layer::Handle(4)
+        );
+        assert_eq!(preferences.layer(&state, false, Some(4_000)), Layer::Normal);
+        state.tucked = true;
+        assert_eq!(
+            preferences.layer(&state, false, Some(8_000)),
+            Layer::Handle(10)
+        );
+        state.alert = true;
+        assert_eq!(preferences.layer(&state, false, Some(0)), Layer::Normal);
+        assert_eq!(preferences.layer(&state, true, Some(0)), Layer::Hidden);
+        state.open = true;
+        state.forced = true;
+        assert_eq!(preferences.layer(&state, true, Some(0)), Layer::Normal);
+        preferences.enabled = false;
+        assert_eq!(preferences.layer(&state, true, Some(0)), Layer::Hidden);
+    }
+
+    #[test]
+    fn moving_the_notch_clamps_and_snaps_in_scaled_coordinates() {
+        let preferences = Preferences::default();
+        assert_eq!(preferences.drag_position(700.0, 9.0, 1.5), 50);
+        assert_eq!(preferences.drag_position(700.0, 70.0, 2.0), 70);
+        assert_eq!(preferences.drag_position(700.0, -400.0, 1.0), 0);
+        assert_eq!(preferences.drag_position(700.0, 400.0, 1.0), 100);
     }
 }

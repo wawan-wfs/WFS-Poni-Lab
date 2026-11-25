@@ -4,6 +4,7 @@ const invoke = window.__TAURI__.core.invoke;
 const surface = document.querySelector('#surface');
 const closed = document.querySelector('#closed');
 const open = document.querySelector('#open');
+const hideNotch = document.querySelector('#hide-notch');
 const status = document.querySelector('#status');
 const todoReminder = document.querySelector('#todo-reminder');
 const bedtimeReminder = document.querySelector('#bedtime-reminder');
@@ -37,6 +38,11 @@ let rememberTimer = null;
 let preferenceQueue = Promise.resolve();
 let mediaPending = false;
 let keyboardOpen = false;
+let notchTucked = false;
+let lastNotchRightClick = 0;
+let notchDrag = null;
+let suppressPanelClick = false;
+let moveRequest = Promise.resolve();
 let weatherRequest = 0;
 let searchRequest = 0;
 let systemPending = false;
@@ -62,6 +68,8 @@ let preferences = {
   live: { enabled:true, rotate:true, timers:true, calendar:true, todo:true },
   shelf: { enabled:true, open_on_drag:true, remove_after_drag:false },
   panel: { direction: 'auto', top_gap: 0, position: 50, width: 200, height: 32, opacity: 100,
+    enabled: true, display: 'primary', lock_position: false, hide_in_fullscreen: true, auto_hide: false,
+    standby_show: false, standby_secs: 12, hide_button: false,
     expanded_width: 680, expanded_height: 196, tall_height: 268, show_in_screenshots: true },
 };
 const mountedModules = new Set();
@@ -71,9 +79,15 @@ const panelReady = invoke('initialize_panel', { session: panelSession });
 panelReady.catch(error => { status.textContent = String(error); });
 
 function setOpen(value) {
-  if (closed.hidden === value) return;
+  if (value && !preferences.panel.enabled) return;
+  if (closed.hidden === value) {
+    if (value && keyboardOpen) updatePanelSize(true, true);
+    return;
+  }
   clearTimeout(hoverTimer);
   if (value) {
+    notchTucked = false;
+    closed.setAttribute('aria-label', 'Open Poni');
     const preferred = preferences.remember_module ? preferences.last_module : null;
     if (!selectModule(preferred)) selectModule(preferences.default_module);
   } else {
@@ -102,7 +116,7 @@ function updatePanelSize(isOpen, focus = false) {
   const seq = ++panelSequence;
   const taskAlert = !isOpen && (!todoReminder.hidden || !bedtimeReminder.hidden || !timerReminder.hidden ||
     !healthReminder.hidden || !document.getElementById('video-shrink').hidden);
-  panelReady.then(() => invoke('set_panel_open', { session: panelSession, open: isOpen, tall, focus, seq, taskAlert }))
+  panelReady.then(() => invoke('set_panel_open', { session: panelSession, open: isOpen, tall, focus, seq, taskAlert, tucked: notchTucked }))
     .catch(error => { status.textContent = String(error); });
 }
 
@@ -116,13 +130,15 @@ function selectModule(id) {
 function applyPreferences(value) {
   if (!value || !Array.isArray(value.module_order) || !Array.isArray(value.hidden_modules)) return;
   const previous = preferences;
-  preferences = { ...preferences, ...value };
+  preferences = { ...preferences, ...value, panel: { ...previous.panel, ...value.panel } };
   const panel = preferences.panel;
   document.documentElement.dir = panel.direction === 'rtl' ? 'rtl' : 'ltr';
   surface.classList.toggle('floating', panel.top_gap > 0);
   surface.style.setProperty('--notch-width', panel.width + 'px');
   surface.style.setProperty('--notch-height', panel.height + 'px');
   surface.style.setProperty('--notch-opacity', String(panel.opacity / 100));
+  hideNotch.hidden = !panel.hide_button;
+  if (!panel.enabled && !open.hidden) setOpen(false);
   window.poniNightWarmth.configure(panel);
   if (['top_gap', 'position', 'width', 'height', 'expanded_width', 'expanded_height', 'tall_height',
     'show_in_screenshots'].some(key => previous.panel[key] !== panel[key])) {
@@ -258,18 +274,81 @@ function callModule(method) {
   }
 }
 closed.addEventListener('click', () => {
+  if (suppressPanelClick) return;
+  if (notchTucked) { tuckNotch(false); return; }
   const destination = currentLive?.tab;
   setOpen(true);
   if (destination) selectModule(destination);
 });
 closed.addEventListener('pointerenter', () => {
   clearTimeout(hoverTimer);
-  if (!preferences.open_on_hover) return;
+  if (!preferences.open_on_hover || notchTucked || notchDrag) return;
   if (preferences.hover_delay) hoverTimer = setTimeout(() => setOpen(true), preferences.hover_delay);
   else setOpen(true);
 });
 closed.addEventListener('pointerleave', () => clearTimeout(hoverTimer));
 document.querySelector('#close').addEventListener('click', () => setOpen(false));
+hideNotch.addEventListener('click', () => tuckNotch(true));
+
+function tuckNotch(tucked) {
+  notchTucked = tucked;
+  closed.setAttribute('aria-label', tucked ? 'Bring Poni back' : 'Open Poni');
+  if (tucked && !open.hidden) setOpen(false);
+  else updatePanelSize(false);
+}
+
+surface.addEventListener('contextmenu', event => {
+  if (!event.target.closest('#closed, #open header') || event.target.closest('input, select')) return;
+  event.preventDefault();
+  if (Date.now() - lastNotchRightClick <= 650) {
+    lastNotchRightClick = 0;
+    tuckNotch(!notchTucked);
+  } else {
+    lastNotchRightClick = Date.now();
+  }
+});
+
+function moveNotch(delta, save) {
+  moveRequest = moveRequest.then(() => panelReady)
+    .then(() => invoke('move_panel', {session: panelSession, delta, save}))
+    .catch(error => { status.textContent = String(error); });
+}
+
+surface.addEventListener('pointerdown', event => {
+  if (event.button !== 0 || preferences.panel.lock_position || notchTucked) return;
+  const handle = event.target.closest('#closed') ||
+    (!event.target.closest('button, input, select, a') && event.target.closest('#open header'));
+  if (!handle) return;
+  handle.setPointerCapture(event.pointerId);
+  notchDrag = { id: event.pointerId, start: event.screenX, moving: false, sent: 0 };
+});
+
+surface.addEventListener('pointermove', event => {
+  if (notchDrag?.id !== event.pointerId) return;
+  const delta = Math.round(event.screenX - notchDrag.start);
+  if (!notchDrag.moving && Math.abs(delta) < 6) return;
+  notchDrag.moving = true;
+  clearTimeout(hoverTimer);
+  clearTimeout(closeTimer);
+  if (performance.now() - notchDrag.sent >= 33) {
+    notchDrag.sent = performance.now();
+    moveNotch(delta, false);
+  }
+});
+
+function finishNotchDrag(event) {
+  if (notchDrag?.id !== event.pointerId) return;
+  const drag = notchDrag;
+  notchDrag = null;
+  if (!drag.moving) return;
+  suppressPanelClick = true;
+  setTimeout(() => { suppressPanelClick = false; }, 0);
+  moveNotch(event.type === 'pointerup' ? Math.round(event.screenX - drag.start) : null, true);
+}
+
+surface.addEventListener('pointerup', finishNotchDrag);
+surface.addEventListener('pointercancel', finishNotchDrag);
+surface.addEventListener('lostpointercapture', finishNotchDrag);
 const settingsGear = document.getElementById('settings-gear');
 settingsGear.addEventListener('click', async () => {
   settingsGear.disabled = true;
@@ -286,11 +365,11 @@ surface.addEventListener('pointerenter', () => clearTimeout(closeTimer));
 surface.addEventListener('pointerleave', () => {
   clearTimeout(closeTimer);
   closeTimer = setTimeout(() => {
-    if (!keyboardOpen && !window.poniShelf?.keepOpen() && !surface.matches(':hover') && !document.activeElement.matches('input, textarea, select, [contenteditable="true"]')) setOpen(false);
+    if (!keyboardOpen && !notchDrag && !window.poniShelf?.keepOpen() && !surface.matches(':hover') && !document.activeElement.matches('input, textarea, select, [contenteditable="true"]')) setOpen(false);
   }, preferences.close_delay);
 });
-window.__TAURI__.event.listen('poni-toggle', () => {
-  const shouldOpen = open.hidden;
+window.__TAURI__.event.listen('poni-toggle', event => {
+  const shouldOpen = open.hidden || event?.payload === true;
   keyboardOpen = shouldOpen;
   setOpen(shouldOpen);
 }).catch(error => { status.textContent = String(error); });

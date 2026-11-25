@@ -26,6 +26,8 @@ FIXTURE = """
       drop_enabled:true,tiles:['shelf','zip','extract','copy'],quality:'medium'},
     bedtime_reminder:false, bedtime_chime_dnd:false,
     panel:{ direction:'auto', top_gap:0, position:50, width:200, height:32, opacity:100,
+      enabled:true, display:'primary', lock_position:false, hide_in_fullscreen:true, auto_hide:false,
+      standby_show:false, standby_secs:12, hide_button:false,
       expanded_width:680, expanded_height:196, tall_height:268, show_in_screenshots:true,
       warm_night:false, warmth:60 },
   };
@@ -151,7 +153,9 @@ FIXTURE = """
           stopwatch:{elapsed_ms:0,started_at_ms:null,laps:[]},
         };
       }
-      if (command === 'set_panel_open') return;
+      if (command === 'panel_displays') return [{id:'monitor:fixture', label:'Display 1 · 1024 × 768'}];
+      if (command === 'set_panel_open') { sessionStorage.setItem('test-panel-state', JSON.stringify(args)); return; }
+      if (command === 'move_panel') { sessionStorage.setItem('test-panel-move', JSON.stringify(args)); return; }
       if (command === 'health_state') return {today:{water:2, breaks:1, mindful:1}, last_break_ms:null, streak:1};
       if (command === 'current_media') return null;
       if (command === 'calendar_first_weekday') return 0;
@@ -234,6 +238,34 @@ def test_settings(page):
     expect(page.locator('html')).to_have_attribute('dir', 'ltr')
     settings.locator('#settings-launch-at-login').check()
     expect(settings.get_by_role('status')).to_have_text('Saved')
+    display = settings.locator('#settings-notch-display')
+    display.select_option('monitor:fixture')
+    expect(display).to_have_value('monitor:fixture')
+    display.select_option('cursor')
+    expect(display).to_have_value('cursor')
+    display.select_option('primary')
+    settings.locator('#settings-notch-enabled').uncheck()
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    page.evaluate('window.testShortcut()')
+    expect(page.locator('#open')).to_be_hidden()
+    settings.locator('#settings-notch-enabled').check()
+    settings.locator('#settings-notch-auto-hide').check()
+    settings.locator('#settings-notch-standby').check()
+    settings.locator('#settings-notch-standby-secs').fill('45')
+    settings.locator('#settings-notch-standby-secs').press('Tab')
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    expect(settings.locator('#settings-notch-standby-secs')).to_have_value('45')
+    settings.locator('#settings-notch-auto-hide').uncheck()
+    expect(settings.locator('#settings-notch-standby-secs')).to_be_disabled()
+    settings.locator('#settings-notch-hide-button').check()
+    page.evaluate('window.testShortcut()')
+    expect(page.locator('#hide-notch')).to_be_visible()
+    page.locator('#hide-notch').click()
+    expect(page.locator('#closed')).to_have_attribute('aria-label', 'Bring Poni back')
+    page.wait_for_function("JSON.parse(sessionStorage.getItem('test-panel-state')).tucked")
+    page.locator('#closed').click()
+    page.wait_for_function("!JSON.parse(sessionStorage.getItem('test-panel-state')).tucked")
+    settings.locator('#settings-notch-hide-button').uncheck()
 
     page.clock.set_fixed_time(datetime(2026, 11, 24, 12, tzinfo=timezone.utc))
     settings.locator('#settings-warm-night').check()
