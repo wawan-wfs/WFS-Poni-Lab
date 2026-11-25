@@ -110,6 +110,7 @@
     ['live', 'Events starting within 15 minutes', 'live calendar event activity', 'live-calendar'],
     ['live', 'Todo deadlines', 'live upcoming tasks hour deadline tunda tugas', 'live-todo'],
     ['shelf', 'Shelf tab', 'shelf files folders show tab rak file', 'shelf-enabled'],
+    ['shelf', 'Drop actions', 'drop file tiles zip extract copy seret', 'shelf-drop-enabled'],
     ['shelf', 'Open the shelf when dragging files', 'shelf open drag file buka seret', 'shelf-open-on-drag'],
     ['shelf', 'Remove from shelf after dragging out', 'shelf drag remove references lepas seret', 'shelf-remove-after-drag'],
     ['shelf', 'Remember what you copy', 'clipboard history pin riwayat salin tempel', 'shelf-clipboard-enabled'],
@@ -373,6 +374,45 @@
   }
 
   function shelf(content) {
+    const actions = group(content);
+    toggle(actions, 'shelf-drop-enabled', 'Drop actions', null, 'drop_enabled', 'shelf');
+    const catalog = [
+      ['shelf', 'Shelf', 'Keep files on Poni’s Shelf'],
+      ['zip', 'ZIP', 'Make a ZIP next to the files'],
+      ['extract', 'Extract', 'Extract one or more ZIP files into folders'],
+      ['copy', 'Copy', 'Copy into a folder you pick'],
+    ];
+    const tiles = group(content, 'Tiles');
+    const ids = settings.shelf.tiles;
+    for (const id of [...ids, ...catalog.map(([id]) => id).filter(id => !ids.includes(id))]) {
+      const [, title, description] = catalog.find(([key]) => key === id);
+      const node = create('div', 'settings-row');
+      const name = create('label', 'settings-label');
+      const checkbox = create('input', 'settings-switch');
+      checkbox.id = 'settings-shelf-tile-' + id;
+      checkbox.type = 'checkbox';
+      checkbox.checked = ids.includes(id);
+      name.htmlFor = checkbox.id;
+      name.append(create('span', null, title), create('small', null, description));
+      const controls = create('span', 'settings-row-actions');
+      const index = ids.indexOf(id);
+      for (const step of [-1, 1]) {
+        const target = index + step;
+        const move = button(step < 0 ? '↑' : '↓', () => {
+          const next = [...ids];
+          [next[index], next[target]] = [next[target], next[index]];
+          void change({ tiles: next }, 'shelf-tile-' + id, 'shelf');
+        });
+        move.setAttribute('aria-label', `Move ${title} ${step < 0 ? 'up' : 'down'}`);
+        move.disabled = index < 0 || target < 0 || target >= ids.length;
+        controls.append(move);
+      }
+      checkbox.addEventListener('change', () => void change({ tiles: checkbox.checked
+        ? [...ids, id] : ids.filter(key => key !== id) }, 'shelf-tile-' + id, 'shelf'));
+      controls.append(checkbox);
+      node.append(name, controls);
+      tiles.append(node);
+    }
     const controls = group(content, 'Shelf');
     toggle(controls, 'shelf-enabled', 'Shelf tab', null, 'enabled', 'shelf');
     toggle(controls, 'shelf-open-on-drag', 'Open the shelf when dragging files', null, 'open_on_drag', 'shelf');

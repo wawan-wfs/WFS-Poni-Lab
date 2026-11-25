@@ -21,6 +21,8 @@ pub(super) struct Preferences {
     remove_after_drag: bool,
     pub(super) clipboard_enabled: bool,
     pub(super) clipboard_limit: u8,
+    pub(super) drop_enabled: bool,
+    pub(super) tiles: Vec<crate::drop_actions::Tile>,
 }
 
 impl Default for Preferences {
@@ -31,6 +33,8 @@ impl Default for Preferences {
             remove_after_drag: false,
             clipboard_enabled: false,
             clipboard_limit: 30,
+            drop_enabled: true,
+            tiles: crate::drop_actions::Tile::ALL.to_vec(),
         }
     }
 }
@@ -43,6 +47,8 @@ pub(super) struct PreferencesPatch {
     remove_after_drag: Option<bool>,
     clipboard_enabled: Option<bool>,
     clipboard_limit: Option<u8>,
+    drop_enabled: Option<bool>,
+    tiles: Option<Vec<crate::drop_actions::Tile>>,
 }
 
 impl Preferences {
@@ -56,6 +62,16 @@ impl Preferences {
         self.remove_after_drag = patch.remove_after_drag.unwrap_or(self.remove_after_drag);
         self.clipboard_enabled = patch.clipboard_enabled.unwrap_or(self.clipboard_enabled);
         self.clipboard_limit = limit;
+        self.drop_enabled = patch.drop_enabled.unwrap_or(self.drop_enabled);
+        if let Some(tiles) = patch.tiles {
+            let mut seen = std::collections::HashSet::new();
+            if tiles.len() > crate::drop_actions::Tile::ALL.len()
+                || !tiles.iter().all(|tile| seen.insert(*tile))
+            {
+                return Err("Each drop action may appear at most once".into());
+            }
+            self.tiles = tiles;
+        }
         Ok(())
     }
 }
@@ -100,17 +116,9 @@ pub(super) struct Card {
 impl Content {
     fn from_input(input: Input) -> Result<Self, String> {
         match input {
-            Input::File { path } => {
-                if !path.is_absolute() {
-                    return Err("Choose a file or folder with an absolute path".into());
-                }
-                let path = dunce::canonicalize(path)
-                    .map_err(|error| format!("Could not find the file or folder: {error}"))?;
-                if !path.is_file() && !path.is_dir() {
-                    return Err("Choose a file or folder".into());
-                }
-                Ok(Self::File { path })
-            }
+            Input::File { path } => Ok(Self::File {
+                path: checked_path(path)?,
+            }),
             Input::Text { text } => {
                 let text = text.trim();
                 if text.is_empty() || text.len() > MAX_TEXT_BYTES {
@@ -140,6 +148,18 @@ impl Content {
             Self::Link { text } | Self::Text { text } => text.clone(),
         }
     }
+}
+
+pub(super) fn checked_path(path: PathBuf) -> Result<PathBuf, String> {
+    if !path.is_absolute() {
+        return Err("Choose a file or folder with an absolute path".into());
+    }
+    let path = dunce::canonicalize(path)
+        .map_err(|error| format!("Could not find the file or folder: {error}"))?;
+    if !path.is_file() && !path.is_dir() {
+        return Err("Choose a file or folder".into());
+    }
+    Ok(path)
 }
 
 impl From<Item> for Card {

@@ -4,7 +4,12 @@
   const invoke = (command, args) => window.__TAURI__.core.invoke(command, args);
   const surface = document.querySelector('#surface');
   const badge = document.querySelector('#shelf-count');
-  const defaults = { enabled: true, open_on_drag: true, clipboard_enabled: false };
+  const dropPanel = document.querySelector('#file-drop-actions');
+  const dropTiles = {
+    shelf: ['Shelf', '▰'], zip: ['ZIP', '▣'], extract: ['Extract', '⇩'], copy: ['Copy', '▤'],
+  };
+  const defaults = { enabled: true, open_on_drag: true, clipboard_enabled: false,
+    drop_enabled: true, tiles: ['shelf', 'zip', 'extract', 'copy'] };
   let preferences = defaults;
   let visible = true;
   let page;
@@ -14,6 +19,7 @@
   let primary;
   let picking = false;
   let draggingIn = false;
+  let hoveredTile = null;
   let confirming = false;
   let clipboardView = false;
   let queue = Promise.resolve();
@@ -41,7 +47,8 @@
   }
 
   function status(message) {
-    (page?.querySelector('.shelf-status') || document.querySelector('#status')).textContent = message;
+    const local = hooks?.isShelf() && page?.querySelector('.shelf-status');
+    (local || document.querySelector('#status')).textContent = message;
   }
 
   function update(next) {
@@ -228,21 +235,80 @@
 
   function endDrag() {
     draggingIn = false;
+    hoveredTile = null;
     surface.classList.remove('shelf-dragging');
+    dropPanel.hidden = true;
+    dropPanel.replaceChildren();
   }
 
-  function handleNativeDrag({type, paths = []}) {
+  function openDropPanel(paths) {
+    const tiles = preferences.tiles.filter(tile => tile in dropTiles && (tile !== 'shelf' || visible));
+    if (!preferences.drop_enabled || !tiles.length) return false;
+    dropPanel.replaceChildren();
+    for (const id of tiles) {
+      const [name, symbol] = dropTiles[id];
+      const tile = part('div', 'file-drop-tile');
+      const icon = part('span', '', symbol);
+      icon.setAttribute('aria-hidden', 'true');
+      tile.append(icon, part('strong', '', name));
+      if (id !== 'extract' || paths.every(path => /\.zip$/i.test(path))) {
+        tile.dataset.tile = id;
+      } else {
+        tile.classList.add('file-drop-unavailable');
+      }
+      dropPanel.append(tile);
+    }
+    hooks.openActions();
+    dropPanel.hidden = false;
+    return true;
+  }
+
+  function tileAt(position) {
+    if (dropPanel.hidden) return null;
+    if (!position) return hoveredTile;
+    const scale = window.devicePixelRatio || 1;
+    return document.elementFromPoint(position.x / scale, position.y / scale)?.closest('#file-drop-actions [data-tile]')?.dataset.tile || null;
+  }
+
+  async function processFiles(tile, paths) {
+    picking = tile === 'copy';
+    try {
+      status('Working…');
+      const outputs = await invoke('run_drop_action', {action: tile, paths});
+      if (!outputs.length) status('');
+      else if (outputs.length === 1) status(`Saved ${outputs[0].split(/[\\/]/).pop()}`);
+      else status(`Saved ${outputs.length} items`);
+    } catch (error) {
+      status(String(error));
+    } finally {
+      picking = false;
+    }
+  }
+
+  function handleNativeDrag({type, paths = [], position}) {
     if (type === 'leave') { endDrag(); return; }
-    if (!visible) return;
+    if (!visible && !preferences.drop_enabled) return;
     if (type === 'enter' && paths.length) {
       draggingIn = true;
       surface.classList.add('shelf-dragging');
       if (clipboardView) { clipboardView = false; updateView(); }
-      if (hooks.isOpen() || preferences.open_on_drag) hooks.open();
+      if (!openDropPanel(paths) && visible && (hooks.isOpen() || preferences.open_on_drag)) hooks.open();
+    } else if (type === 'over') {
+      hoveredTile = tileAt(position);
+      for (const tile of dropPanel.querySelectorAll('[data-tile]')) {
+        tile.classList.toggle('file-drop-over', tile.dataset.tile === hoveredTile);
+      }
     } else if (type === 'drop') {
+      const choose = tileAt(position);
+      const usedTiles = !dropPanel.hidden;
       endDrag();
-      if (!paths.length || (hooks.isOpen() && !hooks.isShelf())) return;
-      hooks.open();
+      if (!paths.length) return;
+      if (choose && choose !== 'shelf') {
+        void processFiles(choose, paths);
+        return;
+      }
+      if (!visible || (!usedTiles && hooks.isOpen() && !hooks.isShelf())) return;
+      if (usedTiles || hooks.isOpen() || preferences.open_on_drag) hooks.open();
       void run('shelf_add', {items: paths.map(path => ({kind: 'file', path}))});
     }
   }
@@ -282,7 +348,7 @@
     configure(value, available) {
       preferences = { ...defaults, ...value };
       visible = available && preferences.enabled;
-      if (!visible) endDrag();
+      if (!visible && !preferences.drop_enabled) endDrag();
       if (!preferences.clipboard_enabled) clipboardView = false;
       updateView();
       render();

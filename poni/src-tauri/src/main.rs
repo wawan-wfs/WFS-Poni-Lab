@@ -20,6 +20,7 @@ mod clipboard;
 mod control;
 mod currency;
 mod dashboard;
+mod drop_actions;
 mod eye_break;
 mod github;
 mod health;
@@ -1372,6 +1373,7 @@ fn main() {
             shelf::shelf_remove,
             shelf::shelf_item_action,
             shelf::shelf_drag,
+            drop_actions::run_drop_action,
             clipboard::clipboard_history,
             clipboard::clipboard_history_action,
             clipboard::clipboard_image,

@@ -22,7 +22,8 @@ FIXTURE = """
       break_reminders:true, break_interval:50, water_reminders:false, water_interval:60, eye_breaks:false, eye_interval:20},
     battery:{enabled:true,show_percentage:true,icon:'bar',charging_activity:true,low_threshold:20},
     live:{enabled:true,rotate:true,timers:true,calendar:true,todo:true},
-    shelf:{enabled:true,open_on_drag:true,remove_after_drag:false,clipboard_enabled:false,clipboard_limit:30},
+    shelf:{enabled:true,open_on_drag:true,remove_after_drag:false,clipboard_enabled:false,clipboard_limit:30,
+      drop_enabled:true,tiles:['shelf','zip','extract','copy']},
     bedtime_reminder:false, bedtime_chime_dnd:false,
     panel:{ direction:'auto', top_gap:0, position:50, width:200, height:32, opacity:100,
       expanded_width:680, expanded_height:196, tall_height:268, show_in_screenshots:true,
@@ -459,6 +460,10 @@ def test_settings(page):
     expect(settings.locator('#settings-live-calendar')).not_to_be_checked()
     expect(settings.locator('#settings-live-timers')).to_be_checked()
     settings.get_by_role('button', name='Drop Actions & Shelf', exact=True).click()
+    settings.get_by_role('button', name='Move ZIP up', exact=True).click()
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    expect(settings.locator('#settings-shelf-tile-zip')).to_be_focused()
+    assert page.evaluate("JSON.parse(localStorage.getItem('test-settings')).shelf.tiles[0]") == 'zip'
     settings.locator('#settings-shelf-remove-after-drag').check()
     expect(settings.get_by_role('status')).to_have_text('Saved')
     settings.locator('#settings-shelf-clipboard-enabled').check()

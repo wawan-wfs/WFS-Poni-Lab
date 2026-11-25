@@ -1377,4 +1377,8 @@ window.poniShelf?.connect({
     setOpen(true);
     selectModule('shelf');
   },
+  openActions() {
+    clearTimeout(closeTimer);
+    setOpen(true);
+  },
 });

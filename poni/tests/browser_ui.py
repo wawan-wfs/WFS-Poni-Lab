@@ -24,7 +24,9 @@ with sync_playwright() as pw:
         if (name === 'poni-timer-completed') window.poniTestTimer = listener;
         if (name === 'poni-battery-changed') window.poniTestBattery = payload => listener({payload});
         if (name === 'poni-toggle') window.poniTestShortcut = listener;
-      }}, core: { invoke: async (command, args = {}) => {
+      }}, webview:{getCurrentWebview:()=>({
+        onDragDropEvent:async callback => { window.testShelfDrag = payload => callback({payload}); },
+      })}, core: { invoke: async (command, args = {}) => {
         const data = JSON.parse(localStorage.getItem('test-data') || '{"tasks":[],"notes":[],"timer":{"total_ms":1500000,"remaining_ms":1500000,"ends_at_ms":null},"stopwatch":{"elapsed_ms":0,"started_at_ms":null,"laps":[]},"world_clocks":[]}');
         if (command === 'current_media') return {title: 'Test track', artist: 'Test artist', playing: true, position_ms: 30000, duration_ms: 60000};
         if (command === 'system_snapshot') return {cpu_percent: 32.5, memory_used: 2147483648, memory_total: 8589934592};
@@ -52,6 +54,10 @@ with sync_playwright() as pw:
         if (command === 'shelf_item_action') {
           localStorage.setItem('last-shelf-action', args.action);
           return;
+        }
+        if (command === 'run_drop_action') {
+          localStorage.setItem('last-drop-action', args.action);
+          return ['/tests/example.zip'];
         }
         if (command?.startsWith('clipboard_history')) {
           const clips = JSON.parse(localStorage.getItem('test-clips') || 'null') ||
@@ -171,6 +177,17 @@ with sync_playwright() as pw:
     page.get_by_role('button', name='Pin', exact=True).click()
     expect(page.get_by_role('button', name='Unpin', exact=True)).to_be_visible()
     page.get_by_role('button', name='Files', exact=True).click()
+    page.evaluate("window.testShelfDrag({type:'enter',paths:['/tests/example.txt']})")
+    drop = page.locator('#file-drop-actions')
+    expect(drop).to_be_visible()
+    expect(drop.locator('.file-drop-unavailable')).to_have_text('⇩Extract')
+    tile = drop.locator('[data-tile="zip"]').bounding_box()
+    page.evaluate("""([x,y]) => window.testShelfDrag(
+      {type:'drop',paths:['/tests/example.txt'],position:{x,y}})""",
+      [tile['x'] + tile['width'] / 2, tile['y'] + tile['height'] / 2])
+    expect(drop).to_be_hidden()
+    expect(page.locator('.shelf-status')).to_have_text('Saved example.zip')
+    assert page.evaluate("localStorage.getItem('last-drop-action')") == 'zip'
     page.locator('[data-page="home"]').click()
     page.keyboard.press('ArrowRight')
     expect(page.locator('#page-tasks')).to_be_visible()

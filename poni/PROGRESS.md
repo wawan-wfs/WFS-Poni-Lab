@@ -13,6 +13,8 @@ Angka 100% mengukur cakupan inventaris modul. Kesetaraan penuh menunggu perbandi
 [Daftar verifikasi kesetaraan](PARITY.md) memuat skenario dan bukti yang diperlukan untuk setiap modul serta fitur di luar inventaris.
 [Inventaris Settings](SETTINGS-PARITY.md) memuat tampilan General yang dibuka di Poni 1.8.1, serta daftar pengaturan standar dan khusus.
 
+Shelf kini menyimpan referensi file dan folder, tautan, dan teks. File dapat dipilih atau diseret masuk, lalu dibuka, ditampilkan di Explorer, disalin jalurnya, atau diseret keluar. Drop Actions menampilkan ubin Shelf, ZIP, Extract, dan Copy. Clipboard history dapat diaktifkan terpisah, dengan item yang dipin, batas salinan terbaru, pratinjau gambar, dan penanda privat Windows yang dilewati.
+
 ## Modul yang sudah dimulai
 
 - **Todo:** tugas dapat memiliki daftar langkah, tenggat, jadwal berulang, dan aturan penyelesaian saat terlambat. Settings mengatur aturan bawaan, durasi snooze, dan retensi Trash. Tab Todo memisahkan Active, Done, dan Trash. Pengingat pada notch tertutup bisa diselesaikan atau ditunda tanpa membuka panel. Teks Indonesia dan Inggris dapat mengisi tenggat atau pengulangan secara lokal dan menawarkan pratinjau. Detail tugas bisa menautkan dan membuka catatan. Tindakan daya belum tersedia.
