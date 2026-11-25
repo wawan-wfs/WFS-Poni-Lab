@@ -111,6 +111,7 @@
     ['live', 'Todo deadlines', 'live upcoming tasks hour deadline tunda tugas', 'live-todo'],
     ['shelf', 'Shelf tab', 'shelf files folders show tab rak file', 'shelf-enabled'],
     ['shelf', 'Drop actions', 'drop file tiles zip extract copy seret', 'shelf-drop-enabled'],
+    ['shelf', 'Shrink image quality', 'compress photo sharpest medium smallest kompres foto', 'shelf-quality'],
     ['shelf', 'Open the shelf when dragging files', 'shelf open drag file buka seret', 'shelf-open-on-drag'],
     ['shelf', 'Remove from shelf after dragging out', 'shelf drag remove references lepas seret', 'shelf-remove-after-drag'],
     ['shelf', 'Remember what you copy', 'clipboard history pin riwayat salin tempel', 'shelf-clipboard-enabled'],
@@ -376,16 +377,11 @@
   function shelf(content) {
     const actions = group(content);
     toggle(actions, 'shelf-drop-enabled', 'Drop actions', null, 'drop_enabled', 'shelf');
-    const catalog = [
-      ['shelf', 'Shelf', 'Keep files on Poni’s Shelf'],
-      ['zip', 'ZIP', 'Make a ZIP next to the files'],
-      ['extract', 'Extract', 'Extract one or more ZIP files into folders'],
-      ['copy', 'Copy', 'Copy into a folder you pick'],
-    ];
+    const catalog = new Map(window.poniDropCatalog.map(tile => [tile.id, tile]));
     const tiles = group(content, 'Tiles');
     const ids = settings.shelf.tiles;
-    for (const id of [...ids, ...catalog.map(([id]) => id).filter(id => !ids.includes(id))]) {
-      const [, title, description] = catalog.find(([key]) => key === id);
+    for (const id of [...ids, ...[...catalog.keys()].filter(id => !ids.includes(id))]) {
+      const {label: title, description} = catalog.get(id);
       const node = create('div', 'settings-row');
       const name = create('label', 'settings-label');
       const checkbox = create('input', 'settings-switch');
@@ -413,6 +409,9 @@
       node.append(name, controls);
       tiles.append(node);
     }
+    select(group(content), 'shelf-quality', 'Shrink image quality',
+      'Choose how much smaller the copy should be.', 'quality',
+      [['light', 'Light: sharpest'], ['medium', 'Medium'], ['strong', 'Strong: smallest']], false, 'shelf');
     const controls = group(content, 'Shelf');
     toggle(controls, 'shelf-enabled', 'Shelf tab', null, 'enabled', 'shelf');
     toggle(controls, 'shelf-open-on-drag', 'Open the shelf when dragging files', null, 'open_on_drag', 'shelf');

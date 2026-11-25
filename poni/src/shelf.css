@@ -79,7 +79,7 @@
   z-index: 3;
   inset: 38px 8px 8px;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(98px, 1fr));
+  grid-template-columns: repeat(var(--drop-columns, 5), minmax(0, 1fr));
   gap: 8px;
   padding: 7px;
   border-radius: 12px;

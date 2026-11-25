@@ -180,7 +180,8 @@ with sync_playwright() as pw:
     page.evaluate("window.testShelfDrag({type:'enter',paths:['/tests/example.txt']})")
     drop = page.locator('#file-drop-actions')
     expect(drop).to_be_visible()
-    expect(drop.locator('.file-drop-unavailable')).to_have_text('⇩Extract')
+    expect(drop.locator('[data-action="extract"]')).to_have_class('file-drop-tile file-drop-unavailable')
+    expect(drop.locator('[data-action="convert"]')).to_have_class('file-drop-tile file-drop-unavailable')
     tile = drop.locator('[data-tile="zip"]').bounding_box()
     page.evaluate("""([x,y]) => window.testShelfDrag(
       {type:'drop',paths:['/tests/example.txt'],position:{x,y}})""",

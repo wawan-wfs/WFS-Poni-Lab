@@ -5,11 +5,9 @@
   const surface = document.querySelector('#surface');
   const badge = document.querySelector('#shelf-count');
   const dropPanel = document.querySelector('#file-drop-actions');
-  const dropTiles = {
-    shelf: ['Shelf', '▰'], zip: ['ZIP', '▣'], extract: ['Extract', '⇩'], copy: ['Copy', '▤'],
-  };
+  const dropTiles = new Map(window.poniDropCatalog.map(tile => [tile.id, tile]));
   const defaults = { enabled: true, open_on_drag: true, clipboard_enabled: false,
-    drop_enabled: true, tiles: ['shelf', 'zip', 'extract', 'copy'] };
+    drop_enabled: true, tiles: [...dropTiles.keys()] };
   let preferences = defaults;
   let visible = true;
   let page;
@@ -242,22 +240,25 @@
   }
 
   function openDropPanel(paths) {
-    const tiles = preferences.tiles.filter(tile => tile in dropTiles && (tile !== 'shelf' || visible));
+    const tiles = preferences.tiles.filter(tile => dropTiles.has(tile) && (tile !== 'shelf' || visible));
     if (!preferences.drop_enabled || !tiles.length) return false;
     dropPanel.replaceChildren();
     for (const id of tiles) {
-      const [name, symbol] = dropTiles[id];
+      const {label, icon: symbol, accepts} = dropTiles.get(id);
       const tile = part('div', 'file-drop-tile');
+      tile.dataset.action = id;
       const icon = part('span', '', symbol);
       icon.setAttribute('aria-hidden', 'true');
-      tile.append(icon, part('strong', '', name));
-      if (id !== 'extract' || paths.every(path => /\.zip$/i.test(path))) {
+      tile.append(icon, part('strong', '', label));
+      if (!accepts || accepts(paths)) {
         tile.dataset.tile = id;
       } else {
         tile.classList.add('file-drop-unavailable');
       }
       dropPanel.append(tile);
     }
+    const rows = tiles.length > 14 ? 3 : tiles.length > 5 ? 2 : 1;
+    dropPanel.style.setProperty('--drop-columns', String(Math.max(5, Math.ceil(tiles.length / rows))));
     hooks.openActions();
     dropPanel.hidden = false;
     return true;
@@ -275,7 +276,7 @@
     try {
       status('Working…');
       const outputs = await invoke('run_drop_action', {action: tile, paths});
-      if (!outputs.length) status('');
+      if (!outputs.length) status(tile === 'shrink_image' ? 'These photos are already smaller' : '');
       else if (outputs.length === 1) status(`Saved ${outputs[0].split(/[\\/]/).pop()}`);
       else status(`Saved ${outputs.length} items`);
     } catch (error) {

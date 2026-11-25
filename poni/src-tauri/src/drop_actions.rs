@@ -1,4 +1,4 @@
-use crate::{shelf, Store};
+use crate::{drop_images, shelf, Store};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashSet,
@@ -22,10 +22,19 @@ pub(super) enum Tile {
     Zip,
     Extract,
     Copy,
+    ShrinkImage,
+    Convert,
 }
 
 impl Tile {
-    pub(super) const ALL: [Self; 4] = [Self::Shelf, Self::Zip, Self::Extract, Self::Copy];
+    pub(super) const ALL: [Self; 6] = [
+        Self::Shelf,
+        Self::Zip,
+        Self::ShrinkImage,
+        Self::Extract,
+        Self::Convert,
+        Self::Copy,
+    ];
 }
 
 fn alternate(name: &OsStr, number: u16) -> std::ffi::OsString {
@@ -90,7 +99,7 @@ fn rename_new_directory(from: &Path, to: &Path) -> io::Result<()> {
     Ok(())
 }
 
-fn archive_path(
+pub(super) fn persist_unique_file(
     parent: &Path,
     name: &OsStr,
     mut temp: tempfile::NamedTempFile,
@@ -211,7 +220,7 @@ fn make_zip(paths: &[PathBuf]) -> Result<PathBuf, String> {
     temp.flush()
         .and_then(|()| temp.as_file().sync_all())
         .map_err(|error| error.to_string())?;
-    archive_path(parent, &name, temp)
+    persist_unique_file(parent, &name, temp)
 }
 
 fn safe_archive_path(name: &str, path: Option<PathBuf>) -> Result<PathBuf, String> {
@@ -350,7 +359,7 @@ fn copy_to(paths: &[PathBuf], destination: &Path) -> Result<Vec<PathBuf>, String
                 &mut temp,
             )
             .map_err(|error| error.to_string())?;
-            outputs.push(archive_path(destination, name, temp)?);
+            outputs.push(persist_unique_file(destination, name, temp)?);
         }
     }
     Ok(outputs)
@@ -367,12 +376,14 @@ pub(super) async fn run_drop_action(
     }
     let app = window.app_handle();
     let store = app.state::<Mutex<Store>>();
-    let enabled = store.lock().is_ok_and(|store| {
-        store.data.settings.shelf.drop_enabled && store.data.settings.shelf.tiles.contains(&action)
-    });
-    if !enabled {
-        return Err("This drop action is turned off".into());
-    }
+    let quality = {
+        let store = store.lock().map_err(|_| "Storage unavailable")?;
+        let preferences = &store.data.settings.shelf;
+        if !preferences.drop_enabled || !preferences.tiles.contains(&action) {
+            return Err("This drop action is turned off".into());
+        }
+        preferences.quality
+    };
     let folder = if action == Tile::Copy {
         #[cfg(windows)]
         {
@@ -397,6 +408,8 @@ pub(super) async fn run_drop_action(
             .collect::<Result<Vec<_>, _>>()?;
         match action {
             Tile::Zip => make_zip(&paths).map(|output| vec![output]),
+            Tile::ShrinkImage => drop_images::shrink(&paths, quality),
+            Tile::Convert => drop_images::convert(&paths),
             Tile::Extract => {
                 if !paths.iter().all(|path| {
                     path.extension()

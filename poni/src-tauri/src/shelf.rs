@@ -23,6 +23,7 @@ pub(super) struct Preferences {
     pub(super) clipboard_limit: u8,
     pub(super) drop_enabled: bool,
     pub(super) tiles: Vec<crate::drop_actions::Tile>,
+    pub(super) quality: crate::drop_images::Quality,
 }
 
 impl Default for Preferences {
@@ -35,6 +36,7 @@ impl Default for Preferences {
             clipboard_limit: 30,
             drop_enabled: true,
             tiles: crate::drop_actions::Tile::ALL.to_vec(),
+            quality: crate::drop_images::Quality::default(),
         }
     }
 }
@@ -49,6 +51,7 @@ pub(super) struct PreferencesPatch {
     clipboard_limit: Option<u8>,
     drop_enabled: Option<bool>,
     tiles: Option<Vec<crate::drop_actions::Tile>>,
+    quality: Option<crate::drop_images::Quality>,
 }
 
 impl Preferences {
@@ -63,6 +66,7 @@ impl Preferences {
         self.clipboard_enabled = patch.clipboard_enabled.unwrap_or(self.clipboard_enabled);
         self.clipboard_limit = limit;
         self.drop_enabled = patch.drop_enabled.unwrap_or(self.drop_enabled);
+        self.quality = patch.quality.unwrap_or(self.quality);
         if let Some(tiles) = patch.tiles {
             let mut seen = std::collections::HashSet::new();
             if tiles.len() > crate::drop_actions::Tile::ALL.len()
