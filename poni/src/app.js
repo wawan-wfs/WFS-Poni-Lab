@@ -13,8 +13,16 @@ const healthReminder = document.querySelector('#health-reminder');
 const liveActivity = document.querySelector('#notch-live');
 const liveTitle = document.querySelector('#notch-live-title');
 const liveTime = document.querySelector('#notch-live-time');
+const closedMediaControls = document.querySelector('#closed-media-controls');
+const musicPeek = document.querySelector('#music-peek');
 let liveIndex = 0;
 let currentLive = null;
+let mediaSnapshot;
+let mediaSampleAt = 0;
+let musicPeekTimer;
+let lastSystemPeek = Date.now();
+let systemPeek = null;
+let systemPeekPending = false;
 let data = { tasks: [], notes: [], timer: { total_ms: 1500000, remaining_ms: 1500000, ends_at_ms: null }, stopwatch: { elapsed_ms: 0, started_at_ms: null, laps: [] }, weather_location: null, world_clocks: [], calendar_events: [] };
 let editingTask = null;
 let ignoreTaskLanguage = false;
@@ -57,7 +65,7 @@ const modules = window.poniModules || {};
 const navigation = open.querySelector('header nav');
 const moduleTabs = new Map([...navigation.querySelectorAll('.tab')].map(tab => [tab.dataset.page, tab]));
 let preferences = {
-  clock_format: 'region', header_clock: true, open_on_hover: true,
+  clock_format: 'region', clock_with_activities: true, header_clock: true, open_on_hover: true,
   hover_delay: 0, close_delay: 450, module_shortcuts: true,
   module_order: [], hidden_modules: [], default_module: 'home',
   remember_module: false, last_module: null,
@@ -65,7 +73,8 @@ let preferences = {
   timer_presets: [], timer_remember: true,
   todo: { late_minutes: 0, snooze_minutes: 10, trash_days: 7 },
   bedtime_reminder: false,
-  live: { enabled:true, rotate:true, timers:true, calendar:true, todo:true },
+  live: { enabled:true, rotate:true, timers:true, calendar:true, todo:true, music:true,
+    system:false, system_interval:120, sneak_peek:false, hover_media_controls:false },
   shelf: { enabled:true, open_on_drag:true, remove_after_drag:false },
   panel: { direction: 'auto', top_gap: 0, position: 50, width: 200, height: 32, opacity: 100,
     enabled: true, display: 'primary', lock_position: false, hide_in_fullscreen: true, auto_hide: false,
@@ -87,6 +96,7 @@ function setOpen(value) {
   clearTimeout(hoverTimer);
   if (value) {
     notchTucked = false;
+    musicPeek.hidden = true;
     closed.setAttribute('aria-label', 'Open Poni');
     const preferred = preferences.remember_module ? preferences.last_module : null;
     if (!selectModule(preferred)) selectModule(preferences.default_module);
@@ -114,8 +124,7 @@ function updatePanelSize(isOpen, focus = false) {
   const tall = isOpen && isTallPage(activePage);
   open.classList.toggle('tall', tall);
   const seq = ++panelSequence;
-  const taskAlert = !isOpen && (!todoReminder.hidden || !bedtimeReminder.hidden || !timerReminder.hidden ||
-    !healthReminder.hidden || !document.getElementById('video-shrink').hidden);
+  const taskAlert = !isOpen && (otherClosedAlerts() || !musicPeek.hidden);
   panelReady.then(() => invoke('set_panel_open', { session: panelSession, open: isOpen, tall, focus, seq, taskAlert, tucked: notchTucked }))
     .catch(error => { status.textContent = String(error); });
 }
@@ -130,7 +139,8 @@ function selectModule(id) {
 function applyPreferences(value) {
   if (!value || !Array.isArray(value.module_order) || !Array.isArray(value.hidden_modules)) return;
   const previous = preferences;
-  preferences = { ...preferences, ...value, panel: { ...previous.panel, ...value.panel } };
+  preferences = { ...preferences, ...value, panel: { ...previous.panel, ...value.panel },
+    live: { ...previous.live, ...value.live } };
   const panel = preferences.panel;
   document.documentElement.dir = panel.direction === 'rtl' ? 'rtl' : 'ltr';
   surface.classList.toggle('floating', panel.top_gap > 0);
@@ -171,6 +181,12 @@ function applyPreferences(value) {
   if (preferences.health?.enabled === false && healthNotice) showHealthNotice(null);
   renderTodoReminder();
   renderLiveActivities();
+  if (previous.live.system !== preferences.live.system || previous.live.system_interval !== preferences.live.system_interval) {
+    lastSystemPeek = Date.now();
+    systemPeek = null;
+  }
+  if (!preferences.live.enabled || !preferences.live.sneak_peek) dismissMusicPeek();
+  if (preferences.live.music || preferences.live.hover_media_controls) void refreshMedia();
   if (activePage === 'tasks') renderTasks();
   updateClock();
   refreshWeekLayout();
@@ -282,6 +298,7 @@ closed.addEventListener('click', () => {
 });
 closed.addEventListener('pointerenter', () => {
   clearTimeout(hoverTimer);
+  updateClosedMediaControls();
   if (!preferences.open_on_hover || notchTucked || notchDrag) return;
   if (preferences.hover_delay) hoverTimer = setTimeout(() => setOpen(true), preferences.hover_delay);
   else setOpen(true);
@@ -364,6 +381,7 @@ settingsGear.addEventListener('click', async () => {
 surface.addEventListener('pointerenter', () => clearTimeout(closeTimer));
 surface.addEventListener('pointerleave', () => {
   clearTimeout(closeTimer);
+  updateClosedMediaControls();
   closeTimer = setTimeout(() => {
     if (!keyboardOpen && !notchDrag && !window.poniShelf?.keepOpen() && !surface.matches(':hover') && !document.activeElement.matches('input, textarea, select, [contenteditable="true"]')) setOpen(false);
   }, preferences.close_delay);
@@ -435,21 +453,81 @@ document.querySelectorAll('[data-media]').forEach(button => button.addEventListe
 }));
 
 async function refreshMedia() {
-  if (mediaPending || open.hidden) return;
+  const live = preferences.live;
+  if (mediaPending || !preferences.panel.enabled ||
+      (open.hidden && (!live.enabled || !(live.music || live.sneak_peek || live.hover_media_controls)))) return;
   mediaPending = true;
   try {
     const media = await invoke('current_media');
+    const previous = mediaSnapshot;
+    mediaSnapshot = media;
+    mediaSampleAt = Date.now();
+    if (previous && media?.title && media.playing &&
+        (previous.title !== media.title || previous.artist !== media.artist)) showMusicPeek(media);
     document.querySelector('#media-title').textContent = media?.title || (media ? 'Unknown track' : 'Nothing playing');
     document.querySelector('#media-artist').textContent = media?.artist || (media ? 'Unknown artist' : 'Play something in a media player');
-    document.querySelector('[data-media="toggle"]').textContent = media?.playing ? '❚❚' : '▶';
+    for (const toggle of document.querySelectorAll('[data-media="toggle"]')) {
+      toggle.textContent = media?.playing ? '❚❚' : '▶';
+    }
     const percentage = media?.duration_ms > 0 ? Math.max(0, Math.min(100, media.position_ms / media.duration_ms * 100)) : 0;
     document.querySelector('#media-progress-fill').style.width = `${percentage}%`;
+    renderLiveActivities();
   } catch (error) {
+    mediaSnapshot = null;
+    renderLiveActivities();
     document.querySelector('#media-title').textContent = 'Media unavailable';
     document.querySelector('#media-artist').textContent = String(error);
   } finally { mediaPending = false; }
 }
 setInterval(refreshMedia, 5000);
+
+function updateClosedMediaControls() {
+  closedMediaControls.hidden = !open.hidden || notchTucked || !surface.matches(':hover') ||
+    preferences.open_on_hover || !preferences.live.enabled || !preferences.live.hover_media_controls || !mediaSnapshot;
+}
+
+function otherClosedAlerts() {
+  return [todoReminder, bedtimeReminder, timerReminder, healthReminder, document.getElementById('video-shrink')]
+    .some(node => !node.hidden);
+}
+
+function dismissMusicPeek() {
+  clearTimeout(musicPeekTimer);
+  if (!musicPeek.hidden) {
+    musicPeek.hidden = true;
+    if (open.hidden) updatePanelSize(false);
+  }
+}
+
+function showMusicPeek(media) {
+  if (!open.hidden || !preferences.live.enabled || !preferences.live.sneak_peek || otherClosedAlerts()) return;
+  musicPeek.firstElementChild.textContent = [media.title, media.artist].filter(Boolean).join(' — ');
+  musicPeek.hidden = false;
+  updatePanelSize(false);
+  clearTimeout(musicPeekTimer);
+  musicPeekTimer = setTimeout(dismissMusicPeek, 3200);
+}
+
+async function sampleSystemPeek(now) {
+  const settings = preferences.live;
+  if (!settings.enabled || !settings.system || !open.hidden || !preferences.panel.enabled) {
+    lastSystemPeek = now;
+    return;
+  }
+  if (systemPeekPending || now - lastSystemPeek < settings.system_interval * 1000 || otherClosedAlerts() || !musicPeek.hidden) return;
+  lastSystemPeek = now;
+  systemPeekPending = true;
+  try {
+    const sample = await invoke('system_snapshot');
+    if (!open.hidden || !preferences.live.system || otherClosedAlerts()) return;
+    const cpu = sample.cpu_percent == null ? 'CPU —' : `CPU ${Math.round(sample.cpu_percent)}%`;
+    const ram = sample.memory_total > 0 ? `RAM ${Math.round(100 * sample.memory_used / sample.memory_total)}%` : 'RAM —';
+    systemPeek = {tab:'system', title:cpu, time:ram, until:Date.now() + 6000};
+    renderLiveActivities();
+  } catch (_) {
+    // Retry at the next configured interval.
+  } finally { systemPeekPending = false; }
+}
 
 async function refreshSystem() {
   if (systemPending || open.hidden || document.querySelector('#page-system').hidden) return;
@@ -563,6 +641,8 @@ function updateClock() {
   const time = new Intl.DateTimeFormat(undefined, options).format(now);
   document.querySelectorAll('.clock').forEach(clock => { clock.textContent = time; });
   renderLiveActivities(now.getTime());
+  if (otherClosedAlerts()) dismissMusicPeek();
+  void sampleSystemPeek(now.getTime());
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   if (today !== calendarToday) { calendarToday = today; if (calendarDay == null || calendarDay < today) calendarDay = today; renderCalendar(); }
 }
@@ -579,6 +659,11 @@ function renderLiveActivities(now = Date.now(), advance = false) {
   const settings = preferences.live;
   const candidates = [];
   if (settings.enabled && open.hidden) {
+    if (settings.music && mediaSnapshot?.playing) {
+      const total = mediaSnapshot.duration_ms;
+      const elapsed = Math.max(0, (mediaSnapshot.position_ms || 0) + now - mediaSampleAt);
+      candidates.push({tab:'home', title:mediaSnapshot.title || 'Music', time:total > 0 ? liveCountdown(Math.min(elapsed, total)) : '♫'});
+    }
     const pomodoro = window.poniFocusPlayback.session;
     if (settings.timers) {
       if (pomodoro?.ends_at_ms > now) candidates.push({
@@ -618,11 +703,15 @@ function renderLiveActivities(now = Date.now(), advance = false) {
     }
   }
   if (advance && candidates.length > 1) liveIndex++;
-  currentLive = candidates.length
+  const summary = settings.enabled && settings.system && open.hidden && systemPeek?.until > now && !otherClosedAlerts() ? systemPeek : null;
+  currentLive = summary || (candidates.length
     ? candidates[(settings.rotate ? liveIndex : 0) % candidates.length]
-    : null;
+    : null);
   liveActivity.hidden = !currentLive;
   closed.classList.toggle('has-live', !!currentLive);
+  closed.classList.toggle('keep-live-clock', preferences.clock_with_activities &&
+    ['home', 'pomodoro', 'timer'].includes(currentLive?.tab));
+  updateClosedMediaControls();
   if (currentLive) {
     if (liveTitle.textContent !== currentLive.title) liveTitle.textContent = currentLive.title;
     if (liveTime.textContent !== currentLive.time) liveTime.textContent = currentLive.time;

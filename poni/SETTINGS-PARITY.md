@@ -68,6 +68,8 @@ Kelima belas ubin Drop Actions memiliki implementasi. Ubin yang tersedia mencaku
 
 General menambahkan delapan padanan standar. **Show Poni (the notch)** mengendalikan jendela dan menu tray. **Show Poni on** mendukung layar utama, layar kursor, dan satu monitor yang dipilih. Pilihan beberapa notch serentak masih perlu dibuat. Notch bisa diseret ke kiri atau kanan sepanjang tepi atas dan **Lock position** menghentikan drag. Pengaturan fullscreen, Auto-hide, standby dan waktu idle bekerja pada jendela nyata. **Hide button** melipat notch ke handle klik dan klik kanan dua kali juga melipat atau mengembalikannya. Total saat ini **81 dari 201 kontrol standar (40,3%)** memiliki padanan setidaknya sebagian. Tes dua monitor dan perilaku fullscreen di berbagai aplikasi masih diperlukan.
 
+Enam padanan standar berikutnya menghubungkan sumber Music, ringkasan System, interval ringkasan, pratinjau judul saat lagu berubah, kontrol media saat hover, dan pilihan mempertahankan jam saat musik atau timer berjalan. Ringkasan System menampilkan CPU dan RAM selama enam detik. Sumber Music memakai sesi media Windows untuk judul dan posisi. Sampul album, visualizer, GPU, suhu, Wi-Fi, dan peristiwa Bluetooth masih perlu dikerjakan. Total terbaru **87 dari 201 kontrol standar (43,3%)** memiliki padanan setidaknya sebagian.
+
 | Jenis kontrol | Deklarasi | Masuk katalog build |
 | --- | ---: | ---: |
 | Sakelar | 115 | 115 |

@@ -157,7 +157,9 @@ FIXTURE = """
       if (command === 'set_panel_open') { sessionStorage.setItem('test-panel-state', JSON.stringify(args)); return; }
       if (command === 'move_panel') { sessionStorage.setItem('test-panel-move', JSON.stringify(args)); return; }
       if (command === 'health_state') return {today:{water:2, breaks:1, mindful:1}, last_break_ms:null, streak:1};
-      if (command === 'current_media') return null;
+      if (command === 'current_media') return JSON.parse(localStorage.getItem('test-current-media') || 'null');
+      if (command === 'media_control') { localStorage.setItem('test-media-control', args.action); return; }
+      if (command === 'system_snapshot') return {cpu_percent:32.5, memory_used:3000, memory_total:8000};
       if (command === 'calendar_first_weekday') return 0;
     } },
   };
@@ -435,6 +437,38 @@ def test_settings(page):
     expect(settings.get_by_role('status')).to_have_text('Saved')
     settings.locator('#settings-live-calendar').uncheck()
     expect(settings.get_by_role('status')).to_have_text('Saved')
+    settings.locator('#settings-live-music').check()
+    settings.locator('#settings-live-sneak-peek').check()
+    settings.locator('#settings-live-hover-media').check()
+    settings.locator('#settings-live-system').check()
+    settings.locator('#settings-live-system-interval').select_option('30')
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    page.evaluate("""async () => {
+      if (!document.getElementById('open').hidden) window.testShortcut();
+      localStorage.setItem('test-current-media', JSON.stringify({
+        title:'Live track', artist:'Fixture artist', playing:true, duration_ms:180000, position_ms:25000
+      }));
+      await refreshMedia();
+    }""")
+    expect(page.locator('#notch-live-title')).to_have_text('Live track')
+    expect(page.locator('#closed .clock')).to_be_visible()
+    page.locator('#closed').hover(position={'x': 10, 'y': 8})
+    expect(page.locator('#closed-media-controls')).to_be_visible()
+    page.locator('#closed-media-controls [data-media="next"]').click()
+    assert page.evaluate("localStorage.getItem('test-media-control')") == 'next'
+    page.evaluate("""async () => {
+      const track = JSON.parse(localStorage.getItem('test-current-media'));
+      track.title = 'Next live track';
+      localStorage.setItem('test-current-media', JSON.stringify(track));
+      await refreshMedia();
+    }""")
+    expect(page.locator('#music-peek')).to_have_text('Next live track — Fixture artist')
+    page.evaluate("dismissMusicPeek(); sampleSystemPeek(Date.now() + 31000)")
+    expect(page.locator('#notch-live-title')).to_have_text('CPU 33%')
+    expect(page.locator('#notch-live-time')).to_have_text('RAM 38%')
+    settings.locator('#settings-live-system').uncheck()
+    expect(page.locator('#notch-live-title')).to_have_text('Next live track')
+    page.evaluate("localStorage.removeItem('test-current-media'); refreshMedia()")
 
     popup.close()
     page.reload()

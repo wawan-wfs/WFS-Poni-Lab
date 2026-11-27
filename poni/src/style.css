@@ -24,6 +24,12 @@ button { color: inherit; cursor: pointer; }
 .battery-ring .battery-icon::after { inset: 2px; width: auto; border-radius: 50%; background: #0c0c0d; }
 .battery-alert #battery-activity { animation: battery-reveal .25s ease-out; white-space: nowrap; }
 .closed.has-live .clock, .closed.battery-alert .notch-live { display: none; }
+.closed.has-live.keep-live-clock { gap: 6px; padding-inline: 9px; }
+.closed.has-live.keep-live-clock .clock { display: inline; flex: none; font-size: 11px; }
+.keep-live-clock .notch-live { min-width: 0; padding: 0; gap: 4px; }
+.closed-media-controls { position: absolute; z-index: 2; top: 0; left: 50%; transform: translateX(-50%); width: var(--notch-width); height: var(--notch-height); display: flex; justify-content: center; align-items: center; gap: 7px; pointer-events: none; }
+.closed-media-controls button { border: 1px solid #35353c; border-radius: 5px; background: #1c1c21; color: #eee; padding: 2px 7px; pointer-events: auto; }
+.music-peek span { color: #abd5ff; text-align: center; }
 .notch-live { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-inline: 8px; font-size: 11px; }
 .notch-live span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .notch-live b { flex: none; color: #ffb859; font-variant-numeric: tabular-nums; }

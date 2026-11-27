@@ -77,6 +77,7 @@
     ['health', '20-20-20 eye breaks', 'health eye screen overlay mata', 'health-eye-breaks'],
     ['health', 'Eye break every', 'health eye interval screen reminder', 'health-eye-interval'],
     ['general', 'Clock format', '12 hour 24 hour region time', 'clock-format'],
+    ['general', 'Keep the time while music or a timer plays', 'clock time live activity jam musik', 'clock-with-activities'],
     ['general', 'Time at the top of the open Poni', 'header clock', 'header-clock'],
     ['general', 'Open on hover', 'mouse click to open', 'open-on-hover'],
     ['general', 'Hover delay', 'open mouse milliseconds', 'hover-delay'],
@@ -117,6 +118,11 @@
     ['live', 'Pomodoro, timer and stopwatch', 'live clocks countdown activity', 'live-timers'],
     ['live', 'Events starting within 15 minutes', 'live calendar event activity', 'live-calendar'],
     ['live', 'Todo deadlines', 'live upcoming tasks hour deadline tunda tugas', 'live-todo'],
+    ['live', 'Music', 'live current song track playing musik', 'live-music'],
+    ['live', 'System summary now and then', 'cpu ram memory live system ringkasan', 'live-system'],
+    ['live', 'Show the System summary every', 'cpu ram memory live interval', 'live-system-interval'],
+    ['live', 'Sneak peek on song change', 'title next song preview', 'live-sneak-peek'],
+    ['live', 'Hover-reveal media controls while Poni is closed', 'play pause skip previous next track', 'live-hover-media'],
     ['shelf', 'Shelf tab', 'shelf files folders show tab rak file', 'shelf-enabled'],
     ['shelf', 'Drop actions', 'drop file tiles zip extract copy seret', 'shelf-drop-enabled'],
     ['shelf', 'Shrink PDFs, images and videos', 'compress PDF photo video sharpest medium smallest kompres foto', 'shelf-quality'],
@@ -366,6 +372,8 @@
     select(clock, 'clock-format', 'Clock format', 'Follow the Windows region or choose a format.',
       'clock_format', [['region', 'Windows region'], ['h12', '12-hour'], ['h24', '24-hour']]);
     toggle(clock, 'header-clock', 'Time at the top of the open Poni', 'On every tab.', 'header_clock');
+    toggle(clock, 'clock-with-activities', 'Keep the time while music or a timer plays',
+      'Also while Pomodoro and the stopwatch are running.', 'clock_with_activities');
 
     const opening = group(content, 'Opening');
     toggle(opening, 'open-on-hover', 'Open on hover', 'Otherwise click to open.', 'open_on_hover');
@@ -409,10 +417,19 @@
     const controls = group(content);
     toggle(controls, 'live-enabled', 'Live activities while Poni is closed', null, 'enabled', 'live');
     toggle(controls, 'live-rotate', 'Rotate between activities', 'Every 6 seconds', 'rotate', 'live');
+    toggle(controls, 'live-music', 'Music', 'Show the playing track and its progress.', 'music', 'live');
     toggle(controls, 'live-timers', 'Pomodoro, timer and stopwatch', null, 'timers', 'live');
+    toggle(controls, 'live-system', 'System summary now and then', 'Briefly show CPU and memory use.', 'system', 'live');
+    select(controls, 'live-system-interval', 'Show the System summary every', null, 'system_interval',
+      [[30, '30 seconds'], [60, '1 minute'], [120, '2 minutes'], [300, '5 minutes'], [600, '10 minutes'], [1800, '30 minutes']],
+      !settings.live.system, 'live');
     toggle(controls, 'live-calendar', 'Events starting within 15 minutes', null, 'calendar', 'live');
     toggle(controls, 'live-todo', 'Todo deadlines',
       'Counts down the next task due within an hour.', 'todo', 'live');
+    toggle(controls, 'live-sneak-peek', 'Sneak peek on song change', 'Briefly show the song title under Poni.',
+      'sneak_peek', 'live');
+    toggle(controls, 'live-hover-media', 'Hover-reveal media controls while Poni is closed',
+      'Turn off Open on hover to use the media controls here.', 'hover_media_controls', 'live');
   }
 
   function shelf(content) {

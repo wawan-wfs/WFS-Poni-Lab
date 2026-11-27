@@ -64,6 +64,11 @@ struct LiveActivities {
     timers: bool,
     calendar: bool,
     todo: bool,
+    music: bool,
+    system: bool,
+    system_interval: u16,
+    sneak_peek: bool,
+    hover_media_controls: bool,
 }
 
 impl Default for LiveActivities {
@@ -74,6 +79,11 @@ impl Default for LiveActivities {
             timers: true,
             calendar: true,
             todo: true,
+            music: true,
+            system: false,
+            system_interval: 120,
+            sneak_peek: false,
+            hover_media_controls: false,
         }
     }
 }
@@ -86,15 +96,34 @@ struct LiveActivitiesPatch {
     timers: Option<bool>,
     calendar: Option<bool>,
     todo: Option<bool>,
+    music: Option<bool>,
+    system: Option<bool>,
+    system_interval: Option<u16>,
+    sneak_peek: Option<bool>,
+    hover_media_controls: Option<bool>,
 }
 
 impl LiveActivities {
-    fn apply(&mut self, patch: LiveActivitiesPatch) {
+    fn apply(&mut self, patch: LiveActivitiesPatch) -> Result<(), String> {
+        if patch
+            .system_interval
+            .is_some_and(|value| ![30, 60, 120, 300, 600, 1800].contains(&value))
+        {
+            return Err("Choose a system summary interval from Settings".into());
+        }
         self.enabled = patch.enabled.unwrap_or(self.enabled);
         self.rotate = patch.rotate.unwrap_or(self.rotate);
         self.timers = patch.timers.unwrap_or(self.timers);
         self.calendar = patch.calendar.unwrap_or(self.calendar);
         self.todo = patch.todo.unwrap_or(self.todo);
+        self.music = patch.music.unwrap_or(self.music);
+        self.system = patch.system.unwrap_or(self.system);
+        self.system_interval = patch.system_interval.unwrap_or(self.system_interval);
+        self.sneak_peek = patch.sneak_peek.unwrap_or(self.sneak_peek);
+        self.hover_media_controls = patch
+            .hover_media_controls
+            .unwrap_or(self.hover_media_controls);
+        Ok(())
     }
 }
 
@@ -102,6 +131,7 @@ impl LiveActivities {
 #[serde(default)]
 pub(super) struct PoniSettings {
     clock_format: ClockFormat,
+    clock_with_activities: bool,
     header_clock: bool,
     open_on_hover: bool,
     hover_delay: u16,
@@ -134,6 +164,7 @@ impl Default for PoniSettings {
     fn default() -> Self {
         Self {
             clock_format: ClockFormat::Region,
+            clock_with_activities: true,
             header_clock: true,
             open_on_hover: true,
             hover_delay: 0,
@@ -168,6 +199,7 @@ impl Default for PoniSettings {
 #[serde(default, deny_unknown_fields)]
 pub(super) struct SettingsPatch {
     clock_format: Option<ClockFormat>,
+    clock_with_activities: Option<bool>,
     header_clock: Option<bool>,
     open_on_hover: Option<bool>,
     hover_delay: Option<u16>,
@@ -314,12 +346,15 @@ impl PoniSettings {
             self.battery.apply(battery)?;
         }
         if let Some(live) = patch.live {
-            self.live.apply(live);
+            self.live.apply(live)?;
         }
         if let Some(shelf) = patch.shelf {
             self.shelf.apply(shelf)?;
         }
         self.clock_format = patch.clock_format.unwrap_or(self.clock_format);
+        self.clock_with_activities = patch
+            .clock_with_activities
+            .unwrap_or(self.clock_with_activities);
         self.header_clock = patch.header_clock.unwrap_or(self.header_clock);
         self.open_on_hover = patch.open_on_hover.unwrap_or(self.open_on_hover);
         self.hover_delay = patch.hover_delay.unwrap_or(self.hover_delay);

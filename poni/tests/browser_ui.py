@@ -443,6 +443,7 @@ with sync_playwright() as pw:
     page.locator('#timer-extend').click()
     expect(page.locator('#timer-reminder')).to_be_hidden()
     assert page.evaluate("data.timer.ends_at_ms > Date.now() + 295000")
+    page.evaluate('preferences.live.music = false; renderLiveActivities()')
     expect(page.locator('#notch-live-title')).to_have_text('Timer')
     expect(page.locator('#notch-live')).to_be_visible()
     page.evaluate('preferences.live.enabled = false; renderLiveActivities()')

@@ -17,6 +17,8 @@ Shelf kini menyimpan referensi file dan folder, tautan, dan teks. File dapat dip
 
 General kini menghubungkan delapan kontrol tambahan ke perilaku notch. Build Rust mendukung sakelar notch melalui Settings atau tray, monitor utama atau satu layar pilihan, drag dan lock, fullscreen, Auto-hide, waktu standby, serta handle manual. Cakupan kontrol standar Settings kini **81/201 (40,3%)**.
 
+Live Activities menampilkan lagu, posisi pemutaran, pratinjau pergantian lagu, kontrol media saat hover, serta ringkasan CPU dan RAM terjadwal. Jam dapat tetap terlihat bersama musik atau timer. Cakupan terbaru Settings **87/201 kontrol standar (43,3%)**.
+
 ## Modul yang sudah dimulai
 
 - **Todo:** tugas dapat memiliki daftar langkah, tenggat, jadwal berulang, dan aturan penyelesaian saat terlambat. Settings mengatur aturan bawaan, durasi snooze, dan retensi Trash. Tab Todo memisahkan Active, Done, dan Trash. Pengingat pada notch tertutup bisa diselesaikan atau ditunda tanpa membuka panel. Teks Indonesia dan Inggris dapat mengisi tenggat atau pengulangan secara lokal dan menawarkan pratinjau. Detail tugas bisa menautkan dan membuka catatan. Tindakan daya belum tersedia.
