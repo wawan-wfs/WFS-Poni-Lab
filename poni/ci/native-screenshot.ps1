@@ -390,11 +390,22 @@ try {
         Find-Setting 'completion sound'
         [System.Windows.Forms.SendKeys]::SendWait(' ')
         Start-Sleep -Seconds 2
-        # Select the sound last because WebView2's native menu can consume the next mouse click.
-        Find-Setting 'pomodoro background audio noise'
-        [System.Windows.Forms.SendKeys]::SendWait('{DOWN}')
+        # Open the native select explicitly and commit the choice with Enter.
+        Find-Setting 'sound while you focus'
+        [System.Windows.Forms.SendKeys]::SendWait('%{DOWN}')
+        Start-Sleep -Milliseconds 400
+        [System.Windows.Forms.SendKeys]::SendWait('{HOME}{DOWN}{ENTER}')
         Start-Sleep -Seconds 2
-        [System.Windows.Forms.SendKeys]::SendWait('{TAB}')
+        $profile = Get-Content -Raw -LiteralPath $dataPath | ConvertFrom-Json
+        if ($profile.pomodoro.settings.focus_sound -ne 'white') {
+            # Chromium's native select also supports typing the first letter when it is focused.
+            [System.Windows.Forms.SendKeys]::SendWait('{ESC}')
+            Find-Setting 'sound while you focus'
+            [System.Windows.Forms.SendKeys]::SendWait('w')
+            Start-Sleep -Milliseconds 600
+            [System.Windows.Forms.SendKeys]::SendWait('{ENTER}{TAB}')
+            Start-Sleep -Seconds 2
+        }
         Save-Screen 'settings-pomodoro.png'
 
         $profile = Get-Content -Raw -LiteralPath $dataPath | ConvertFrom-Json
