@@ -298,6 +298,32 @@ try {
             handle_height = $parked.Bottom; height_after_hover = $revealed.Bottom } |
             ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'notch-visibility.json') -Encoding UTF8
 
+        Find-Setting 'step aside for the mouse'
+        [System.Windows.Forms.SendKeys]::SendWait(' ')
+        $stepSize = [CursorPosition+Rect]::new()
+        $stepOrigin = [CursorPosition+Point]::new()
+        if (![CursorPosition]::GetClientRect($mainHandle, [ref]$stepSize) -or
+            ![CursorPosition]::ClientToScreen($mainHandle, [ref]$stepOrigin)) {
+            throw 'Could not inspect the notch before Step aside.'
+        }
+        $stepX = $stepOrigin.X + [int]($stepSize.Right / 2)
+        [CursorPosition]::SetCursorPos($stepX, ($stepOrigin.Y + $stepSize.Bottom + 4)) | Out-Null
+        Start-Sleep -Seconds 2
+        $stepped = [CursorPosition+Rect]::new()
+        if (![CursorPosition]::GetClientRect($mainHandle, [ref]$stepped) -or $stepped.Bottom -ne 4) {
+            throw 'The notch did not Step aside when the pointer approached from below.'
+        }
+        [CursorPosition]::SetCursorPos(($bounds.Left + 15), ($bounds.Bottom - 25)) | Out-Null
+        Start-Sleep -Seconds 2
+        $stepReturned = [CursorPosition+Rect]::new()
+        if (![CursorPosition]::GetClientRect($mainHandle, [ref]$stepReturned) -or $stepReturned.Bottom -ne $stepSize.Bottom) {
+            throw 'The notch did not return after the pointer left.'
+        }
+        Find-Setting 'step aside for the mouse'
+        [System.Windows.Forms.SendKeys]::SendWait(' ')
+        @{ handle_height = $stepped.Bottom; returned_height = $stepReturned.Bottom } |
+            ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'notch-step-aside.json') -Encoding UTF8
+
         Find-Setting 'snooze poni global keyboard shortcut'
         [System.Windows.Forms.SendKeys]::SendWait('Alt{+}Shift{+}P{TAB}')
         Start-Sleep -Seconds 2
@@ -353,7 +379,15 @@ try {
             Select-Object -Unique
         $dataPath = $dataPaths | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
         if (!$dataPath) { throw 'Screen Time changes did not create the application profile.' }
+        Find-Setting 'your name'
+        [System.Windows.Forms.SendKeys]::SendWait('Ayu Fixture{ENTER}')
+        Start-Sleep -Seconds 2
         $savedSettings = Get-Content -Raw -LiteralPath $dataPath | ConvertFrom-Json
+        if ($savedSettings.settings.user_name -ne 'Ayu Fixture') { throw 'Poni did not save the name from General.' }
+        @{ user_name_saved = $true; greeting_recorded = [bool]$savedSettings.last_greeting } |
+            ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'general-name.json') -Encoding UTF8
+        Find-Setting 'clock size'
+        Save-Screen 'settings-closed-clock.png'
         if (!$savedSettings.settings.panel.warm_night -or $savedSettings.settings.panel.warmth -ne 100) {
             throw 'The night warmth controls did not save the enabled state and strength.'
         }

@@ -11,6 +11,7 @@ from playwright.sync_api import expect, sync_playwright
 FIXTURE = """
 (() => {
   const defaults = {
+    user_name:'', closed_display:{mode:'time',size:'normal',bold:false,left:'none',right:'battery'},
     clock_format:'region', header_clock:true, open_on_hover:true, hover_delay:0, close_delay:450,
     media_enabled:true, music_progress:true, color_glow:true, haptics:true, battery_saving:'off',
     animations:{timer_outline:true, shelf_fly:true, tab_slide:true, shadow:'off', celebrate:true},
@@ -24,7 +25,8 @@ FIXTURE = """
     health: {water_goal:8, break_goal:6, mindful_goal:5, eye_duration:20, enabled:true,
       break_reminders:true, break_interval:50, water_reminders:false, water_interval:60, eye_breaks:false, eye_interval:20},
     battery:{enabled:true,show_percentage:true,icon:'bar',charging_activity:true,low_threshold:20},
-    live:{enabled:true,rotate:true,timers:true,calendar:true,todo:true},
+    live:{enabled:true,rotate:true,timers:true,calendar:true,todo:true,bluetooth:true},
+    bluetooth:{enabled:true,low_threshold:20},
     shelf:{enabled:true,open_on_drag:true,remove_after_drag:false,clipboard_enabled:false,clipboard_limit:30,
       drop_enabled:true,tiles:['shelf','zip','extract','copy'],quality:'medium'},
     bedtime_reminder:false, bedtime_chime_dnd:false,
@@ -80,6 +82,13 @@ FIXTURE = """
       if (command === 'get_poni_settings') return settings;
       if (command === 'get_day_schedule') return readSchedule();
       if (command === 'get_battery') return null;
+      if (command === 'bluetooth_devices') return { supported:true, adapter_present:true,
+        devices:JSON.parse(localStorage.getItem('test-bluetooth-devices') || '[]') };
+      if (command === 'claim_poni_greeting') {
+        if (args.name !== settings.user_name || localStorage.getItem('test-greeting')) return false;
+        localStorage.setItem('test-greeting', new Date().toISOString().slice(0, 10));
+        return true;
+      }
       if (command === 'bedtime_action') {
         localStorage.setItem('test-bedtime-action', args.action);
         return;
@@ -124,12 +133,14 @@ FIXTURE = """
         return settings;
       }
       if (command === 'set_poni_settings') {
-        const { panel, todo, health, battery, live, shelf, animations, hourly, ...patch } = args.patch;
+        const { panel, todo, health, battery, bluetooth, closed_display, live, shelf, animations, hourly, ...patch } = args.patch;
         Object.assign(settings, patch);
         if (panel) Object.assign(settings.panel, panel);
         if (todo) Object.assign(settings.todo, todo);
         if (health) Object.assign(settings.health, health);
         if (battery) Object.assign(settings.battery, battery);
+        if (bluetooth) Object.assign(settings.bluetooth, bluetooth);
+        if (closed_display) Object.assign(settings.closed_display, closed_display);
         if (live) Object.assign(settings.live, live);
         if (shelf) Object.assign(settings.shelf, shelf);
         if (animations) Object.assign(settings.animations, animations);
@@ -159,7 +170,7 @@ FIXTURE = """
           bus.postMessage({name:'poni-day-schedule-changed',payload:schedule});
         }
         return {
-          ...schedule, settings, tasks: [], notes: [], world_clocks: [], calendar_events: [],
+          ...schedule, settings, last_greeting:localStorage.getItem('test-greeting'), tasks: [], notes: [], world_clocks: [], calendar_events: [],
           timer:{total_ms:1500000,remaining_ms:1500000,ends_at_ms:null},
           stopwatch:{elapsed_ms:0,started_at_ms:null,laps:[]},
         };
@@ -368,6 +379,7 @@ def test_settings(page):
     page.wait_for_function("document.querySelector('#page-home .calendar').hidden")
     settings.get_by_role('button', name='Open Calendar', exact=True).click()
     expect(page.locator('#page-calendar')).to_be_visible()
+
     expect(page.locator('#calendar-grid > span').first).to_have_text('Mon')
 
     search.fill('excluded apps')
@@ -610,6 +622,63 @@ def test_settings(page):
     expect(page.locator('#page-calendar')).to_be_visible()
 
 
+def test_closed_poni(page):
+    page.evaluate('window.testShortcut()')
+    popup, settings = open_settings(page)
+    expect(page.locator('#closed')).to_be_visible()
+    search = settings.get_by_role('searchbox', name='Search settings')
+    search.fill('clock size')
+    search.press('Enter')
+    expect(settings.locator('#settings-closed-middle')).to_be_focused()
+    settings.locator('#settings-closed-mode-date').click()
+    expect(page.locator('#closed-day')).to_be_visible()
+    settings.locator('#settings-closed-size').select_option('xlarge')
+    settings.locator('#settings-closed-bold').check()
+    expect(page.locator('.closed-clock')).to_have_css('font-weight', '750')
+    expect(page.locator('.closed-clock')).to_have_css('font-size', '18.25px')
+    settings.locator('#settings-closed-left').click()
+    settings.locator('#settings-closed-left-time').click()
+    expect(page.locator('#closed-slot-left')).to_be_visible()
+    page.wait_for_function("JSON.parse(sessionStorage.getItem('test-panel-state')).contentWidth > 200")
+    settings.locator('#settings-closed-middle').click()
+    settings.locator('#settings-closed-mode-off').click()
+    expect(page.locator('.closed-clock')).to_be_hidden()
+    settings.locator('#settings-closed-mode-date').click()
+    expect(page.locator('.closed-clock')).to_be_visible()
+    name = settings.get_by_role('textbox', name='Your name')
+    name.fill('Poni Fixture')
+    name.press('Enter')
+    expect(page.locator('#greeting-text')).to_contain_text('Poni Fixture')
+    expect(page.locator('#closed-greeting')).to_be_hidden(timeout=6500)
+    page.reload()
+    expect(page.locator('#closed-day')).to_be_visible()
+    expect(page.locator('#closed-greeting')).to_be_hidden()
+
+    def bluetooth_device(connected, battery):
+        page.evaluate("""([connected,battery]) => {
+          localStorage.setItem('test-bluetooth-devices', JSON.stringify([
+            {id:'headphones-fixture', name:'Fixture Headphones', connected, battery, paired:true, kind:'Bluetooth LE device'},
+          ]));
+          window.dispatchEvent(new Event('focus'));
+        }""", [connected, battery])
+
+    settings.get_by_role('button', name='Bluetooth & Wi-Fi', exact=True).click()
+    threshold = settings.locator('#settings-bluetooth-low')
+    threshold.focus()
+    threshold.press('End')
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    bluetooth_device(True, 55)
+    expect(page.locator('#notch-live-title')).to_have_text('Fixture Headphones')
+    expect(page.locator('#notch-live-time')).to_have_text('55%')
+    bluetooth_device(True, 50)
+    expect(page.locator('#notch-live-time')).to_have_text('50% low')
+    bluetooth_device(False, 50)
+    expect(page.locator('#notch-live-time')).to_have_text('Disconnected')
+    settings.locator('#settings-bluetooth-enabled').uncheck()
+    expect(threshold).to_be_disabled()
+    expect(page.locator('#notch-live')).to_be_hidden()
+    popup.close()
+
 def main():
     root = Path(__file__).resolve().parents[1]
     handler = partial(SimpleHTTPRequestHandler, directory=str(root / 'src'))
@@ -628,6 +697,9 @@ def main():
                 page = context.new_page()
                 page.goto(f'http://127.0.0.1:{server.server_port}/index.html')
                 test_settings(page)
+                page.evaluate('localStorage.clear(); sessionStorage.clear()')
+                page.reload()
+                test_closed_poni(page)
                 assert not errors, errors
                 browser.close()
         finally:

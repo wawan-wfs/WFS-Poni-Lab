@@ -39,7 +39,6 @@
       el.title = known ? `${power.percent}% · ${describe()}` : describe();
       el.setAttribute('aria-label', el.title);
     }
-    closed.classList.toggle('has-battery', enabled);
   }
 
   function endActivity() {
@@ -76,6 +75,7 @@
   }
 
   window.poniBattery = {
+    get present() { return Boolean(settings.enabled && power); },
     get saving() { return power?.plugged_in === false || power?.saver === true; },
     configure(preferences) {
       settings = { ...defaults, ...preferences };

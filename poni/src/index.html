@@ -56,15 +56,19 @@
   <script src="drop-catalog.js" defer></script>
   <script src="shelf.js" defer></script>
   <script src="animations.js" defer></script>
+  <script src="closed-display.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
   <div class="surface" id="surface">
     <button class="closed" id="closed" aria-expanded="false" aria-controls="open">
-      <time class="clock">--:--</time><span id="battery-activity" role="status" hidden></span>
+      <span class="closed-slot" id="closed-slot-left" hidden><span class="closed-slot-value"></span><span class="battery-indicator" role="img" hidden><span class="battery-percent"></span><i class="battery-icon"></i></span></span>
+      <span class="closed-clock"><span id="closed-day" hidden></span><time class="clock">--:--</time></span>
+      <span id="battery-activity" role="status" hidden></span>
+      <span id="closed-greeting" role="status" hidden><span id="greeting-symbol" aria-hidden="true"></span><span id="greeting-text"></span><small id="greeting-day"></small></span>
       <span id="notch-live" class="notch-live" hidden><img id="closed-media-artwork" alt="" hidden><span id="notch-live-title"></span><b id="notch-live-time"></b></span>
       <span id="closed-music-progress" aria-hidden="true" hidden></span>
-      <span class="battery-indicator" role="img" hidden><span class="battery-percent"></span><i class="battery-icon"></i></span>
+      <span class="closed-slot" id="closed-slot-right" hidden><span class="closed-slot-value"></span><span class="battery-indicator" role="img" hidden><span class="battery-percent"></span><i class="battery-icon"></i></span></span>
     </button>
     <div id="closed-media-controls" class="closed-media-controls" role="group" aria-label="Media controls" hidden>
       <button type="button" data-media="previous" aria-label="Previous track">⏮</button>

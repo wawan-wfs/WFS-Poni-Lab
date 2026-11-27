@@ -37,6 +37,7 @@
         hint: 'Choose when your day begins and ends.' },
       { id: 'screentime', title: 'Screen Time', icon: '⌛', color: 'indigo', link: 'screentime',
         hint: 'Tracking, idle time, and excluded apps.' },
+      { id: 'bluetooth', title: 'Bluetooth & Wi-Fi', icon: 'ᛒ', color: 'blue', link: 'bluetooth' },
     ] },
     { group: 'Poni & system', pages: [
       { id: 'notifications', title: 'Notifications', icon: '♧', color: 'red', link: 'notifs',
@@ -92,6 +93,14 @@
     ['general', 'Snooze Poni', 'global keyboard shortcut hotkey wake sembunyikan tunda', 'snooze-shortcut'],
     ['general', 'Snooze duration', 'minutes pause hide tunda menit', 'snooze-minutes'],
     ['general', 'Layout direction', 'right left rtl ltr writing arah tata letak', 'layout-direction'],
+    ['general', 'Your name', 'greeting name nama panggilan sapaan', 'user-name'],
+    ['general', 'What the closed Poni shows', 'idle closed notch clock sides waktu sisi', 'closed-middle'],
+    ['general', 'Left side', 'idle slots time date weather battery calendar todo cpu ram world', 'closed-left'],
+    ['general', 'Right side', 'idle slots time date weather battery calendar todo cpu ram world', 'closed-right'],
+    ['general', 'Clock size', 'middle day and time jam ukuran bold tebal', 'closed-middle'],
+    ['bluetooth', 'Bluetooth devices & battery', 'headset connected perangkat koneksi', 'bluetooth-enabled'],
+    ['bluetooth', 'Low battery alert at', 'bluetooth percentage threshold persen baterai', 'bluetooth-low'],
+    ['live', 'Bluetooth connect / disconnect / low battery', 'live activity bluetooth perangkat baterai', 'live-bluetooth'],
     ['general', 'Launch at login', 'windows startup sign in otomatis mulai masuk', 'launch-at-login'],
     ['general', 'Show Poni (the notch)', 'hide disable tray tampil sembunyikan', 'notch-enabled'],
     ['general', 'Show Poni on', 'display screen monitor cursor layar', 'notch-display'],
@@ -101,6 +110,7 @@
     ['general', 'Come down when you’re idle', 'auto hide standby inactive diam', 'notch-standby'],
     ['general', 'Idle for', 'standby delay inactive seconds detik', 'notch-standby-secs'],
     ['general', 'Hide button', 'manual hide eye handle sembunyikan', 'notch-hide-button'],
+    ['general', 'Step aside for the mouse', 'notch moves up click behind pointer minggir tetikus', 'notch-step-aside'],
     ['general', 'Position along the top', 'notch position left centre right posisi', 'notch-position'],
     ['general', 'Gap from the top edge', 'notch position floating distance jarak atas', 'notch-top-gap'],
     ['general', 'Show Poni in screenshots & recordings', 'share capture protection privacy rekaman', 'show-in-screenshots'],
@@ -192,9 +202,11 @@
   let busy = false;
   let loading = false;
   let dragId = null;
+  let closedPart = null;
 
   function choose(id, focusId = null) {
     active = id;
+    if (id === 'general' && /^closed-(left|middle|right)$/.test(focusId || '')) closedPart = focusId.slice(7);
     search.value = '';
     render(false);
     if (focusId) document.getElementById('settings-' + focusId)?.focus();
@@ -227,7 +239,7 @@
           window.poniFocusPlayback.previewSettings(timer);
         }
       } else {
-        const update = ['panel', 'todo', 'health', 'battery', 'live', 'shelf', 'animations', 'hourly'].includes(source) ? { [source]: patch } : patch;
+        const update = ['panel', 'todo', 'health', 'battery', 'live', 'shelf', 'animations', 'hourly', 'bluetooth', 'closed_display'].includes(source) ? { [source]: patch } : patch;
         settings = await window.__TAURI__.core.invoke('set_poni_settings', { patch: update });
         broadcast();
       }
@@ -272,6 +284,8 @@
 
   function values(source) {
     if (source === 'pomodoro') return pomo;
+    if (source === 'closed_display') return { ...window.poniClosedDisplay.defaults, ...settings.closed_display };
+    if (source === 'bluetooth') return { enabled: true, low_threshold: 20, ...settings.bluetooth };
     if (['panel', 'todo', 'health', 'battery', 'live', 'shelf', 'animations', 'hourly'].includes(source)) return settings[source];
     if (source === 'shortcuts') return settings.shortcuts || { toggle: 'Alt+N', snooze: '', minutes: 30 };
     if (source === 'startup') return { launch_at_login: launchAtLogin };
@@ -332,8 +346,88 @@
     range(container, id, title, key, { max, step, disabled, unit: 'ms', spokenUnit: 'milliseconds' });
   }
 
+  function closedPreview(container) {
+    const display = window.poniClosedDisplay;
+    const config = values('closed_display');
+    const now = new Date();
+    const time = display.time(now, settings.clock_format);
+    const day = display.day(now);
+    const sideText = kind => kind === 'time' ? time : kind === 'date' ? day : display.slots.find(([id]) => id === kind)?.[2];
+    container.append(create('div', 'settings-closed-label', 'What the closed Poni shows'));
+    const bar = create('div', 'settings-closed-preview');
+    bar.dir = 'ltr';
+    bar.style.setProperty('--preview-height', `${Math.max(26, settings.panel.height || 32)}px`);
+    bar.style.setProperty('--preview-font', `${display.font(settings.panel.height || 32, config.size)}px`);
+    bar.classList.toggle('clock-bold', config.bold);
+    const controls = [
+      ['left', 'Left side', sideText(config.left)],
+      ['middle', 'Middle', config.mode === 'date' ? `${day} ${time}` : config.mode === 'time' ? time : ''],
+      ['right', 'Right side', sideText(config.right)],
+    ];
+    for (const [part, label, value] of controls) {
+      const preview = button(value || '+', () => {
+        closedPart = closedPart === part ? null : part;
+        render(true);
+        document.getElementById('settings-closed-' + part)?.focus({preventScroll: true});
+      }, 'settings-closed-part');
+      preview.id = 'settings-closed-' + part;
+      preview.title = label;
+      preview.setAttribute('aria-label', label);
+      preview.setAttribute('aria-expanded', String(closedPart === part));
+      bar.append(preview);
+    }
+    container.append(bar);
+    if (!closedPart) {
+      container.append(create('small', 'settings-closed-hint', 'Choose the left, middle, or right part.'));
+      return;
+    }
+    const choice = create('div', 'settings-closed-choices');
+    choice.setAttribute('role', 'group');
+    choice.setAttribute('aria-label', controls.find(([part]) => part === closedPart)[1] + ' choices');
+    const isMiddle = closedPart === 'middle';
+    const key = isMiddle ? 'mode' : closedPart;
+    const choices = isMiddle ? [['time', 'Time'], ['date', 'Day and time'], ['off', 'Nothing']] : display.slots;
+    for (const [value, label] of choices) {
+      const id = `closed-${key}-${value}`;
+      const tile = button(label, () => void change({[key]: value}, id, 'closed_display'));
+      tile.id = 'settings-' + id;
+      tile.setAttribute('aria-pressed', String(config[key] === value));
+      choice.append(tile);
+    }
+    choice.addEventListener('keydown', event => {
+      const buttons = [...choice.children];
+      const index = buttons.indexOf(document.activeElement);
+      if (index < 0) return;
+      const delta = document.documentElement.dir === 'rtl' ? -1 : 1;
+      const columns = buttons.filter(tile => tile.offsetTop === buttons[0].offsetTop).length;
+      const target = { ArrowLeft: index - delta, ArrowRight: index + delta, ArrowUp: index - columns,
+        ArrowDown: index + columns, Home: 0, End: buttons.length - 1 }[event.key];
+      if (!buttons[target]) return;
+      event.preventDefault();
+      buttons[target].focus();
+    });
+    container.append(choice);
+    if (isMiddle) {
+      select(container, 'closed-size', 'Clock size', 'The clock grows with the height of the closed notch.', 'size',
+        [['small', 'Small'], ['normal', 'Normal'], ['large', 'Large'], ['xlarge', 'Extra large']], config.mode === 'off', 'closed_display');
+      toggle(container, 'closed-bold', 'Bold', 'Emphasize the day and time.', 'bold', 'closed_display', config.mode === 'off');
+    }
+  }
+
   function general(content) {
     const display = group(content, 'Display');
+    const name = create('input', 'settings-text');
+    name.id = 'settings-user-name';
+    name.type = 'text';
+    name.maxLength = 40;
+    name.spellcheck = false;
+    name.autocomplete = 'off';
+    name.value = settings.user_name || '';
+    name.addEventListener('change', () => void change({user_name: name.value}, 'user-name'));
+    name.addEventListener('keydown', event => {
+      if (event.key === 'Enter' && !event.isComposing) { event.preventDefault(); name.blur(); }
+    });
+    row(display, 'Your name', 'Poni uses this name for its greeting. It is saved on this PC.', name);
     select(display, 'layout-direction', 'Layout direction', null, 'direction',
       [['auto', 'Follow the language'], ['ltr', 'Left to right'], ['rtl', 'Right to left']], false, 'panel');
     toggle(display, 'launch-at-login', 'Launch at login',
@@ -381,6 +475,9 @@
     row(display, 'Idle for', 'Seconds without mouse or keyboard input.', standby);
     toggle(display, 'notch-hide-button', 'Hide button',
       'Show a button in Poni that tucks it into a handle at the top edge.', 'hide_button', 'panel');
+    toggle(display, 'notch-step-aside', 'Step aside for the mouse',
+      'Move the closed notch out of the way when the pointer approaches from below. Reach the top edge to use Poni.',
+      'step_aside', 'panel', settings.panel.auto_hide);
     const pixels = { unit: 'px', spokenUnit: 'pixels', source: 'panel' };
     range(display, 'notch-top-gap', 'Gap from the top edge', 'top_gap',
       { ...pixels, max: 120, step: 2, description: 'At 0, Poni stays attached to the top edge.' });
@@ -391,6 +488,7 @@
       'Pause decorative animations and update media less often while on battery or with Energy saver on.',
       'battery_saving', [['off', 'Off'], ['auto', 'Automatic']]);
 
+    closedPreview(group(content, 'Closed Poni'));
     const clock = group(content, 'Clock');
     select(clock, 'clock-format', 'Clock format', 'Follow the Windows region or choose a format.',
       'clock_format', [['region', 'Windows region'], ['h12', '12-hour'], ['h24', '24-hour']]);
@@ -491,12 +589,41 @@
       [[30, '30 seconds'], [60, '1 minute'], [120, '2 minutes'], [300, '5 minutes'], [600, '10 minutes'], [1800, '30 minutes']],
       !settings.live.system, 'live');
     toggle(controls, 'live-calendar', 'Events starting within 15 minutes', null, 'calendar', 'live');
+    toggle(controls, 'live-bluetooth', 'Bluetooth connect / disconnect / low battery', null, 'bluetooth', 'live');
     toggle(controls, 'live-todo', 'Todo deadlines',
       'Counts down the next task due within an hour.', 'todo', 'live');
     toggle(controls, 'live-sneak-peek', 'Sneak peek on song change', 'Briefly show the song title under Poni.',
       'sneak_peek', 'live');
     toggle(controls, 'live-hover-media', 'Hover-reveal media controls while Poni is closed',
       'Turn off Open on hover to use the media controls here.', 'hover_media_controls', 'live');
+  }
+
+  function bluetooth(content) {
+    const controls = group(content);
+    toggle(controls, 'bluetooth-enabled', 'Bluetooth devices & battery',
+      'Shows a paired device when it connects, disconnects, or its battery runs low.', 'enabled', 'bluetooth');
+    range(controls, 'bluetooth-low', 'Low battery alert at', 'low_threshold',
+      { min: 5, max: 50, step: 5, unit: '%', spokenUnit: 'percent', source: 'bluetooth', disabled: !values('bluetooth').enabled });
+    const devices = group(content, 'Bluetooth devices');
+    const list = create('ul', 'settings-device-list');
+    list.replaceChildren(create('li', null, 'Checking for paired devices…'));
+    devices.append(list);
+    window.__TAURI__.core.invoke('bluetooth_devices').then(snapshot => {
+      if (!list.isConnected) return;
+      const entries = snapshot.devices?.map(device => {
+        const item = create('li');
+        const connection = device.connected == null ? 'Connection unknown' : device.connected ? 'Connected' : 'Not connected';
+        const battery = Number.isInteger(device.battery) ? ` · ${device.battery}%` : '';
+        item.append(create('strong', null, device.name), create('small', null, `${connection} · ${device.kind}${battery}`));
+        return item;
+      }) || [];
+      if (!entries.length) {
+        entries.push(create('li', null, snapshot.adapter_present ? 'No paired devices found.' : 'Bluetooth adapter unavailable.'));
+      }
+      list.replaceChildren(...entries);
+    }).catch(error => {
+      if (list.isConnected) list.replaceChildren(create('li', null, String(error)));
+    });
   }
 
   function shelf(content) {
@@ -950,6 +1077,7 @@
         else if (active === 'battery' && settings.battery) battery(controls);
         else if (active === 'calendar') calendar(controls);
         else if (active === 'screentime' && screenTime) screenTimeControls(controls);
+        else if (active === 'bluetooth') bluetooth(controls);
         else if (active === 'pomodoro' && pomo) pomodoroControls(controls);
         else feature(controls, current);
       }
@@ -995,7 +1123,10 @@
     search.setAttribute('aria-label', 'Search settings');
     search.addEventListener('input', () => render(false));
     search.addEventListener('keydown', event => {
-      if (event.key === 'Enter') panel.querySelector('.settings-result')?.click();
+      if (event.key === 'Enter' && !event.isComposing) {
+        event.preventDefault();
+        panel.querySelector('.settings-result')?.click();
+      }
     });
     menu = create('div', 'settings-menu');
     menu.setAttribute('aria-label', 'Settings categories');

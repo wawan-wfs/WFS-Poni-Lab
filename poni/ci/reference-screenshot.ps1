@@ -150,6 +150,8 @@ public static class PoniPointer {
                         'notch-closed-size' = 'corner curve'
                         'notch-opacity' = 'opacity when closed'
                         'notch-position' = 'gap from the top edge'
+                        'closed-clock' = 'Clock size'
+                        'bluetooth' = 'Low battery alert at'
                         screentime = 'Track screen time'
                         'day-progress' = 'Remind me at bedtime'
                         battery = 'Low battery warning at'

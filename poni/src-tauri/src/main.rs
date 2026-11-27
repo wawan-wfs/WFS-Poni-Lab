@@ -321,6 +321,7 @@ impl Timer {
 struct AppData {
     calendar_reminder_ledger: calendar_reminders::ReminderLedger,
     settings: settings::PoniSettings,
+    last_greeting: Option<chrono::NaiveDate>,
     shelf: shelf::Shelf,
     ai_usage: aiusage::AiUsage,
     chat: chat::ChatData,
@@ -1331,8 +1332,10 @@ fn initialize_panel(
         .panel
         .clone();
     let snooze_until = state.presentation.snooze_until;
+    let cursor_passthrough = state.presentation.cursor_passthrough;
     state.presentation = panel::Presentation::default();
     state.presentation.snooze_until = snooze_until;
+    state.presentation.cursor_passthrough = cursor_passthrough;
     apply_panel_preferences(&window, &mut state, &preferences)?;
     state.session = Some(session);
     state.last = 0;
@@ -1349,6 +1352,7 @@ fn set_panel_open(
     tall: bool,
     task_alert: Option<bool>,
     tucked: Option<bool>,
+    content_width: Option<u16>,
     focus: bool,
     seq: u64,
 ) -> Result<(), String> {
@@ -1370,6 +1374,7 @@ fn set_panel_open(
     state.presentation.tall = tall;
     state.presentation.alert = task_alert.unwrap_or(false);
     state.presentation.tucked = tucked.unwrap_or(false);
+    state.presentation.content_width = content_width.unwrap_or(0).min(560);
     state.presentation.forced = open && (focus || state.presentation.forced);
     apply_panel_preferences(&window, &mut state, &preferences)?;
     if open && focus && state.presentation.visible == Some(true) {
@@ -1431,6 +1436,7 @@ async fn open_poni_settings(app: tauri::AppHandle) -> Result<(), String> {
             tauri::WebviewUrl::App("settings.html".into()),
         )
         .title("Poni Settings")
+        .theme(Some(tauri::Theme::Dark))
         .inner_size(900.0, 700.0)
         .min_inner_size(530.0, 420.0)
         .center()
@@ -1577,6 +1583,7 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             settings::get_poni_settings,
+            settings::claim_poni_greeting,
             panel::panel_displays,
             move_panel,
             shelf::shelf_items,

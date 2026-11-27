@@ -3,6 +3,11 @@
 const invoke = window.__TAURI__.core.invoke;
 const surface = document.querySelector('#surface');
 const closed = document.querySelector('#closed');
+const closedClock = closed.querySelector('.closed-clock');
+const closedDay = document.querySelector('#closed-day');
+const greeting = document.querySelector('#closed-greeting');
+const closedDisplay = window.poniClosedDisplay;
+const closedSlots = [...closed.querySelectorAll('.closed-slot')];
 const open = document.querySelector('#open');
 const hideNotch = document.querySelector('#hide-notch');
 const status = document.querySelector('#status');
@@ -30,6 +35,17 @@ let musicPeekTimer;
 let lastSystemPeek = Date.now();
 let systemPeek = null;
 let systemPeekPending = false;
+let bluetoothPeek = null;
+let idleSystemSample = null;
+let idleSystemPending = false;
+let nextIdleSystemSample = 0;
+let currentWeather = null;
+let closedWidth = 0;
+let greetingTimer;
+let nextGreetingCheck = Date.now() + 4000;
+let lastGreetingDay = null;
+let greetingPending = false;
+let preferencesLoaded = false;
 let data = { tasks: [], notes: [], timer: { total_ms: 1500000, remaining_ms: 1500000, ends_at_ms: null }, stopwatch: { elapsed_ms: 0, started_at_ms: null, laps: [] }, weather_location: null, world_clocks: [], calendar_events: [] };
 let editingTask = null;
 let ignoreTaskLanguage = false;
@@ -72,6 +88,7 @@ const modules = window.poniModules || {};
 const navigation = open.querySelector('header nav');
 const moduleTabs = new Map([...navigation.querySelectorAll('.tab')].map(tab => [tab.dataset.page, tab]));
 let preferences = {
+  user_name: '', closed_display: closedDisplay.defaults,
   clock_format: 'region', clock_with_activities: true, header_clock: true, open_on_hover: true,
   media_enabled: true, music_progress: true, color_glow: true,
   haptics: true, battery_saving: 'off',
@@ -83,8 +100,9 @@ let preferences = {
   timer_presets: [], timer_remember: true,
   todo: { late_minutes: 0, snooze_minutes: 10, trash_days: 7 },
   bedtime_reminder: false,
-  live: { enabled:true, rotate:true, timers:true, calendar:true, todo:true, music:true,
+  live: { enabled:true, rotate:true, timers:true, calendar:true, bluetooth:true, todo:true, music:true,
     system:false, system_interval:120, sneak_peek:false, hover_media_controls:false },
+  bluetooth: { enabled:true, low_threshold:20 },
   shelf: { enabled:true, open_on_drag:true, remove_after_drag:false },
   panel: { direction: 'auto', top_gap: 0, position: 50, width: 200, height: 32, opacity: 100,
     enabled: true, display: 'primary', lock_position: false, hide_in_fullscreen: true, auto_hide: false,
@@ -107,6 +125,7 @@ function setOpen(value) {
   if (value) {
     notchTucked = false;
     musicPeek.hidden = true;
+    dismissGreeting();
     closed.setAttribute('aria-label', 'Open Poni');
     const preferred = preferences.remember_module ? preferences.last_module : null;
     if (!selectModule(preferred)) selectModule(preferences.default_module);
@@ -135,7 +154,7 @@ function updatePanelSize(isOpen, focus = false) {
   open.classList.toggle('tall', tall);
   const seq = ++panelSequence;
   const taskAlert = !isOpen && (otherClosedAlerts() || !musicPeek.hidden);
-  panelReady.then(() => invoke('set_panel_open', { session: panelSession, open: isOpen, tall, focus, seq, taskAlert, tucked: notchTucked }))
+  panelReady.then(() => invoke('set_panel_open', { session: panelSession, open: isOpen, tall, focus, seq, taskAlert, tucked: notchTucked, contentWidth: closedWidth }))
     .catch(error => { status.textContent = String(error); });
 }
 
@@ -150,11 +169,19 @@ function applyPreferences(value) {
   if (!value || !Array.isArray(value.module_order) || !Array.isArray(value.hidden_modules)) return;
   const previous = preferences;
   preferences = { ...preferences, ...value, panel: { ...previous.panel, ...value.panel },
-    live: { ...previous.live, ...value.live }, animations: {...previous.animations, ...value.animations} };
+    live: { ...previous.live, ...value.live }, animations: {...previous.animations, ...value.animations},
+    closed_display: { ...closedDisplay.defaults, ...value.closed_display } };
+  if (previous.user_name !== preferences.user_name) {
+    dismissGreeting();
+    if (preferencesLoaded) nextGreetingCheck = Date.now() + 300;
+  }
+  preferencesLoaded = true;
   const panel = preferences.panel;
+  const bluetoothEnabled = panel.enabled && preferences.live.bluetooth && preferences.bluetooth?.enabled;
+  window.poniBluetoothAlerts.configure({enabled: !!bluetoothEnabled, threshold: preferences.bluetooth?.low_threshold ?? 20}, showBluetoothNotice);
+  if (!bluetoothEnabled) bluetoothPeek = null;
   document.documentElement.dir = panel.direction === 'rtl' ? 'rtl' : 'ltr';
   surface.classList.toggle('floating', panel.top_gap > 0);
-  surface.style.setProperty('--notch-width', panel.width + 'px');
   surface.style.setProperty('--notch-height', panel.height + 'px');
   surface.style.setProperty('--notch-opacity', String(panel.opacity / 100));
   hideNotch.hidden = !panel.hide_button;
@@ -310,13 +337,21 @@ closed.addEventListener('click', () => {
   setOpen(true);
   if (destination) selectModule(destination);
 });
-closed.addEventListener('pointerenter', () => {
+function openFromHover() {
   clearTimeout(hoverTimer);
-  updateClosedMediaControls();
   if (!preferences.open_on_hover || notchTucked || notchDrag) return;
   if (preferences.hover_delay) hoverTimer = setTimeout(() => setOpen(true), preferences.hover_delay);
   else setOpen(true);
+}
+closed.addEventListener('pointerenter', () => {
+  updateClosedMediaControls();
+  openFromHover();
 });
+window.__TAURI__.event.listen('poni-step-aside-edge', ({payload}) => {
+  if (!open.hidden || !preferences.panel.step_aside) return;
+  if (payload) openFromHover();
+  else clearTimeout(hoverTimer);
+}).catch(error => { status.textContent = String(error); });
 closed.addEventListener('pointerleave', () => clearTimeout(hoverTimer));
 document.querySelector('#close').addEventListener('click', () => setOpen(false));
 hideNotch.addEventListener('click', () => tuckNotch(true));
@@ -564,6 +599,14 @@ function showMusicPeek(media) {
   musicPeekTimer = setTimeout(dismissMusicPeek, 3200);
 }
 
+function showBluetoothNotice(notice) {
+  if (!open.hidden || notchTucked || otherClosedAlerts() || closed.classList.contains('battery-alert')) return;
+  bluetoothPeek = { tab:'bluetooth', title:notice.title, time:notice.text, kind:notice.kind,
+    until:Date.now() + (notice.kind === 'low' ? 5000 : 4000) };
+  window.poniAnimations.bounce();
+  renderLiveActivities();
+}
+
 async function sampleSystemPeek(now) {
   const settings = preferences.live;
   if (!settings.enabled || !settings.system || !open.hidden || !preferences.panel.enabled) {
@@ -694,15 +737,142 @@ document.querySelector('#day-schedule').addEventListener('submit', async event =
 function updateClock() {
   const now = new Date();
   updatePowerSaving();
-  const options = { hour: 'numeric', minute: '2-digit' };
-  if (preferences.clock_format !== 'region') options.hourCycle = preferences.clock_format === 'h24' ? 'h23' : 'h12';
-  const time = new Intl.DateTimeFormat(undefined, options).format(now);
-  document.querySelectorAll('.clock').forEach(clock => { clock.textContent = time; });
+  const time = closedDisplay.time(now, preferences.clock_format);
+  for (const clock of document.querySelectorAll('.clock')) {
+    if (clock.textContent !== time) clock.textContent = time;
+  }
   renderLiveActivities(now.getTime());
   if (otherClosedAlerts()) dismissMusicPeek();
   void sampleSystemPeek(now.getTime());
+  void sampleIdleSystem(now.getTime());
+  void checkGreeting(now);
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
   if (today !== calendarToday) { calendarToday = today; if (calendarDay == null || calendarDay < today) calendarDay = today; renderCalendar(); }
+}
+
+function nextClosedCalendar(now, limit, includeOngoing) {
+  if (!preferences.calendar_enabled || !data.calendar_events?.length) return null;
+  const today = new Date(now);
+  const tomorrow = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+  const fits = item => item.start <= limit && (includeOngoing
+    ? item.start + item.event.duration_minutes * 60000 > now : item.start > now);
+  return occurrencesOnDay(today).find(fits) || (tomorrow.getTime() <= limit && occurrencesOnDay(tomorrow).find(fits));
+}
+
+function slotText(kind, now) {
+  const time = (value, zone) => closedDisplay.time(new Date(value), preferences.clock_format, zone);
+  switch (kind) {
+    case 'time': return time(now);
+    case 'date': return closedDisplay.day(now);
+    case 'weather': return Number.isFinite(currentWeather?.temperature_2m)
+      ? `${Math.round(currentWeather.temperature_2m)}°` : '';
+    case 'event': {
+      const next = nextClosedCalendar(now.getTime(), now.getTime() + 43_200_000, true);
+      return next ? `${next.event.title} ${time(next.start)}` : '';
+    }
+    case 'todo': {
+      const next = data.tasks.filter(task => !task.done).reduce((first, task) => {
+        if (!first) return task;
+        return (task.due_at_ms ?? Infinity) < (first.due_at_ms ?? Infinity) ? task : first;
+      }, null);
+      return next ? `${next.text}${next.due_at_ms == null ? '' : ` ${time(next.due_at_ms)}`}` : '';
+    }
+    case 'world': {
+      const place = data.world_clocks?.[0];
+      if (!place) return '';
+      try { return `${place.name} ${time(now, place.zone)}`; }
+      catch (error) { if (error instanceof RangeError) return ''; throw error; }
+    }
+    case 'cpu': return Number.isFinite(idleSystemSample?.cpu_percent) ? `CPU ${Math.round(idleSystemSample.cpu_percent)}%` : '';
+    case 'ram': return idleSystemSample?.memory_total > 0 ? `RAM ${Math.round(100 * idleSystemSample.memory_used / idleSystemSample.memory_total)}%` : '';
+    default: return '';
+  }
+}
+
+async function sampleIdleSystem(now) {
+  if (!open.hidden || !preferences.panel.enabled || currentLive || idleSystemPending || now < nextIdleSystemSample ||
+      ![preferences.closed_display.left, preferences.closed_display.right].some(kind => kind === 'cpu' || kind === 'ram')) return;
+  idleSystemPending = true;
+  nextIdleSystemSample = now + (surface.classList.contains('power-saving') ? 10_000 : 5000);
+  try { idleSystemSample = await invoke('system_snapshot'); }
+  catch (_) { idleSystemSample = null; }
+  finally { idleSystemPending = false; }
+}
+
+function renderClosedDisplay(now) {
+  if (!open.hidden) return;
+  const config = preferences.closed_display;
+  const panel = preferences.panel;
+  const keepClock = closed.classList.contains('keep-live-clock');
+  const hasGreeting = !greeting.hidden;
+  closedClock.hidden = config.mode === 'off' || (currentLive && !keepClock) || hasGreeting;
+  closedDay.hidden = config.mode !== 'date';
+  if (!closedDay.hidden) closedDay.textContent = closedDisplay.day(now);
+  closed.style.setProperty('--clock-size', `${closedDisplay.font(panel.height, config.size)}px`);
+  closed.classList.toggle('clock-bold', config.bold);
+  const widths = closedSlots.map((slot, index) => {
+    const kind = index === 0 ? config.left : config.right;
+    const value = slot.querySelector('.closed-slot-value');
+    const text = slotText(kind, now);
+    if (value.textContent !== text) value.textContent = text;
+    slot.dataset.kind = kind;
+    slot.hidden = !!currentLive || hasGreeting || (!text && !(kind === 'battery' && window.poniBattery.present));
+    return slot.hidden ? 0 : Math.min(112, Math.ceil(slot.firstElementChild.scrollWidth || slot.lastElementChild.offsetWidth) + 7);
+  });
+  const side = Math.max(...widths);
+  const minute = Math.floor(now.getTime() / 60000);
+  const sideKey = [config.left, config.right, minute].join('|');
+  if (closed.dataset.sideKey !== sideKey || (!side && !currentLive && !hasGreeting)) {
+    closed.dataset.sideKey = sideKey;
+    closed.style.removeProperty('--slot-width');
+  }
+  const stableSide = side ? Math.max(side, parseInt(closed.style.getPropertyValue('--slot-width'), 10) || 0) : 0;
+  if (side) closed.style.setProperty('--slot-width', `${stableSide}px`);
+  const centerWidth = closedClock.hidden ? 0 : closedClock.scrollWidth;
+  const width = Math.min(560, Math.ceil(Math.max(panel.width, centerWidth + 24) + 2 * stableSide));
+  surface.style.setProperty('--notch-width', `${width}px`);
+  if (closedWidth !== width) {
+    closedWidth = width;
+    updatePanelSize(false);
+  }
+}
+
+function dismissGreeting() {
+  clearTimeout(greetingTimer);
+  greeting.hidden = true;
+}
+
+async function checkGreeting(now) {
+  const name = preferences.user_name;
+  if (!name || !preferences.panel.enabled || greetingPending || now.getTime() < nextGreetingCheck) return;
+  const day = [now.getFullYear(), now.getMonth() + 1, now.getDate()]
+    .map((value, index) => String(value).padStart(index === 0 ? 4 : 2, '0')).join('-');
+  if (lastGreetingDay === day || data.last_greeting === day) return;
+  nextGreetingCheck = now.getTime() + 5000;
+  const busy = () => !open.hidden || notchTucked || currentLive || otherClosedAlerts() || !musicPeek.hidden ||
+    closed.classList.contains('battery-alert');
+  if (busy()) return;
+  greetingPending = true;
+  try {
+    if (!await invoke('claim_poni_greeting', { name })) return;
+    lastGreetingDay = day;
+    if (busy() || preferences.user_name !== name) return;
+    const hour = now.getHours();
+    const [text, icon, color] = hour >= 5 && hour < 12 ? [`Good morning, ${name}`, '☀', '#ffd60a'] :
+      hour >= 12 && hour < 18 ? [`Good afternoon, ${name}`, '◒', '#ff9f0a'] :
+      hour >= 18 && hour < 22 ? [`Good evening, ${name}`, '☾', '#bf5af2'] :
+        [`Still up, ${name}?`, '★', '#64d2ff'];
+    greeting.querySelector('#greeting-symbol').textContent = icon;
+    greeting.querySelector('#greeting-text').textContent = text;
+    greeting.querySelector('#greeting-day').textContent = closedDisplay.day(now);
+    greeting.style.setProperty('--greeting-color', color);
+    greeting.hidden = false;
+    renderClosedDisplay(now);
+    window.poniAnimations.bounce();
+    greetingTimer = setTimeout(() => { dismissGreeting(); renderClosedDisplay(new Date()); }, 4000);
+  } catch (_) {
+    // Leave the notch clock in place when the profile cannot be updated.
+  } finally { greetingPending = false; }
 }
 
 function updatePowerSaving() {
@@ -749,14 +919,8 @@ function renderLiveActivities(now = Date.now(), advance = false) {
         outline: playbackFraction(data.timer.ends_at_ms - now, data.timer.total_ms),
       });
     }
-    if (settings.calendar && preferences.calendar_enabled && data.calendar_events?.length) {
-      const day = new Date(now);
-      const nextDay = new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1);
-      const latest = now + 900_000;
-      const next = occurrencesOnDay(day).find(item => item.start > now && item.start <= latest) ??
-        (nextDay.getTime() <= latest
-          ? occurrencesOnDay(nextDay).find(item => item.start > now && item.start <= latest)
-          : null);
+    if (settings.calendar) {
+      const next = nextClosedCalendar(now, now + 900_000, false);
       if (next) candidates.push({
         tab: 'calendar', title: next.event.title, time: `in ${Math.ceil((next.start - now) / 60_000)}m`,
       });
@@ -774,12 +938,14 @@ function renderLiveActivities(now = Date.now(), advance = false) {
   }
   if (advance && candidates.length > 1) liveIndex++;
   const summary = settings.enabled && settings.system && open.hidden && systemPeek?.until > now && !otherClosedAlerts() ? systemPeek : null;
-  currentLive = summary || (candidates.length
+  const device = open.hidden && bluetoothPeek?.until > now && !otherClosedAlerts() ? bluetoothPeek : null;
+  currentLive = device || summary || (candidates.length
     ? candidates[(settings.rotate ? liveIndex : 0) % candidates.length]
     : null);
   liveActivity.hidden = !currentLive;
   closed.classList.toggle('has-live', !!currentLive);
   closed.classList.toggle('music-playing', currentLive?.tab === 'home');
+  closed.dataset.deviceNotice = device?.kind || '';
   closedArtwork.hidden = !artworkUrl || currentLive?.tab !== 'home';
   closed.classList.toggle('keep-live-clock', preferences.clock_with_activities &&
     ['home', 'pomodoro', 'timer'].includes(currentLive?.tab));
@@ -792,6 +958,8 @@ function renderLiveActivities(now = Date.now(), advance = false) {
     if (liveTitle.textContent !== currentLive.title) liveTitle.textContent = currentLive.title;
     if (liveTime.textContent !== currentLive.time) liveTime.textContent = currentLive.time;
   }
+  if (currentLive || otherClosedAlerts() || closed.classList.contains('battery-alert')) dismissGreeting();
+  renderClosedDisplay(new Date(now));
 }
 function renderCalendar() {
   const today = new Date(calendarToday);
@@ -1567,6 +1735,7 @@ function weatherDescription(code) {
 
 async function loadWeather(location) {
   const request = ++weatherRequest;
+  currentWeather = null;
   const weatherStatus = document.querySelector('#weather-status');
   weatherStatus.textContent = 'Loading weather…';
   document.querySelector('#weather-current').textContent = '';
@@ -1575,6 +1744,7 @@ async function loadWeather(location) {
     const forecast = await invoke('weather_forecast', { location });
     if (request !== weatherRequest) return;
     const current = forecast.current;
+    currentWeather = current;
     weatherStatus.textContent = [location.name, location.admin1, location.country].filter(Boolean).join(', ');
     document.querySelector('#weather-current').textContent = `${Math.round(current.temperature_2m)}°C · ${weatherDescription(current.weather_code)} · ${Math.round(current.relative_humidity_2m)}% · ${Math.round(current.wind_speed_10m)} km/h`;
     const days = document.querySelector('#weather-days');

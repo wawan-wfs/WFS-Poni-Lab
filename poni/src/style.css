@@ -9,24 +9,35 @@ button { color: inherit; cursor: pointer; }
   #closed { height: 100%; border-radius: 0 0 8px 8px; }
   #closed > * { visibility: hidden; }
 }
-.closed { display: block; width: min(100%, var(--notch-width, 200px)); height: min(100%, var(--notch-height, 32px)); margin: 0 auto; border: 0; border-radius: 0 0 17px 17px; background: #000; font-weight: 700; opacity: var(--notch-opacity, 1); }
+.closed { display: flex; align-items: center; justify-content: center; width: min(100%, var(--notch-width, 200px)); height: min(100%, var(--notch-height, 32px)); margin: 0 auto; padding-inline: 12px; border: 0; border-radius: 0 0 17px 17px; background: #000; opacity: var(--notch-opacity, 1); }
 .closed:hover, .closed:focus-visible { opacity: 1; }
 .closed { position: relative; }
 .battery-indicator { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; font-variant-numeric: tabular-nums; color: #f2f2f5; }
 .battery-plugged { color: #30d158; }
 .battery-low { color: #ff453a; }
 .battery-saver:not(.battery-low) { color: #ffd60a; }
-.closed .battery-indicator { position: absolute; inset-inline-end: 11px; inset-block-start: 50%; transform: translateY(-50%); }
-.closed.has-battery { padding-inline: 5px 58px; }
+.closed-clock { flex: none; display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; font-size: var(--clock-size, 12px); font-variant-numeric: tabular-nums; font-weight: 600; }
+.closed-clock #closed-day { color: #b5b5bd; font-weight: 500; }
+.closed.clock-bold .closed-clock { font-weight: 750; }
+.closed.clock-bold #closed-day { font-weight: 700; }
+.closed-slot { display: flex; align-items: center; justify-content: center; position: absolute; inset-block: 0; width: max-content; min-width: var(--slot-width, 0px); max-width: 112px; padding-inline: 5px; font-size: 11px; font-variant-numeric: tabular-nums; }
+#closed-slot-left { left: 8px; }
+#closed-slot-right { right: 8px; }
+.closed-slot-value { white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+.closed-slot[data-kind="battery"] .closed-slot-value, .closed-slot:not([data-kind="battery"]) .battery-indicator { display: none; }
+#closed-greeting { display: flex; align-items: baseline; gap: 5px; font-size: 12px; font-weight: 600; min-width: 0; white-space: nowrap; }
+#greeting-symbol { color: var(--greeting-color); }
+#greeting-text { overflow: hidden; text-overflow: ellipsis; }
+#greeting-day { color: #b7b7bf; flex: none; }
 .battery-icon { position: relative; display: block; width: 18px; height: 9px; border: 1px solid currentColor; border-radius: 3px; background: linear-gradient(to right, currentColor 0 var(--level), transparent var(--level)) content-box; padding: 1px; }
 .battery-icon::after { content: ""; position: absolute; inset-inline-start: calc(100% + 1px); inset-block: 2px; width: 2px; background: currentColor; border-radius: 0 2px 2px 0; }
 .battery-ring .battery-icon { width: 12px; height: 12px; border: none; padding: 0; border-radius: 50%; background: conic-gradient(currentColor 0 var(--level), #45454a var(--level)); }
 .battery-ring .battery-icon::after { inset: 2px; width: auto; border-radius: 50%; background: #0c0c0d; }
 .battery-alert #battery-activity { animation: battery-reveal .25s ease-out; white-space: nowrap; }
-.closed.has-live .clock, .closed.battery-alert .notch-live { display: none; }
+.closed.battery-alert .notch-live, .closed.battery-alert .closed-clock, .closed.battery-alert #closed-greeting { display: none; }
 .closed.has-live.keep-live-clock { gap: 6px; padding-inline: 9px; }
-.closed.has-live.keep-live-clock .clock { display: inline; flex: none; font-size: 11px; }
-.keep-live-clock .notch-live { min-width: 0; padding: 0; gap: 4px; }
+.notch-live:not([hidden]) { flex: 1; min-width: 0; }
+.keep-live-clock .notch-live { padding: 0; gap: 4px; }
 .closed-media-controls { position: absolute; z-index: 2; top: 0; left: 50%; transform: translateX(-50%); width: var(--notch-width); height: var(--notch-height); display: flex; justify-content: center; align-items: center; gap: 7px; pointer-events: none; }
 .closed-media-controls button { border: 1px solid #35353c; border-radius: 5px; background: #1c1c21; color: #eee; padding: 2px 7px; pointer-events: auto; }
 .music-peek span { color: #abd5ff; text-align: center; }
@@ -43,6 +54,8 @@ button { color: inherit; cursor: pointer; }
 .notch-live { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-inline: 8px; font-size: 11px; }
 .notch-live span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .notch-live b { flex: none; color: #ffb859; font-variant-numeric: tabular-nums; }
+.closed[data-device-notice="connected"] .notch-live b { color: #70b9ff; }
+.closed[data-device-notice="low"] .notch-live b { color: #ff706a; }
 @keyframes battery-reveal { from { opacity: 0; transform: translateY(2px); } }
 @media (prefers-reduced-motion: reduce) { .battery-alert #battery-activity { animation: none; } }
 .open { position: absolute; inset: 0; display: flex; flex-direction: column; background: #000; border-radius: 0 0 27px 27px; padding: 8px 18px 13px; overflow: hidden; }

@@ -1,4 +1,4 @@
-use crate::{battery, health, panel, shelf, shortcuts, sound, todo, Store};
+use crate::{battery, bluetooth, health, panel, shelf, shortcuts, sound, todo, Store};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, sync::Mutex};
 use tauri::{AppHandle, Emitter, State};
@@ -41,6 +41,94 @@ enum ClockFormat {
     H24,
 }
 
+#[derive(Clone, Copy, Default, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+enum ClosedClockMode {
+    #[default]
+    Time,
+    Date,
+    Off,
+}
+
+#[derive(Clone, Copy, Default, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+enum ClosedClockSize {
+    Small,
+    #[default]
+    Normal,
+    Large,
+    Xlarge,
+}
+
+#[derive(Clone, Copy, Default, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+enum ClosedSlot {
+    #[default]
+    None,
+    Weather,
+    Battery,
+    Date,
+    Event,
+    Todo,
+    Time,
+    Cpu,
+    Ram,
+    World,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(default)]
+struct ClosedDisplay {
+    mode: ClosedClockMode,
+    size: ClosedClockSize,
+    bold: bool,
+    left: ClosedSlot,
+    right: ClosedSlot,
+}
+
+impl Default for ClosedDisplay {
+    fn default() -> Self {
+        Self {
+            mode: ClosedClockMode::Time,
+            size: ClosedClockSize::Normal,
+            bold: false,
+            left: ClosedSlot::None,
+            right: ClosedSlot::Battery,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ClosedDisplayPatch {
+    mode: Option<ClosedClockMode>,
+    size: Option<ClosedClockSize>,
+    bold: Option<bool>,
+    left: Option<ClosedSlot>,
+    right: Option<ClosedSlot>,
+}
+
+impl ClosedDisplay {
+    fn apply(&mut self, patch: ClosedDisplayPatch) {
+        self.mode = patch.mode.unwrap_or(self.mode);
+        self.size = patch.size.unwrap_or(self.size);
+        self.bold = patch.bold.unwrap_or(self.bold);
+        self.left = patch.left.unwrap_or(self.left);
+        self.right = patch.right.unwrap_or(self.right);
+    }
+}
+
+fn clean_name(value: &str) -> String {
+    let collapsed = value.split_whitespace().collect::<Vec<_>>().join(" ");
+    collapsed
+        .chars()
+        .filter(|character| !character.is_control())
+        .take(40)
+        .collect::<String>()
+        .trim_end()
+        .to_owned()
+}
+
 #[derive(Clone, Copy, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
 enum MirrorShape {
@@ -63,6 +151,7 @@ struct LiveActivities {
     rotate: bool,
     timers: bool,
     calendar: bool,
+    bluetooth: bool,
     todo: bool,
     music: bool,
     system: bool,
@@ -78,6 +167,7 @@ impl Default for LiveActivities {
             rotate: true,
             timers: true,
             calendar: true,
+            bluetooth: true,
             todo: true,
             music: true,
             system: false,
@@ -95,6 +185,7 @@ struct LiveActivitiesPatch {
     rotate: Option<bool>,
     timers: Option<bool>,
     calendar: Option<bool>,
+    bluetooth: Option<bool>,
     todo: Option<bool>,
     music: Option<bool>,
     system: Option<bool>,
@@ -115,6 +206,7 @@ impl LiveActivities {
         self.rotate = patch.rotate.unwrap_or(self.rotate);
         self.timers = patch.timers.unwrap_or(self.timers);
         self.calendar = patch.calendar.unwrap_or(self.calendar);
+        self.bluetooth = patch.bluetooth.unwrap_or(self.bluetooth);
         self.todo = patch.todo.unwrap_or(self.todo);
         self.music = patch.music.unwrap_or(self.music);
         self.system = patch.system.unwrap_or(self.system);
@@ -189,6 +281,8 @@ impl Animations {
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(default)]
 pub(super) struct PoniSettings {
+    pub(super) user_name: String,
+    closed_display: ClosedDisplay,
     clock_format: ClockFormat,
     clock_with_activities: bool,
     media_enabled: bool,
@@ -216,6 +310,7 @@ pub(super) struct PoniSettings {
     pub(super) todo: todo::Preferences,
     pub(super) health: health::Preferences,
     battery: battery::Preferences,
+    bluetooth: bluetooth::Preferences,
     live: LiveActivities,
     pub(super) shelf: shelf::Preferences,
     pub(super) bedtime_reminder: bool,
@@ -230,6 +325,8 @@ pub(super) struct PoniSettings {
 impl Default for PoniSettings {
     fn default() -> Self {
         Self {
+            user_name: String::new(),
+            closed_display: ClosedDisplay::default(),
             clock_format: ClockFormat::Region,
             clock_with_activities: true,
             media_enabled: true,
@@ -257,6 +354,7 @@ impl Default for PoniSettings {
             todo: todo::Preferences::default(),
             health: health::Preferences::default(),
             battery: battery::Preferences::default(),
+            bluetooth: bluetooth::Preferences::default(),
             live: LiveActivities::default(),
             shelf: shelf::Preferences::default(),
             bedtime_reminder: false,
@@ -273,6 +371,8 @@ impl Default for PoniSettings {
 #[derive(Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub(super) struct SettingsPatch {
+    user_name: Option<String>,
+    closed_display: Option<ClosedDisplayPatch>,
     clock_format: Option<ClockFormat>,
     clock_with_activities: Option<bool>,
     media_enabled: Option<bool>,
@@ -299,6 +399,7 @@ pub(super) struct SettingsPatch {
     todo: Option<todo::Patch>,
     health: Option<health::Patch>,
     battery: Option<battery::Patch>,
+    bluetooth: Option<bluetooth::Patch>,
     live: Option<LiveActivitiesPatch>,
     shelf: Option<shelf::PreferencesPatch>,
     bedtime_reminder: Option<bool>,
@@ -368,6 +469,13 @@ impl PoniSettings {
     }
 
     fn apply(&mut self, patch: SettingsPatch) -> Result<(), String> {
+        if let Some(name) = patch.user_name {
+            let name = clean_name(&name);
+            self.user_name = name;
+        }
+        if let Some(display) = patch.closed_display {
+            self.closed_display.apply(display);
+        }
         if patch.hover_delay.is_some_and(|ms| ms > 800)
             || patch.close_delay.is_some_and(|ms| ms > 1500)
         {
@@ -427,6 +535,9 @@ impl PoniSettings {
         if let Some(battery) = patch.battery {
             self.battery.apply(battery)?;
         }
+        if let Some(bluetooth) = patch.bluetooth {
+            self.bluetooth.apply(bluetooth)?;
+        }
         if let Some(live) = patch.live {
             self.live.apply(live)?;
         }
@@ -468,6 +579,32 @@ impl PoniSettings {
         self.normalize();
         Ok(())
     }
+}
+
+#[tauri::command]
+pub(super) fn claim_poni_greeting(
+    window: tauri::WebviewWindow,
+    sequence: State<'_, Mutex<crate::WindowSequence>>,
+    store: State<'_, Mutex<Store>>,
+    name: String,
+) -> Result<bool, String> {
+    if window.label() != "main" || name.is_empty() {
+        return Ok(false);
+    }
+    let state = sequence.lock().map_err(|_| "Window state unavailable")?;
+    if !state.presentation.can_show_greeting() {
+        return Ok(false);
+    }
+    let mut store = store.lock().map_err(|_| "Storage unavailable")?;
+    let today = chrono::Local::now().date_naive();
+    if store.data.settings.user_name != name || store.data.last_greeting == Some(today) {
+        return Ok(false);
+    }
+    store.update(|data| {
+        data.last_greeting = Some(today);
+        Ok(())
+    })?;
+    Ok(true)
 }
 
 #[tauri::command]
@@ -527,6 +664,37 @@ pub(super) fn remember_poni_module(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn older_profiles_accept_independent_closed_display_and_bluetooth_changes() {
+        let mut settings: PoniSettings = serde_json::from_str("{}").unwrap();
+        assert!(settings.user_name.is_empty());
+        settings
+            .apply(
+                serde_json::from_str(
+                    r#"{"user_name":"  Ayu\tPratiwi  ","closed_display":{"left":"world","mode":"date"},"bluetooth":{"low_threshold":35},"live":{"bluetooth":false}}"#,
+                )
+                .unwrap(),
+            )
+            .unwrap();
+        settings
+            .apply(
+                serde_json::from_str(r#"{"closed_display":{"bold":true,"size":"xlarge"}}"#)
+                    .unwrap(),
+            )
+            .unwrap();
+        let saved = serde_json::to_value(&settings).unwrap();
+        assert_eq!(saved["user_name"], "Ayu Pratiwi");
+        assert_eq!(saved["closed_display"]["left"], "world");
+        assert_eq!(saved["closed_display"]["mode"], "date");
+        assert_eq!(saved["closed_display"]["right"], "battery");
+        assert_eq!(saved["closed_display"]["bold"], true);
+        assert_eq!(saved["bluetooth"]["low_threshold"], 35);
+        assert_eq!(saved["live"]["bluetooth"], false);
+        assert!(settings
+            .apply(serde_json::from_str(r#"{"bluetooth":{"low_threshold":37}}"#).unwrap())
+            .is_err());
+    }
 
     #[test]
     fn timer_presets_sort_deduplicate_and_validate() {

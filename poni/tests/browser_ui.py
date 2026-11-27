@@ -464,10 +464,11 @@ with sync_playwright() as pw:
     expect(page.locator('#stopwatch-display')).to_have_text('00:00.0')
     page.locator('#close').click()
     page.evaluate("""() => {
+      preferences.live.enabled = false;
       window.poniBattery.configure({icon:'ring', show_percentage:true, low_threshold:25});
       window.poniTestBattery({percent:26, plugged_in:false, charging:false, saver:false, seconds_remaining:3800});
     }""")
-    indicator = page.locator('#closed .battery-indicator')
+    indicator = page.locator('#closed-slot-right .battery-indicator')
     expect(indicator).to_be_visible()
     expect(indicator.locator('.battery-percent')).to_have_text('26%')
     page.evaluate("preferences.battery_saving = 'auto'; updatePowerSaving()")
@@ -482,6 +483,7 @@ with sync_playwright() as pw:
     assert not page.evaluate("document.getElementById('surface').classList.contains('power-saving')")
     page.evaluate("window.poniTestBattery(null)")
     expect(indicator).to_be_hidden()
+    page.evaluate('preferences.live.enabled = true')
     page.evaluate('window.poniTestShortcut()')
     page.locator('[data-page="weather"]').click()
     page.locator('#weather-city').fill('Jakarta')

@@ -1,4 +1,4 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize)]
 pub(super) struct BluetoothSnapshot {
@@ -9,10 +9,49 @@ pub(super) struct BluetoothSnapshot {
 
 #[derive(Serialize)]
 struct BluetoothDevice {
+    id: String,
     name: String,
     connected: Option<bool>,
     paired: bool,
     kind: &'static str,
+    battery: Option<u8>,
+}
+
+#[derive(Clone, Copy, Deserialize, Serialize)]
+#[serde(default)]
+pub(super) struct Preferences {
+    enabled: bool,
+    low_threshold: u8,
+}
+
+impl Default for Preferences {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            low_threshold: 20,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct Patch {
+    enabled: Option<bool>,
+    low_threshold: Option<u8>,
+}
+
+impl Preferences {
+    pub(super) fn apply(&mut self, patch: Patch) -> Result<(), String> {
+        if patch
+            .low_threshold
+            .is_some_and(|value| !(5..=50).contains(&value) || value % 5 != 0)
+        {
+            return Err("Choose a Bluetooth battery threshold from 5 to 50 percent".into());
+        }
+        self.enabled = patch.enabled.unwrap_or(self.enabled);
+        self.low_threshold = patch.low_threshold.unwrap_or(self.low_threshold);
+        Ok(())
+    }
 }
 
 #[tauri::command]
@@ -131,10 +170,12 @@ fn read_snapshot() -> Result<BluetoothSnapshot, String> {
                 let device = by_address
                     .entry(address)
                     .or_insert_with(|| BluetoothDevice {
+                        id: format!("bluetooth:{address:012x}"),
                         name: name.to_owned(),
                         connected: Some(connected),
                         paired,
                         kind,
+                        battery: None,
                     });
                 device.connected = Some(device.connected == Some(true) || connected);
                 device.paired |= paired;
@@ -161,14 +202,14 @@ fn snapshot_with_devices(
     classic_adapter_present: bool,
     mut classic: std::collections::BTreeMap<u64, BluetoothDevice>,
 ) -> BluetoothSnapshot {
-    let low_energy = read_low_energy().unwrap_or_default();
-    let mut le_only = Vec::new();
-    for (address, low_energy_device) in low_energy {
+    let endpoints = read_endpoints().unwrap_or_default();
+    let mut without_address = Vec::new();
+    for (address, endpoint) in endpoints {
         let matching_name = || {
-            if low_energy_device.name.is_empty() {
+            if endpoint.name.is_empty() {
                 return None;
             }
-            let name = low_energy_device.name.to_lowercase();
+            let name = endpoint.name.to_lowercase();
             let mut matches = classic
                 .iter()
                 .filter(|(_, device)| device.name.to_lowercase() == name);
@@ -178,18 +219,19 @@ fn snapshot_with_devices(
         if let Some(key) = address.or_else(matching_name) {
             if let Some(saved_device) = classic.get_mut(&key) {
                 saved_device.paired = true;
-                saved_device.connected = saved_device.connected.max(low_energy_device.connected);
+                saved_device.connected = saved_device.connected.max(endpoint.connected);
+                saved_device.battery = saved_device.battery.or(endpoint.battery);
                 if saved_device.name.is_empty() {
-                    saved_device.name = low_energy_device.name;
+                    saved_device.name = endpoint.name;
                 }
             } else {
-                classic.insert(key, low_energy_device);
+                classic.insert(key, endpoint);
             }
         } else {
-            le_only.push(low_energy_device);
+            without_address.push(endpoint);
         }
     }
-    let mut devices: Vec<_> = classic.into_values().chain(le_only).collect();
+    let mut devices: Vec<_> = classic.into_values().chain(without_address).collect();
     for device in &mut devices {
         if device.name.is_empty() {
             device.name = "Unnamed device".to_owned();
@@ -208,19 +250,11 @@ fn snapshot_with_devices(
 }
 
 #[cfg(windows)]
-fn read_low_energy() -> windows::core::Result<Vec<(Option<u64>, BluetoothDevice)>> {
-    use std::time::{Duration, Instant};
+fn read_endpoints() -> windows::core::Result<Vec<(Option<u64>, BluetoothDevice)>> {
     use windows::{
-        core::{Interface, HSTRING},
-        Devices::{
-            Bluetooth::BluetoothLEDevice,
-            Enumeration::{DeviceInformation, DeviceInformationKind},
-        },
-        Foundation::IPropertyValue,
+        Devices::Bluetooth::{BluetoothDevice, BluetoothLEDevice},
         Win32::System::WinRT::{RoInitialize, RoUninitialize, RO_INIT_MULTITHREADED},
     };
-    use windows_collections::IIterable;
-    use windows_future::AsyncStatus;
 
     struct WinRtApartment;
     impl Drop for WinRtApartment {
@@ -231,12 +265,52 @@ fn read_low_energy() -> windows::core::Result<Vec<(Option<u64>, BluetoothDevice)
 
     unsafe { RoInitialize(RO_INIT_MULTITHREADED)? };
     let _apartment = WinRtApartment;
-    let filter = BluetoothLEDevice::GetDeviceSelectorFromPairingState(true)?;
+    let mut endpoints = Vec::new();
+    for (selector, kind) in [
+        (
+            BluetoothDevice::GetDeviceSelectorFromPairingState(true),
+            "Bluetooth device",
+        ),
+        (
+            BluetoothLEDevice::GetDeviceSelectorFromPairingState(true),
+            "Bluetooth LE device",
+        ),
+    ] {
+        if let Ok(found) = selector.and_then(|filter| read_endpoint_kind(&filter, kind)) {
+            endpoints.extend(found);
+        }
+    }
+    Ok(endpoints)
+}
+
+#[cfg(windows)]
+fn read_endpoint_kind(
+    filter: &windows::core::HSTRING,
+    kind: &'static str,
+) -> windows::core::Result<Vec<(Option<u64>, BluetoothDevice)>> {
+    use std::time::{Duration, Instant};
+    use windows::{
+        core::{Interface, HSTRING},
+        Devices::Enumeration::{DeviceInformation, DeviceInformationKind},
+        Foundation::IPropertyValue,
+    };
+    use windows_collections::IIterable;
+    use windows_future::AsyncStatus;
+
     let connected_key = HSTRING::from("System.Devices.Aep.IsConnected");
     let address_key = HSTRING::from("System.Devices.Aep.DeviceAddress");
-    let properties: IIterable<HSTRING> = vec![connected_key.clone(), address_key.clone()].into();
+    let battery_key = HSTRING::from("System.Devices.BatteryLife");
+    // Some Bluetooth drivers expose the percentage as an endpoint device property.
+    let battery_endpoint_key = HSTRING::from("{104EA319-6EE2-4701-BD47-8DDBF425BBE5} 2");
+    let properties: IIterable<HSTRING> = vec![
+        connected_key.clone(),
+        address_key.clone(),
+        battery_key.clone(),
+        battery_endpoint_key.clone(),
+    ]
+    .into();
     let query = DeviceInformation::FindAllAsyncWithKindAqsFilterAndAdditionalProperties(
-        &filter,
+        filter,
         &properties,
         DeviceInformationKind::AssociationEndpoint,
     )?;
@@ -263,6 +337,18 @@ fn read_low_energy() -> windows::core::Result<Vec<(Option<u64>, BluetoothDevice)
         let address = lookup(&address_key)
             .and_then(|value| value.GetString().ok())
             .and_then(|address| parse_device_address(&address.to_string_lossy()));
+        let Ok(endpoint_id) = item.Id() else { continue };
+        let battery = [&battery_key, &battery_endpoint_key]
+            .into_iter()
+            .find_map(|key| {
+                let value = lookup(key)?;
+                let level = value
+                    .GetUInt8()
+                    .map(u32::from)
+                    .or_else(|_| value.GetUInt32())
+                    .ok()?;
+                (level <= 100).then_some(level as u8)
+            });
         let name = item
             .Name()
             .map(|name| name.to_string_lossy())
@@ -270,10 +356,15 @@ fn read_low_energy() -> windows::core::Result<Vec<(Option<u64>, BluetoothDevice)
         devices.push((
             address,
             BluetoothDevice {
+                id: address.map_or_else(
+                    || endpoint_id.to_string_lossy(),
+                    |address| format!("bluetooth:{address:012x}"),
+                ),
                 name: name.trim().to_owned(),
                 connected,
                 paired: true,
-                kind: "Bluetooth LE device",
+                kind,
+                battery,
             },
         ));
     }

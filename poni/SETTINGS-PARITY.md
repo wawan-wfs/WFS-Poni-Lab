@@ -74,6 +74,8 @@ Tiga kontrol pintasan kini mengatur tombol buka/tutup, tombol snooze, dan durasi
 
 Sebelas padanan tambahan menambahkan lima efek (garis Timer, animasi masuk Shelf, animasi tab, bayangan notch terbuka, dan konfeti setelah tugas terakhir hari itu selesai), tiga kontrol Media (musik, progres, dan warna sampul dari sesi Windows), serta tiga kontrol General (bounce, hemat baterai, dan lonceng jam). Lonceng mengenal interval setengah jam dan jam tenang yang dapat melewati tengah malam. Hemat baterai mengurangi animasi dekoratif dan memperlambat pembaruan media serta ringkasan sistem. Total terbaru **101 dari 201 kontrol standar (50,2%)** memiliki padanan setidaknya sebagian.
 
+Empat kontrol standar tambahan mencakup **Step aside for the mouse**, sakelar dan ambang baterai Bluetooth, serta sumber Bluetooth di Live Activities. Total **105 dari 201 kontrol standar (52,2%)** memiliki padanan setidaknya sebagian. Kontrol kustom **Your name** menyimpan nama lokal dan menampilkan sapaan paling banyak sekali sehari. **What the closed Poni shows** mengatur mode jam, ukuran, ketebalan, dan kedua sisi dengan pilihan waktu, tanggal, cuaca, baterai, acara, tugas, CPU, RAM, dan jam dunia. Slot doa, sensor suhu, disk, Wi-Fi, dan jaringan belum tersedia. Perangkat Bluetooth hanya menampilkan persentase ketika Windows melaporkannya.
+
 | Jenis kontrol | Deklarasi | Masuk katalog build |
 | --- | ---: | ---: |
 | Sakelar | 115 | 115 |

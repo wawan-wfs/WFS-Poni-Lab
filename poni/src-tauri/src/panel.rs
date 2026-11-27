@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
-use std::time::{Duration, SystemTime};
-use tauri::{Monitor, PhysicalPosition, PhysicalSize, WebviewWindow};
+use std::time::{Duration, Instant, SystemTime};
+use tauri::{Emitter, Monitor, PhysicalPosition, PhysicalSize, WebviewWindow};
 
 #[derive(Clone, Copy, Default, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
@@ -34,6 +34,7 @@ pub(super) struct Preferences {
     standby_show: bool,
     standby_secs: u16,
     hide_button: bool,
+    step_aside: bool,
 }
 
 impl Default for Preferences {
@@ -59,6 +60,7 @@ impl Default for Preferences {
             standby_show: false,
             standby_secs: 12,
             hide_button: false,
+            step_aside: false,
         }
     }
 }
@@ -86,6 +88,7 @@ pub(super) struct Patch {
     standby_show: Option<bool>,
     standby_secs: Option<u16>,
     hide_button: Option<bool>,
+    step_aside: Option<bool>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -102,6 +105,36 @@ struct Geometry {
 }
 
 #[derive(Default)]
+struct StepAside {
+    edge_reached: bool,
+    in_way: bool,
+    return_at: Option<Instant>,
+}
+
+impl StepAside {
+    fn track(&mut self, near: bool, edge: bool, now: Instant) {
+        if edge {
+            self.edge_reached = true;
+            self.in_way = false;
+            self.return_at = None;
+        } else if near {
+            self.in_way = !self.edge_reached;
+            self.return_at = None;
+        } else {
+            if self.in_way {
+                self.return_at = Some(now + Duration::from_millis(600));
+            }
+            self.in_way = false;
+            self.edge_reached = false;
+        }
+    }
+
+    fn tucked(&self, now: Instant) -> bool {
+        self.in_way || self.return_at.is_some_and(|end| end > now)
+    }
+}
+
+#[derive(Default)]
 pub(super) struct Presentation {
     pub(super) open: bool,
     pub(super) tall: bool,
@@ -111,11 +144,19 @@ pub(super) struct Presentation {
     pub(super) visible: Option<bool>,
     pub(super) move_preview: Option<u16>,
     pub(super) snooze_until: Option<SystemTime>,
+    pub(super) content_width: u16,
     geometry: Option<Geometry>,
     edge_revealed: bool,
+    layer: Option<Layer>,
+    step_aside: StepAside,
+    pub(super) cursor_passthrough: bool,
 }
 
 impl Presentation {
+    pub(super) fn can_show_greeting(&self) -> bool {
+        !self.open && !self.alert && !self.tucked && self.layer == Some(Layer::Normal)
+    }
+
     pub(super) fn snoozed(&self) -> bool {
         self.snooze_until
             .is_some_and(|until| until > SystemTime::now())
@@ -212,6 +253,7 @@ impl Preferences {
         self.standby_show = patch.standby_show.unwrap_or(self.standby_show);
         self.standby_secs = patch.standby_secs.unwrap_or(self.standby_secs);
         self.hide_button = patch.hide_button.unwrap_or(self.hide_button);
+        self.step_aside = patch.step_aside.unwrap_or(self.step_aside);
         Ok(())
     }
 
@@ -308,7 +350,13 @@ impl Preferences {
             .is_some_and(foreground_fullscreen)
     }
 
-    fn layer(&self, state: &Presentation, fullscreen: bool, idle_ms: Option<u32>) -> Layer {
+    fn layer(
+        &self,
+        state: &Presentation,
+        fullscreen: bool,
+        idle_ms: Option<u32>,
+        now: Instant,
+    ) -> Layer {
         if !self.enabled
             || state.snoozed()
             || (self.hide_in_fullscreen && fullscreen && !state.forced)
@@ -326,7 +374,19 @@ impl Preferences {
         if self.auto_hide && !state.edge_revealed && !standby {
             return Layer::Handle(4);
         }
+        if self.step_aside_active(state) && state.step_aside.tucked(now) {
+            return Layer::Handle(4);
+        }
         Layer::Normal
+    }
+
+    fn step_aside_active(&self, state: &Presentation) -> bool {
+        self.step_aside
+            && !self.auto_hide
+            && !state.open
+            && !state.alert
+            && !state.tucked
+            && state.move_preview.is_none()
     }
 
     pub(super) fn apply_layout(
@@ -335,6 +395,9 @@ impl Preferences {
         state: &mut Presentation,
     ) -> Result<(), String> {
         let mut dimensions = self.dimensions(state.open, state.tall);
+        if !state.open {
+            dimensions.0 = dimensions.0.max(state.content_width.min(560));
+        }
         if !state.open && state.alert {
             dimensions.0 = dimensions.0.max(320);
             dimensions.1 += 44;
@@ -346,6 +409,12 @@ impl Preferences {
         let idle_ms = (self.auto_hide && self.standby_show)
             .then(crate::activity::idle_millis)
             .flatten();
+        let now = Instant::now();
+        let step_aside = self.step_aside_active(state);
+        let previously_at_edge = state.step_aside.edge_reached;
+        if !step_aside || monitor.is_none() || (self.hide_in_fullscreen && fullscreen) {
+            state.step_aside = StepAside::default();
+        }
         let mut geometry = if let Some(monitor) = monitor {
             let (size, gap) =
                 self.fit(dimensions, monitor.work_area().size, monitor.scale_factor());
@@ -369,11 +438,25 @@ impl Preferences {
                         && cursor.y >= f64::from(top)
                         && cursor.y <= f64::from(top) + f64::from(reach)
                 });
+            if step_aside && !fullscreen {
+                let scale = monitor.scale_factor();
+                let (near, edge) = cursor.map_or((false, false), |cursor| {
+                    let y = cursor.y - f64::from(top);
+                    let within_width =
+                        cursor.x >= f64::from(x) && cursor.x < f64::from(x) + f64::from(size.width);
+                    let near = cursor.x >= f64::from(x) - 6.0 * scale
+                        && cursor.x < f64::from(x) + f64::from(size.width) + 6.0 * scale
+                        && y >= 0.0
+                        && y <= f64::from(gap + size.height) + 12.0 * scale;
+                    (near, within_width && (0.0..=5.0 * scale).contains(&y))
+                });
+                state.step_aside.track(near, edge, now);
+            }
             let mut geometry = Geometry {
                 size,
                 position: PhysicalPosition::new(x, top.saturating_add(gap as i32)),
             };
-            if let Layer::Handle(height) = self.layer(state, fullscreen, idle_ms) {
+            if let Layer::Handle(height) = self.layer(state, fullscreen, idle_ms, now) {
                 geometry.size.height = (f64::from(height) * monitor.scale_factor())
                     .round()
                     .max(1.0) as u32;
@@ -383,7 +466,8 @@ impl Preferences {
         } else {
             None
         };
-        let visible = self.layer(state, fullscreen, idle_ms) != Layer::Hidden;
+        let layer = self.layer(state, fullscreen, idle_ms, now);
+        let visible = layer != Layer::Hidden;
         if !visible {
             geometry = None;
         }
@@ -394,6 +478,13 @@ impl Preferences {
             position_client(window, geometry.position).map_err(|error| error.to_string())?;
             state.geometry = Some(geometry);
         }
+        let cursor_passthrough = visible && step_aside && !state.step_aside.edge_reached;
+        if cursor_passthrough != state.cursor_passthrough {
+            window
+                .set_ignore_cursor_events(cursor_passthrough)
+                .map_err(|error| error.to_string())?;
+            state.cursor_passthrough = cursor_passthrough;
+        }
         if state.visible != Some(visible) {
             if visible {
                 window.show()
@@ -402,6 +493,14 @@ impl Preferences {
             }
             .map_err(|error| error.to_string())?;
             state.visible = Some(visible);
+        }
+        state.layer = Some(layer);
+        if visible
+            && step_aside
+            && previously_at_edge != state.step_aside.edge_reached
+            && self.top_gap > 0
+        {
+            let _ = window.emit("poni-step-aside-edge", state.step_aside.edge_reached);
         }
         Ok(())
     }
@@ -475,6 +574,23 @@ mod tests {
     use super::*;
 
     #[test]
+    fn step_aside_opens_at_the_edge_and_returns_after_the_pointer_leaves() {
+        let mut step = StepAside::default();
+        let now = Instant::now();
+        step.track(true, false, now);
+        assert!(step.tucked(now));
+        step.track(false, false, now);
+        assert!(step.tucked(now + Duration::from_millis(599)));
+        assert!(!step.tucked(now + Duration::from_millis(600)));
+        step.track(true, true, now);
+        step.track(true, false, now);
+        assert!(step.edge_reached);
+        assert!(!step.tucked(now));
+        step.track(false, false, now);
+        assert!(!step.edge_reached);
+    }
+
+    #[test]
     fn sizes_and_position_follow_scale_and_fit_the_display() {
         let mut preferences = Preferences::default();
         let patch = serde_json::from_str(
@@ -512,23 +628,38 @@ mod tests {
             .unwrap();
         let mut state = Presentation::default();
         assert_eq!(
-            preferences.layer(&state, false, Some(3_999)),
+            preferences.layer(&state, false, Some(3_999), Instant::now()),
             Layer::Handle(4)
         );
-        assert_eq!(preferences.layer(&state, false, Some(4_000)), Layer::Normal);
+        assert_eq!(
+            preferences.layer(&state, false, Some(4_000), Instant::now()),
+            Layer::Normal
+        );
         state.tucked = true;
         assert_eq!(
-            preferences.layer(&state, false, Some(8_000)),
+            preferences.layer(&state, false, Some(8_000), Instant::now()),
             Layer::Handle(10)
         );
         state.alert = true;
-        assert_eq!(preferences.layer(&state, false, Some(0)), Layer::Normal);
-        assert_eq!(preferences.layer(&state, true, Some(0)), Layer::Hidden);
+        assert_eq!(
+            preferences.layer(&state, false, Some(0), Instant::now()),
+            Layer::Normal
+        );
+        assert_eq!(
+            preferences.layer(&state, true, Some(0), Instant::now()),
+            Layer::Hidden
+        );
         state.open = true;
         state.forced = true;
-        assert_eq!(preferences.layer(&state, true, Some(0)), Layer::Normal);
+        assert_eq!(
+            preferences.layer(&state, true, Some(0), Instant::now()),
+            Layer::Normal
+        );
         preferences.enabled = false;
-        assert_eq!(preferences.layer(&state, true, Some(0)), Layer::Hidden);
+        assert_eq!(
+            preferences.layer(&state, true, Some(0), Instant::now()),
+            Layer::Hidden
+        );
     }
 
     #[test]
@@ -550,10 +681,19 @@ mod tests {
         };
         assert!(state.toggle_snooze(30));
         assert!(!state.open);
-        assert_eq!(preferences.layer(&state, false, Some(0)), Layer::Hidden);
+        assert_eq!(
+            preferences.layer(&state, false, Some(0), Instant::now()),
+            Layer::Hidden
+        );
         assert!(!state.toggle_snooze(30));
-        assert_eq!(preferences.layer(&state, false, Some(0)), Layer::Normal);
+        assert_eq!(
+            preferences.layer(&state, false, Some(0), Instant::now()),
+            Layer::Normal
+        );
         state.snooze_until = Some(SystemTime::UNIX_EPOCH);
-        assert_eq!(preferences.layer(&state, false, Some(0)), Layer::Normal);
+        assert_eq!(
+            preferences.layer(&state, false, Some(0), Instant::now()),
+            Layer::Normal
+        );
     }
 }

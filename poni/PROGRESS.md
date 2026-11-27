@@ -23,6 +23,8 @@ Pintasan buka/tutup dan snooze dapat disetel. Snooze membangunkan kembali notch 
 
 Settings kini mencakup **101/201 kontrol standar (50,2%)**. Animations mengendalikan garis Timer, masuknya file ke Shelf, perpindahan tab, bayangan, dan konfeti. Media menampilkan sampul dari sesi Windows, warna sampul, dan progres pemutaran. General mengatur bounce, hemat baterai, dan lonceng jam.
 
+**105/201 kontrol standar (52,2%)** kini punya padanan setidaknya sebagian. General menambahkan Step aside untuk penunjuk, kolom nama lokal, serta pratinjau untuk mengatur kiri, kanan, ukuran, dan mode jam notch tertutup. Bluetooth menambahkan sakelar perangkat, ambang baterai, daftar perangkat, serta sumber aktivitas notch.
+
 ## Modul yang sudah dimulai
 
 - **Todo:** tugas dapat memiliki daftar langkah, tenggat, jadwal berulang, dan aturan penyelesaian saat terlambat. Settings mengatur aturan bawaan, durasi snooze, dan retensi Trash. Tab Todo memisahkan Active, Done, dan Trash. Pengingat pada notch tertutup bisa diselesaikan atau ditunda tanpa membuka panel. Teks Indonesia dan Inggris dapat mengisi tenggat atau pengulangan secara lokal dan menawarkan pratinjau. Detail tugas bisa menautkan dan membuka catatan. Tindakan daya belum tersedia.
@@ -46,7 +48,7 @@ Settings kini mencakup **101/201 kontrol standar (50,2%)**. Animations mengendal
 - **Support** membuka tautan PayPal dan GitHub resmi untuk Poni asli. Panel publik belum menyertakan gambar QRIS.
 - **Translate** mengirim teks saat tombol Translate ditekan dan menggunakan MyMemory. Arah terjemahan dipilih manual, dengan batas 500 byte UTF-8 dari penyedia. Penyedia LLM milik aplikasi asli belum diintegrasikan.
 - **AI Usage** mengimpor snapshot penggunaan Codex atau Claude yang dipilih pengguna, lalu menampilkan persentase, waktu reset, dan laju penggunaan jika waktunya tersedia. Sinkronisasi langsung dengan akun dan pembaruan otomatis belum tersedia.
-- **Bluetooth** menampilkan perangkat klasik yang dipasangkan atau diingat Windows, serta perangkat Bluetooth LE yang sudah dipasangkan. Panel menampilkan status koneksi jika tersedia dan membuka Pengaturan Bluetooth Windows. Status baterai dan kontrol koneksi langsung belum tersedia. Pengujian perangkat fisik masih diperlukan.
+- **Bluetooth** menampilkan perangkat klasik yang dipasangkan atau diingat Windows, serta perangkat Bluetooth LE yang sudah dipasangkan. Panel menampilkan koneksi dan tingkat baterai yang dilaporkan Windows. Perubahan koneksi dan ambang baterai dapat memicu aktivitas notch. Pengaturan Windows dapat dibuka dari panel. Kontrol koneksi langsung, Wi-Fi, dan verifikasi pada perangkat fisik masih diperlukan.
 - **Chat** mengirim percakapan teks ke Ollama lokal dan menyimpan riwayat per percakapan. Pemakaian memerlukan model Ollama yang terpasang. Penyedia cloud, lampiran, dan tindakan aplikasi dari Chat belum tersedia.
 
 Di luar inventaris modul, Rust menyediakan sebagian perilaku Home/notch, Mirror di Home, jendela Settings terpisah dengan pengaturan dasar yang tersimpan, pemutaran media Windows, stopwatch, timer, statistik CPU/memori dan installer. Poni asli masih memiliki lebih banyak pengaturan, termasuk wizard Setup. Mirror perlu diuji dengan kamera fisik Windows. Tampilan pengingat OS pada instalasi Windows juga perlu diuji. Audit keamanan menyeluruh masih menunggu kesetaraan fitur.

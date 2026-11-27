@@ -123,6 +123,20 @@
 .settings-controls { border: 0; margin: 0; padding: 0; min-inline-size: 0; }
 .settings-controls h3 { margin: 13px 0 6px; color: var(--settings-dim); font-size: 10px; text-transform: uppercase; letter-spacing: .07em; }
 .settings-controls h3:first-child { margin-top: 0; }
+.settings-closed-label { padding: 12px 13px 3px; font-size: 13px; }
+.settings-closed-preview { width: min(100% - 24px, 320px); height: var(--preview-height); margin: 9px auto; display: grid; grid-template-columns: 1fr 1.5fr 1fr; background: #000; border-radius: 0 0 15px 15px; overflow: hidden; }
+.settings-closed-part { min-width: 0; padding: 2px 4px; border: 0; border-inline-end: 1px solid #37373e; background: transparent; color: #f5f5f7; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.settings-closed-part:last-child { border-inline-end: 0; }
+.settings-closed-part:nth-child(2) { font-size: var(--preview-font); font-weight: 600; }
+.settings-closed-preview.clock-bold .settings-closed-part:nth-child(2) { font-weight: 750; }
+.settings-closed-part:hover, .settings-closed-part[aria-expanded="true"] { background: #172b45; }
+.settings-closed-part:focus-visible { outline: 2px solid #8ec5ff; outline-offset: -2px; }
+.settings-closed-hint { display: block; padding: 0 12px 11px; color: var(--settings-dim); text-align: center; }
+.settings-closed-choices { display: grid; grid-template-columns: repeat(auto-fit, minmax(105px, 1fr)); gap: 6px; padding: 5px 12px 12px; }
+.settings-device-list { list-style: none; margin: 0; padding: 4px 13px; font-size: 13px; }
+.settings-device-list li { padding: 6px 0; }
+.settings-device-list li + li { border-top: 1px solid var(--settings-line); }
+.settings-device-list li small { display: block; padding-top: 2px; color: var(--settings-dim); }
 
 .settings-group {
   background: var(--settings-panel);

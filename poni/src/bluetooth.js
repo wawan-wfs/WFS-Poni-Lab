@@ -6,6 +6,9 @@
   let visible = false;
   let pending = false;
   let interval;
+  let previous = null;
+  let alerts = {enabled: false, threshold: 20};
+  let report = () => {};
 
   function render(snapshot) {
     list.replaceChildren();
@@ -34,20 +37,48 @@
       details.textContent = device.kind + (device.paired ? ' · Paired' : ' · Remembered');
       const state = document.createElement('div');
       state.className = device.connected ? 'bluetooth-state connected' : 'bluetooth-state';
-      state.textContent = device.connected == null ? 'Connection unknown' :
+      const connection = device.connected == null ? 'Connection unknown' :
         device.connected ? 'Connected' : 'Not connected';
+      state.textContent = `${connection}${Number.isInteger(device.battery) ? ` · ${device.battery}%` : ''}`;
       item.append(title, details, state);
       list.append(item);
     }
   }
 
+  function detectChange(snapshot) {
+    if (!alerts.enabled || !snapshot.supported || !snapshot.adapter_present) {
+      previous = null;
+      return;
+    }
+    const devices = snapshot.devices.filter(device => device.id);
+    const before = previous;
+    previous = new Map(devices.map(device => [device.id, device]));
+    if (!before) return;
+    let notice = null;
+    for (const device of devices) {
+      const old = before.get(device.id);
+      if (device.connected === true && (!old || old.connected === false)) {
+        notice = {kind: 'connected', title: device.name, text: Number.isInteger(device.battery) ? `${device.battery}%` : 'Connected'};
+      } else if (device.connected === false && old?.connected === true) {
+        notice = {kind: 'disconnected', title: device.name, text: 'Disconnected'};
+      } else if (device.connected === true && Number.isInteger(device.battery) &&
+          old?.battery > alerts.threshold && device.battery <= alerts.threshold) {
+        notice = {kind: 'low', title: device.name, text: `${device.battery}% low`};
+      }
+    }
+    if (notice) report(notice);
+  }
+
   async function refresh() {
-    if (pending || !visible) return;
+    if (pending || (!visible && !alerts.enabled)) return;
     pending = true;
-    refreshButton.disabled = true;
-    status.textContent = '';
+    if (visible) {
+      refreshButton.disabled = true;
+      status.textContent = '';
+    }
     try {
       const snapshot = await invoke('bluetooth_devices');
+      detectChange(snapshot);
       if (visible) render(snapshot);
     } catch (error) {
       if (visible) {
@@ -57,8 +88,16 @@
       }
     } finally {
       pending = false;
-      refreshButton.disabled = false;
+      if (refreshButton) refreshButton.disabled = false;
     }
+  }
+
+  function schedule() {
+    clearInterval(interval);
+    if (!visible && !alerts.enabled) return;
+    void refresh();
+    // The paired-device lookup does not start radio discovery or a connection.
+    interval = setInterval(refresh, alerts.enabled ? 5000 : 10000);
   }
 
   function mount(page) {
@@ -84,20 +123,29 @@
         status.textContent = String(error);
       }
     });
-    window.addEventListener('focus', () => void refresh());
   }
 
   function show() {
     visible = true;
-    clearInterval(interval);
-    void refresh();
-    interval = setInterval(() => void refresh(), 10000);
+    schedule();
   }
 
   function hide() {
     visible = false;
-    clearInterval(interval);
+    schedule();
   }
+
+  window.poniBluetoothAlerts = {
+    configure(options, callback) {
+      const changed = alerts.enabled !== options.enabled;
+      alerts = options;
+      report = callback;
+      if (!alerts.enabled) previous = null;
+      if (changed) schedule();
+    },
+  };
+
+  window.addEventListener('focus', () => void refresh());
 
   (window.poniModules ||= {}).bluetooth = {mount, show, hide};
 })();
