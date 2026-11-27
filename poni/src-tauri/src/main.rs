@@ -31,6 +31,7 @@ mod eye_break;
 mod github;
 mod health;
 mod ics_import;
+mod media_artwork;
 mod notes;
 mod notifs;
 mod panel;
@@ -234,6 +235,8 @@ struct MediaSnapshot {
     playing: bool,
     position_ms: Option<u64>,
     duration_ms: Option<u64>,
+    track_id: String,
+    artwork: Option<media_artwork::Cover>,
 }
 
 #[derive(Serialize)]
@@ -1056,7 +1059,10 @@ fn media_control(action: &str) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn current_media() -> Result<Option<MediaSnapshot>, String> {
+async fn current_media(
+    want_artwork: Option<bool>,
+    previous_track: Option<String>,
+) -> Result<Option<MediaSnapshot>, String> {
     #[cfg(windows)]
     {
         use windows::Media::Control::{
@@ -1100,16 +1106,34 @@ async fn current_media() -> Result<Option<MediaSnapshot>, String> {
             let elapsed = position.saturating_sub(start).max(0) as u64 / 10_000;
             Some((elapsed.min(total), total))
         });
+        let title = props.Title().map_err(|e| e.to_string())?.to_string();
+        let artist = props.Artist().map_err(|e| e.to_string())?.to_string();
+        let album = props.AlbumTitle().ok().map(|value| value.to_string());
+        let source = session
+            .SourceAppUserModelId()
+            .ok()
+            .map(|value| value.to_string());
+        let track_id = serde_json::to_string(&(&source, &title, &artist, &album))
+            .map_err(|error| error.to_string())?;
+        let artwork =
+            if want_artwork == Some(true) && previous_track.as_deref() != Some(track_id.as_str()) {
+                media_artwork::read(&props)
+            } else {
+                None
+            };
         Ok(Some(MediaSnapshot {
-            title: props.Title().map_err(|e| e.to_string())?.to_string(),
-            artist: props.Artist().map_err(|e| e.to_string())?.to_string(),
+            title,
+            artist,
             playing,
             position_ms: times.map(|item| item.0),
             duration_ms: times.map(|item| item.1),
+            track_id,
+            artwork,
         }))
     }
     #[cfg(not(windows))]
     {
+        let _ = (want_artwork, previous_track);
         Err("Media information requires Windows".into())
     }
 }
@@ -1530,19 +1554,24 @@ fn main() {
                 let clipboard_handle = handle.clone();
                 std::thread::spawn(move || clipboard::monitor(clipboard_handle));
             }
-            std::thread::spawn(move || loop {
-                if let Ok(now) = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
-                {
-                    let now_ms = now.as_millis() as u64;
-                    notify_due(&handle, now_ms);
-                    todo::tick(&handle, now_ms);
-                    bedtime::tick(&handle, now_ms);
-                    health::tick(&handle, now_ms);
-                    pomodoro::tick(&handle, now_ms);
-                    calendar_reminders::tick(&handle, now_ms);
-                    screentime::sample(&handle);
+            std::thread::spawn(move || {
+                let mut last_chime = None;
+                loop {
+                    if let Ok(now) =
+                        std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)
+                    {
+                        let now_ms = now.as_millis() as u64;
+                        notify_due(&handle, now_ms);
+                        todo::tick(&handle, now_ms);
+                        bedtime::tick(&handle, now_ms);
+                        health::tick(&handle, now_ms);
+                        pomodoro::tick(&handle, now_ms);
+                        calendar_reminders::tick(&handle, now_ms);
+                        sound::hourly_tick(&handle, now_ms, &mut last_chime);
+                        screentime::sample(&handle);
+                    }
+                    std::thread::sleep(std::time::Duration::from_secs(15));
                 }
-                std::thread::sleep(std::time::Duration::from_secs(15));
             });
             Ok(())
         })
@@ -1640,6 +1669,7 @@ fn main() {
             set_world_clocks,
             shortcuts::shortcut_status,
             shortcuts::set_poni_shortcuts,
+            sound::preview_hourly_chime,
             add_task,
             update_task,
             toggle_task,

@@ -302,6 +302,12 @@ impl Preferences {
             .or_else(|| window.current_monitor().ok().flatten())
     }
 
+    pub(super) fn fullscreen_now(&self, window: &WebviewWindow) -> bool {
+        self.monitor(window, true, None)
+            .as_ref()
+            .is_some_and(foreground_fullscreen)
+    }
+
     fn layer(&self, state: &Presentation, fullscreen: bool, idle_ms: Option<u32>) -> Layer {
         if !self.enabled
             || state.snoozed()

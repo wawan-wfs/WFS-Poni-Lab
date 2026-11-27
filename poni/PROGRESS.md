@@ -21,6 +21,8 @@ Live Activities menampilkan lagu, posisi pemutaran, pratinjau pergantian lagu, k
 
 Pintasan buka/tutup dan snooze dapat disetel. Snooze membangunkan kembali notch saat waktunya berakhir atau saat pengguna memilih bangunkan. Settings kini mencakup **90/201 kontrol standar (44,8%)**.
 
+Settings kini mencakup **101/201 kontrol standar (50,2%)**. Animations mengendalikan garis Timer, masuknya file ke Shelf, perpindahan tab, bayangan, dan konfeti. Media menampilkan sampul dari sesi Windows, warna sampul, dan progres pemutaran. General mengatur bounce, hemat baterai, dan lonceng jam.
+
 ## Modul yang sudah dimulai
 
 - **Todo:** tugas dapat memiliki daftar langkah, tenggat, jadwal berulang, dan aturan penyelesaian saat terlambat. Settings mengatur aturan bawaan, durasi snooze, dan retensi Trash. Tab Todo memisahkan Active, Done, dan Trash. Pengingat pada notch tertutup bisa diselesaikan atau ditunda tanpa membuka panel. Teks Indonesia dan Inggris dapat mengisi tenggat atau pengulangan secara lokal dan menawarkan pratinjau. Detail tugas bisa menautkan dan membuka catatan. Tindakan daya belum tersedia.

@@ -76,6 +76,7 @@
   }
 
   window.poniBattery = {
+    get saving() { return power?.plugged_in === false || power?.saver === true; },
     configure(preferences) {
       settings = { ...defaults, ...preferences };
       if (!settings.enabled) endActivity();

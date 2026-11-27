@@ -55,13 +55,15 @@
   <script src="clipboard-history.js" defer></script>
   <script src="drop-catalog.js" defer></script>
   <script src="shelf.js" defer></script>
+  <script src="animations.js" defer></script>
   <script src="app.js" defer></script>
 </head>
 <body>
   <div class="surface" id="surface">
     <button class="closed" id="closed" aria-expanded="false" aria-controls="open">
       <time class="clock">--:--</time><span id="battery-activity" role="status" hidden></span>
-      <span id="notch-live" class="notch-live" hidden><span id="notch-live-title"></span><b id="notch-live-time"></b></span>
+      <span id="notch-live" class="notch-live" hidden><img id="closed-media-artwork" alt="" hidden><span id="notch-live-title"></span><b id="notch-live-time"></b></span>
+      <span id="closed-music-progress" aria-hidden="true" hidden></span>
       <span class="battery-indicator" role="img" hidden><span class="battery-percent"></span><i class="battery-icon"></i></span>
     </button>
     <div id="closed-media-controls" class="closed-media-controls" role="group" aria-label="Media controls" hidden>
@@ -135,7 +137,7 @@
       <main>
         <div id="file-drop-actions" hidden></div>
         <section id="page-home" class="page home">
-          <div class="media"><div class="album" aria-hidden="true">♫</div><div class="media-info"><strong id="media-title">Nothing playing</strong><p id="media-artist">Play something in a media player</p><div class="media-progress" aria-hidden="true"><div id="media-progress-fill"></div></div><div class="media-controls"><button type="button" data-media="previous" aria-label="Previous track">◀◀</button><button type="button" data-media="toggle" aria-label="Play or pause">▶</button><button type="button" data-media="next" aria-label="Next track">▶▶</button></div></div></div>
+          <div class="media"><div class="album" aria-hidden="true"><span id="media-artwork-fallback">♫</span><img id="media-artwork" alt="" hidden></div><div class="media-info"><strong id="media-title">Nothing playing</strong><p id="media-artist">Play something in a media player</p><div class="media-progress" aria-hidden="true"><div id="media-progress-fill"></div></div><div class="media-controls"><button type="button" data-media="previous" aria-label="Previous track">◀◀</button><button type="button" data-media="toggle" aria-label="Play or pause">▶</button><button type="button" data-media="next" aria-label="Next track">▶▶</button></div></div></div>
           <div class="calendar" id="home-calendar"><strong id="month"></strong><div id="week" class="week" aria-label="Next seven days"></div><div id="home-events" class="calendar-empty"></div></div>
           <div id="mirror"></div>
         </section>

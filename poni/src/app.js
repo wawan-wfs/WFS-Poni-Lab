@@ -14,11 +14,18 @@ const liveActivity = document.querySelector('#notch-live');
 const liveTitle = document.querySelector('#notch-live-title');
 const liveTime = document.querySelector('#notch-live-time');
 const closedMediaControls = document.querySelector('#closed-media-controls');
+const closedMusicProgress = document.querySelector('#closed-music-progress');
+const closedArtwork = document.querySelector('#closed-media-artwork');
+const homeArtwork = document.querySelector('#media-artwork');
+const artworkFallback = document.querySelector('#media-artwork-fallback');
 const musicPeek = document.querySelector('#music-peek');
 let liveIndex = 0;
 let currentLive = null;
 let mediaSnapshot;
 let mediaSampleAt = 0;
+let artworkUrl = '';
+let lastMediaCheck = 0;
+let hourGlowTimer;
 let musicPeekTimer;
 let lastSystemPeek = Date.now();
 let systemPeek = null;
@@ -66,6 +73,9 @@ const navigation = open.querySelector('header nav');
 const moduleTabs = new Map([...navigation.querySelectorAll('.tab')].map(tab => [tab.dataset.page, tab]));
 let preferences = {
   clock_format: 'region', clock_with_activities: true, header_clock: true, open_on_hover: true,
+  media_enabled: true, music_progress: true, color_glow: true,
+  haptics: true, battery_saving: 'off',
+  animations: { timer_outline:true, shelf_fly:true, tab_slide:true, shadow:'off', celebrate:true },
   hover_delay: 0, close_delay: 450, module_shortcuts: true,
   module_order: [], hidden_modules: [], default_module: 'home',
   remember_module: false, last_module: null,
@@ -140,7 +150,7 @@ function applyPreferences(value) {
   if (!value || !Array.isArray(value.module_order) || !Array.isArray(value.hidden_modules)) return;
   const previous = preferences;
   preferences = { ...preferences, ...value, panel: { ...previous.panel, ...value.panel },
-    live: { ...previous.live, ...value.live } };
+    live: { ...previous.live, ...value.live }, animations: {...previous.animations, ...value.animations} };
   const panel = preferences.panel;
   document.documentElement.dir = panel.direction === 'rtl' ? 'rtl' : 'ltr';
   surface.classList.toggle('floating', panel.top_gap > 0);
@@ -148,6 +158,10 @@ function applyPreferences(value) {
   surface.style.setProperty('--notch-height', panel.height + 'px');
   surface.style.setProperty('--notch-opacity', String(panel.opacity / 100));
   hideNotch.hidden = !panel.hide_button;
+  document.querySelector('#page-home .media').hidden = !preferences.media_enabled;
+  surface.classList.toggle('album-glow', preferences.color_glow);
+  window.poniAnimations.configure({...preferences.animations, haptics: preferences.haptics});
+  updatePowerSaving();
   if (!panel.enabled && !open.hidden) setOpen(false);
   window.poniNightWarmth.configure(panel);
   if (['top_gap', 'position', 'width', 'height', 'expanded_width', 'expanded_height', 'tall_height',
@@ -185,7 +199,7 @@ function applyPreferences(value) {
     lastSystemPeek = Date.now();
     systemPeek = null;
   }
-  if (!preferences.live.enabled || !preferences.live.sneak_peek) dismissMusicPeek();
+  if (!preferences.media_enabled || !preferences.live.enabled || !preferences.live.sneak_peek) dismissMusicPeek();
   if (preferences.live.music || preferences.live.hover_media_controls) void refreshMedia();
   if (activePage === 'tasks') renderTasks();
   updateClock();
@@ -395,6 +409,12 @@ window.__TAURI__.event.listen('poni-snoozed', () => {
   clearTimeout(hoverTimer);
   setOpen(false);
 }).catch(error => { status.textContent = String(error); });
+window.__TAURI__.event.listen('poni-hour-chime', () => {
+  if (!open.hidden) return;
+  clearTimeout(hourGlowTimer);
+  surface.classList.add('hour-glow');
+  hourGlowTimer = setTimeout(() => surface.classList.remove('hour-glow'), 1800);
+}).catch(error => { status.textContent = String(error); });
 invoke('shortcut_status').then(available => {
   if (!available) status.textContent = 'Poni’s open shortcut is already in use.';
 }).catch(error => { status.textContent = String(error); });
@@ -416,6 +436,8 @@ document.addEventListener('keydown', event => {
 document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => {
   if (tab.hidden) return;
   const previousPage = activePage;
+  const tabs = [...navigation.querySelectorAll('.tab:not([hidden])')];
+  const delta = tabs.indexOf(tab) - tabs.indexOf(moduleTabs.get(previousPage));
   if (tab.dataset.page !== activePage) {
     if (!open.hidden) callModule('hide');
     if (activePage === 'home') window.poniMirror?.hide();
@@ -426,6 +448,8 @@ document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', (
   tab.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   open.querySelector('main').scrollTop = 0;
   if (!open.hidden && previousPage !== activePage) {
+    const nextPage = document.getElementById('page-' + activePage);
+    window.poniAnimations.tab(nextPage, delta);
     if (isTallPage(previousPage) !== isTallPage(activePage)) {
       updatePanelSize(true);
     }
@@ -456,16 +480,20 @@ document.querySelectorAll('[data-media]').forEach(button => button.addEventListe
   invoke('media_control', { action: button.dataset.media }).then(() => setTimeout(refreshMedia, 500)).catch(error => { status.textContent = String(error); });
 }));
 
-async function refreshMedia() {
+async function refreshMedia(periodic = false) {
   const live = preferences.live;
-  if (mediaPending || !preferences.panel.enabled ||
+  const now = Date.now();
+  if (periodic && surface.classList.contains('power-saving') && now - lastMediaCheck < 15000) return;
+  if (mediaPending || !preferences.panel.enabled || !preferences.media_enabled ||
       (open.hidden && (!live.enabled || !(live.music || live.sneak_peek || live.hover_media_controls)))) return;
   mediaPending = true;
+  lastMediaCheck = now;
   try {
-    const media = await invoke('current_media');
+    const media = await invoke('current_media', {wantArtwork:true, previousTrack:mediaSnapshot?.track_id ?? null});
     const previous = mediaSnapshot;
     mediaSnapshot = media;
     mediaSampleAt = Date.now();
+    if (!media || media.artwork || previous?.track_id !== media.track_id) paintArtwork(media?.artwork);
     if (previous && media?.title && media.playing &&
         (previous.title !== media.title || previous.artist !== media.artist)) showMusicPeek(media);
     document.querySelector('#media-title').textContent = media?.title || (media ? 'Unknown track' : 'Nothing playing');
@@ -478,16 +506,39 @@ async function refreshMedia() {
     renderLiveActivities();
   } catch (error) {
     mediaSnapshot = null;
+    paintArtwork();
     renderLiveActivities();
     document.querySelector('#media-title').textContent = 'Media unavailable';
     document.querySelector('#media-artist').textContent = String(error);
   } finally { mediaPending = false; }
 }
-setInterval(refreshMedia, 5000);
+setInterval(() => void refreshMedia(true), 5000);
 
+function paintArtwork(artwork) {
+  if (artworkUrl) URL.revokeObjectURL(artworkUrl);
+  artworkUrl = '';
+  if (artwork?.jpeg) {
+    try {
+      const bytes = Uint8Array.from(atob(artwork.jpeg), char => char.charCodeAt(0));
+      artworkUrl = URL.createObjectURL(new Blob([bytes], {type:'image/jpeg'}));
+    } catch (_) {
+      // The playback controls can still use the song metadata.
+    }
+  }
+  for (const image of [homeArtwork, closedArtwork]) {
+    if (artworkUrl) image.src = artworkUrl;
+    else image.removeAttribute('src');
+  }
+  homeArtwork.hidden = !artworkUrl;
+  artworkFallback.hidden = !!artworkUrl;
+  const accent = artwork?.accent;
+  if (artworkUrl && /^#[0-9a-f]{6}$/i.test(accent)) surface.style.setProperty('--album-accent', accent);
+  else surface.style.removeProperty('--album-accent');
+}
 function updateClosedMediaControls() {
   closedMediaControls.hidden = !open.hidden || notchTucked || !surface.matches(':hover') ||
-    preferences.open_on_hover || !preferences.live.enabled || !preferences.live.hover_media_controls || !mediaSnapshot;
+    preferences.open_on_hover || !preferences.media_enabled || !preferences.live.enabled ||
+    !preferences.live.hover_media_controls || !mediaSnapshot;
 }
 
 function otherClosedAlerts() {
@@ -507,6 +558,7 @@ function showMusicPeek(media) {
   if (!open.hidden || !preferences.live.enabled || !preferences.live.sneak_peek || otherClosedAlerts()) return;
   musicPeek.firstElementChild.textContent = [media.title, media.artist].filter(Boolean).join(' — ');
   musicPeek.hidden = false;
+  window.poniAnimations.bounce();
   updatePanelSize(false);
   clearTimeout(musicPeekTimer);
   musicPeekTimer = setTimeout(dismissMusicPeek, 3200);
@@ -518,7 +570,8 @@ async function sampleSystemPeek(now) {
     lastSystemPeek = now;
     return;
   }
-  if (systemPeekPending || now - lastSystemPeek < settings.system_interval * 1000 || otherClosedAlerts() || !musicPeek.hidden) return;
+  const interval = settings.system_interval * (surface.classList.contains('power-saving') ? 2000 : 1000);
+  if (systemPeekPending || now - lastSystemPeek < interval || otherClosedAlerts() || !musicPeek.hidden) return;
   lastSystemPeek = now;
   systemPeekPending = true;
   try {
@@ -640,6 +693,7 @@ document.querySelector('#day-schedule').addEventListener('submit', async event =
 
 function updateClock() {
   const now = new Date();
+  updatePowerSaving();
   const options = { hour: 'numeric', minute: '2-digit' };
   if (preferences.clock_format !== 'region') options.hourCycle = preferences.clock_format === 'h24' ? 'h23' : 'h12';
   const time = new Intl.DateTimeFormat(undefined, options).format(now);
@@ -651,6 +705,10 @@ function updateClock() {
   if (today !== calendarToday) { calendarToday = today; if (calendarDay == null || calendarDay < today) calendarDay = today; renderCalendar(); }
 }
 
+function updatePowerSaving() {
+  surface.classList.toggle('power-saving', preferences.battery_saving === 'auto' && !!window.poniBattery?.saving);
+}
+
 function liveCountdown(ms) {
   const seconds = Math.max(0, Math.ceil(ms / 1000));
   const hours = Math.floor(seconds / 3600);
@@ -659,20 +717,27 @@ function liveCountdown(ms) {
     ':' + String(seconds % 60).padStart(2, '0');
 }
 
+function playbackFraction(current, total) {
+  return total > 0 ? Math.min(1, Math.max(0, current / total)) : 0;
+}
+
 function renderLiveActivities(now = Date.now(), advance = false) {
   const settings = preferences.live;
   const candidates = [];
   if (settings.enabled && open.hidden) {
-    if (settings.music && mediaSnapshot?.playing) {
+    if (preferences.media_enabled && settings.music && mediaSnapshot?.playing) {
       const total = mediaSnapshot.duration_ms;
       const elapsed = Math.max(0, (mediaSnapshot.position_ms || 0) + now - mediaSampleAt);
-      candidates.push({tab:'home', title:mediaSnapshot.title || 'Music', time:total > 0 ? liveCountdown(Math.min(elapsed, total)) : '♫'});
+      candidates.push({tab:'home', title:mediaSnapshot.title || 'Music',
+        time:total > 0 ? liveCountdown(Math.min(elapsed, total)) : '♫',
+        played: total > 0 ? playbackFraction(elapsed, total) : null});
     }
     const pomodoro = window.poniFocusPlayback.session;
     if (settings.timers) {
       if (pomodoro?.ends_at_ms > now) candidates.push({
         tab: 'pomodoro', title: pomodoro.phase === 'focus' ? 'Focus' : 'Break',
         time: liveCountdown(pomodoro.ends_at_ms - now),
+        outline: playbackFraction(pomodoro.ends_at_ms - now, pomodoro.total_ms),
       });
       const stopwatch = data.stopwatch;
       if (stopwatch.started_at_ms != null) candidates.push({
@@ -681,6 +746,7 @@ function renderLiveActivities(now = Date.now(), advance = false) {
       });
       if (data.timer.ends_at_ms > now) candidates.push({
         tab: 'timer', title: 'Timer', time: liveCountdown(data.timer.ends_at_ms - now),
+        outline: playbackFraction(data.timer.ends_at_ms - now, data.timer.total_ms),
       });
     }
     if (settings.calendar && preferences.calendar_enabled && data.calendar_events?.length) {
@@ -713,8 +779,14 @@ function renderLiveActivities(now = Date.now(), advance = false) {
     : null);
   liveActivity.hidden = !currentLive;
   closed.classList.toggle('has-live', !!currentLive);
+  closed.classList.toggle('music-playing', currentLive?.tab === 'home');
+  closedArtwork.hidden = !artworkUrl || currentLive?.tab !== 'home';
   closed.classList.toggle('keep-live-clock', preferences.clock_with_activities &&
     ['home', 'pomodoro', 'timer'].includes(currentLive?.tab));
+  closed.classList.toggle('timer-outline', preferences.animations.timer_outline && currentLive?.outline > 0);
+  closed.style.setProperty('--timer-outline', `${(currentLive?.outline || 0) * 100}%`);
+  closedMusicProgress.hidden = !preferences.music_progress || currentLive?.played == null;
+  closedMusicProgress.style.width = `calc((100% - 16px) * ${currentLive?.played || 0})`;
   updateClosedMediaControls();
   if (currentLive) {
     if (liveTitle.textContent !== currentLive.title) liveTitle.textContent = currentLive.title;
@@ -763,9 +835,14 @@ setInterval(() => {
 
 function mutate(command, args) {
   const operation = queue.then(async () => {
-    data = await invoke(command, typeof args === 'function' ? args(data) : args);
+    const payload = typeof args === 'function' ? args(data) : args;
+    const today = new Date().toDateString();
+    const pendingToday = task => !task.done && task.due_at_ms != null && new Date(task.due_at_ms).toDateString() === today;
+    const completedToday = command === 'toggle_task' && data.tasks.some(task => task.id === payload.id && pendingToday(task));
+    data = await invoke(command, payload);
     status.textContent = '';
     render();
+    if (completedToday && !data.tasks.some(pendingToday)) window.poniAnimations.celebrate();
     return true;
   });
   queue = operation.catch(error => { status.textContent = String(error); return false; });
@@ -804,6 +881,7 @@ function renderTodoReminder(resize = true) {
   const hidden = !reminderTask;
   const changed = todoReminder.hidden !== hidden;
   todoReminder.hidden = hidden;
+  if (changed && !hidden) window.poniAnimations.bounce();
   if (reminderTask) {
     const text = document.querySelector('#todo-reminder-text');
     const label = 'Due: ' + reminderTask.text;
@@ -820,6 +898,7 @@ function showBedtime(notice) {
   bedtimeNotice = notice?.expires_at_ms > Date.now() ? notice : null;
   bedtimeReminder.hidden = !bedtimeNotice;
   if (bedtimeNotice) {
+    window.poniAnimations.bounce();
     const scheduled = new Date(bedtimeNotice.scheduled_for_ms);
     const time = new Intl.DateTimeFormat(undefined, {hour:'numeric', minute:'2-digit'}).format(scheduled);
     document.querySelector('#bedtime-reminder-text').textContent = `It’s bedtime · ${time}`;
@@ -836,6 +915,7 @@ function renderTimerNotice(resize = false) {
   const hidden = !timerNotice || !!bedtimeNotice;
   const changed = timerReminder.hidden !== hidden;
   timerReminder.hidden = hidden;
+  if (changed && !hidden) window.poniAnimations.bounce();
   renderHealthNotice();
   if (resize) {
     renderTodoReminder(false);
@@ -851,6 +931,7 @@ function showHealthNotice(notice) {
   clearTimeout(healthNoticeTimeout);
   healthNotice = notice?.expires_at_ms > Date.now() && preferences.health?.enabled !== false ? notice : null;
   if (healthNotice) {
+    window.poniAnimations.bounce();
     const water = notice.kind === 'water';
     healthReminder.dataset.kind = notice.kind;
     document.querySelector('#health-reminder-text').textContent = water

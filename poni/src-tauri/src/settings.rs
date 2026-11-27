@@ -1,4 +1,4 @@
-use crate::{battery, health, panel, shelf, shortcuts, todo, Store};
+use crate::{battery, health, panel, shelf, shortcuts, sound, todo, Store};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, sync::Mutex};
 use tauri::{AppHandle, Emitter, State};
@@ -127,11 +127,77 @@ impl LiveActivities {
     }
 }
 
+#[derive(Clone, Copy, Default, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+enum NotchShadow {
+    Always,
+    Opening,
+    #[default]
+    Off,
+}
+
+#[derive(Clone, Copy, Default, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
+enum PowerSaving {
+    #[default]
+    Off,
+    Auto,
+}
+
+#[derive(Clone, Deserialize, Serialize)]
+#[serde(default)]
+struct Animations {
+    timer_outline: bool,
+    shelf_fly: bool,
+    tab_slide: bool,
+    shadow: NotchShadow,
+    celebrate: bool,
+}
+
+impl Default for Animations {
+    fn default() -> Self {
+        Self {
+            timer_outline: true,
+            shelf_fly: true,
+            tab_slide: true,
+            shadow: NotchShadow::Off,
+            celebrate: true,
+        }
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct AnimationsPatch {
+    timer_outline: Option<bool>,
+    shelf_fly: Option<bool>,
+    tab_slide: Option<bool>,
+    shadow: Option<NotchShadow>,
+    celebrate: Option<bool>,
+}
+
+impl Animations {
+    fn apply(&mut self, patch: AnimationsPatch) {
+        self.timer_outline = patch.timer_outline.unwrap_or(self.timer_outline);
+        self.shelf_fly = patch.shelf_fly.unwrap_or(self.shelf_fly);
+        self.tab_slide = patch.tab_slide.unwrap_or(self.tab_slide);
+        self.shadow = patch.shadow.unwrap_or(self.shadow);
+        self.celebrate = patch.celebrate.unwrap_or(self.celebrate);
+    }
+}
+
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(default)]
 pub(super) struct PoniSettings {
     clock_format: ClockFormat,
     clock_with_activities: bool,
+    media_enabled: bool,
+    music_progress: bool,
+    color_glow: bool,
+    haptics: bool,
+    battery_saving: PowerSaving,
+    pub(super) hourly: sound::Hourly,
+    animations: Animations,
     header_clock: bool,
     open_on_hover: bool,
     hover_delay: u16,
@@ -166,6 +232,13 @@ impl Default for PoniSettings {
         Self {
             clock_format: ClockFormat::Region,
             clock_with_activities: true,
+            media_enabled: true,
+            music_progress: true,
+            color_glow: true,
+            haptics: true,
+            battery_saving: PowerSaving::Off,
+            hourly: sound::Hourly::default(),
+            animations: Animations::default(),
             header_clock: true,
             open_on_hover: true,
             hover_delay: 0,
@@ -202,6 +275,13 @@ impl Default for PoniSettings {
 pub(super) struct SettingsPatch {
     clock_format: Option<ClockFormat>,
     clock_with_activities: Option<bool>,
+    media_enabled: Option<bool>,
+    music_progress: Option<bool>,
+    color_glow: Option<bool>,
+    haptics: Option<bool>,
+    battery_saving: Option<PowerSaving>,
+    hourly: Option<sound::HourlyPatch>,
+    animations: Option<AnimationsPatch>,
     header_clock: Option<bool>,
     open_on_hover: Option<bool>,
     hover_delay: Option<u16>,
@@ -357,6 +437,17 @@ impl PoniSettings {
         self.clock_with_activities = patch
             .clock_with_activities
             .unwrap_or(self.clock_with_activities);
+        self.media_enabled = patch.media_enabled.unwrap_or(self.media_enabled);
+        self.music_progress = patch.music_progress.unwrap_or(self.music_progress);
+        self.color_glow = patch.color_glow.unwrap_or(self.color_glow);
+        self.haptics = patch.haptics.unwrap_or(self.haptics);
+        self.battery_saving = patch.battery_saving.unwrap_or(self.battery_saving);
+        if let Some(hourly) = patch.hourly {
+            self.hourly.apply(hourly)?;
+        }
+        if let Some(animations) = patch.animations {
+            self.animations.apply(animations);
+        }
         self.header_clock = patch.header_clock.unwrap_or(self.header_clock);
         self.open_on_hover = patch.open_on_hover.unwrap_or(self.open_on_hover);
         self.hover_delay = patch.hover_delay.unwrap_or(self.hover_delay);

@@ -1,3 +1,4 @@
+import re
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -446,6 +447,7 @@ with sync_playwright() as pw:
     page.evaluate('preferences.live.music = false; renderLiveActivities()')
     expect(page.locator('#notch-live-title')).to_have_text('Timer')
     expect(page.locator('#notch-live')).to_be_visible()
+    expect(page.locator('#closed')).to_have_class(re.compile(r'\btimer-outline\b'))
     page.evaluate('preferences.live.enabled = false; renderLiveActivities()')
     expect(page.locator('#notch-live')).to_be_hidden()
     page.evaluate('preferences.live.enabled = true; renderLiveActivities()')
@@ -468,12 +470,16 @@ with sync_playwright() as pw:
     indicator = page.locator('#closed .battery-indicator')
     expect(indicator).to_be_visible()
     expect(indicator.locator('.battery-percent')).to_have_text('26%')
+    page.evaluate("preferences.battery_saving = 'auto'; updatePowerSaving()")
+    assert page.evaluate("document.getElementById('surface').classList.contains('power-saving')")
     expect(indicator).to_have_class('battery-indicator battery-ring')
     page.evaluate("window.poniTestBattery({percent:25, plugged_in:false, charging:false, saver:false, seconds_remaining:3600})")
     expect(page.locator('#battery-activity')).to_have_text('Low battery')
     expect(indicator).to_have_class('battery-indicator battery-ring battery-low')
     page.evaluate("window.poniTestBattery({percent:25, plugged_in:true, charging:true, saver:false, seconds_remaining:null})")
     expect(page.locator('#battery-activity')).to_have_text('Plugged in')
+    page.evaluate('updatePowerSaving()')
+    assert not page.evaluate("document.getElementById('surface').classList.contains('power-saving')")
     page.evaluate("window.poniTestBattery(null)")
     expect(indicator).to_be_hidden()
     page.evaluate('window.poniTestShortcut()')

@@ -12,6 +12,9 @@ FIXTURE = """
 (() => {
   const defaults = {
     clock_format:'region', header_clock:true, open_on_hover:true, hover_delay:0, close_delay:450,
+    media_enabled:true, music_progress:true, color_glow:true, haptics:true, battery_saving:'off',
+    animations:{timer_outline:true, shelf_fly:true, tab_slide:true, shadow:'off', celebrate:true},
+    hourly:{mode:'off', half:false, quiet:true, from:1320, to:360},
     module_shortcuts:true, module_order:['home','tasks','notes','calendar','timer','weather','worldclock','screentime','pomodoro','health'],
     hidden_modules:[], default_module:'home', remember_module:false, last_module:null,
     mirror_enabled:true, mirror_shape:'rounded',
@@ -121,7 +124,7 @@ FIXTURE = """
         return settings;
       }
       if (command === 'set_poni_settings') {
-        const { panel, todo, health, battery, live, shelf, ...patch } = args.patch;
+        const { panel, todo, health, battery, live, shelf, animations, hourly, ...patch } = args.patch;
         Object.assign(settings, patch);
         if (panel) Object.assign(settings.panel, panel);
         if (todo) Object.assign(settings.todo, todo);
@@ -129,6 +132,8 @@ FIXTURE = """
         if (battery) Object.assign(settings.battery, battery);
         if (live) Object.assign(settings.live, live);
         if (shelf) Object.assign(settings.shelf, shelf);
+        if (animations) Object.assign(settings.animations, animations);
+        if (hourly) Object.assign(settings.hourly, hourly);
         settings.timer_presets.sort((a,b) => a-b);
         if (settings.hidden_modules.includes(settings.default_module)) {
           settings.default_module = settings.module_order.find(id => !settings.hidden_modules.includes(id));
@@ -285,6 +290,13 @@ def test_settings(page):
     assert page.evaluate("JSON.parse(localStorage.getItem('test-settings')).shortcuts") == {
         'toggle': 'Ctrl+Shift+Space', 'snooze': 'Alt+Shift+P', 'minutes': 75,
     }
+    settings.locator('#settings-hour-chime').select_option('light')
+    settings.locator('#settings-hour-chime-half').check()
+    settings.locator('#settings-hour-chime-from').fill('21:15')
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    assert page.evaluate("JSON.parse(localStorage.getItem('test-settings')).hourly.from") == 1275
+    settings.locator('#settings-hour-chime').select_option('off')
+    expect(settings.locator('#settings-hour-chime-half')).to_have_count(0)
 
     page.clock.set_fixed_time(datetime(2026, 11, 24, 12, tzinfo=timezone.utc))
     settings.locator('#settings-warm-night').check()
@@ -462,8 +474,14 @@ def test_settings(page):
     expect(settings.get_by_role('status')).to_have_text('Saved')
     page.evaluate("""async () => {
       if (!document.getElementById('open').hidden) window.testShortcut();
+      const cover = document.createElement('canvas');
+      cover.width = cover.height = 2;
+      const brush = cover.getContext('2d');
+      brush.fillStyle = '#cd2d1e';
+      brush.fillRect(0,0,2,2);
       localStorage.setItem('test-current-media', JSON.stringify({
-        title:'Live track', artist:'Fixture artist', playing:true, duration_ms:180000, position_ms:25000
+        title:'Live track', artist:'Fixture artist', playing:true, duration_ms:180000, position_ms:25000,
+        track_id:'fixture-1', artwork:{jpeg:cover.toDataURL('image/jpeg').split(',')[1], accent:'#cd2d1e'}
       }));
       await refreshMedia();
     }""")
@@ -485,6 +503,24 @@ def test_settings(page):
     expect(page.locator('#notch-live-time')).to_have_text('RAM 38%')
     settings.locator('#settings-live-system').uncheck()
     expect(page.locator('#notch-live-title')).to_have_text('Next live track')
+    settings.get_by_role('button', name='Media', exact=True).click()
+    expect(page.locator('#closed-music-progress')).to_be_visible()
+    expect(page.locator('#closed-media-artwork')).to_be_visible()
+    expect(page.locator('#surface')).to_have_css('--album-accent', '#cd2d1e')
+    settings.locator('#settings-media-color-glow').uncheck()
+    assert not page.evaluate("document.getElementById('surface').classList.contains('album-glow')")
+    settings.locator('#settings-media-progress').uncheck()
+    expect(page.locator('#closed-music-progress')).to_be_hidden()
+    settings.locator('#settings-media-enabled').uncheck()
+    expect(page.locator('#page-home .media')).to_have_attribute('hidden', '')
+    expect(settings.locator('#settings-media-progress')).to_be_disabled()
+    settings.locator('#settings-media-enabled').check()
+    expect(page.locator('#page-home .media')).not_to_have_attribute('hidden', '')
+    settings.get_by_role('button', name='Animations', exact=True).click()
+    settings.locator('#settings-animation-shadow').select_option('opening')
+    expect(page.locator('#surface')).to_have_attribute('data-shadow', 'opening')
+    settings.locator('#settings-animation-shadow').select_option('off')
+    expect(page.locator('#surface')).to_have_attribute('data-shadow', 'off')
     page.evaluate("localStorage.removeItem('test-current-media'); refreshMedia()")
 
     popup.close()

@@ -16,12 +16,14 @@
       { id: 'general', title: 'General', icon: '⚙', color: 'grey' },
       { id: 'modules', title: 'Modules', icon: '▦', color: 'indigo' },
       { id: 'live', title: 'Live Activities', icon: '↗', color: 'red' },
+      { id: 'animations', title: 'Animations', icon: '✧', color: 'purple' },
     ] },
     { group: 'Features', pages: [
       { id: 'dashboard', title: 'Dashboard', icon: '⊞', color: 'blue', link: 'dashboard',
         hint: 'Choose and reorder your Dashboard widgets.' },
       { id: 'todo', title: 'Todo', icon: '☑', color: 'orange', link: 'tasks',
         hint: 'Late completion, snooze, and Trash retention.' },
+      { id: 'media', title: 'Media', icon: '♫', color: 'red' },
       { id: 'calendar', title: 'Calendar', icon: '▤', color: 'red', link: 'calendar',
         hint: 'Calendar display, meeting reminders, and the first day of the week.' },
       { id: 'weather', title: 'Weather', icon: '☀', color: 'cyan', link: 'weather',
@@ -78,6 +80,9 @@
     ['health', 'Eye break every', 'health eye interval screen reminder', 'health-eye-interval'],
     ['general', 'Clock format', '12 hour 24 hour region time', 'clock-format'],
     ['general', 'Keep the time while music or a timer plays', 'clock time live activity jam musik', 'clock-with-activities'],
+    ['general', 'Hourly chime', 'hour clock seconds bell half hour sound bunyi jam', 'hour-chime'],
+    ['general', 'Bounce on events', 'notch animation spring reminder pengingat gerak', 'notch-bounce'],
+    ['general', 'Battery saver', 'low power energy reduce battery daya baterai', 'notch-battery-saver'],
     ['general', 'Time at the top of the open Poni', 'header clock', 'header-clock'],
     ['general', 'Open on hover', 'mouse click to open', 'open-on-hover'],
     ['general', 'Hover delay', 'open mouse milliseconds', 'hover-delay'],
@@ -126,6 +131,14 @@
     ['live', 'Show the System summary every', 'cpu ram memory live interval', 'live-system-interval'],
     ['live', 'Sneak peek on song change', 'title next song preview', 'live-sneak-peek'],
     ['live', 'Hover-reveal media controls while Poni is closed', 'play pause skip previous next track', 'live-hover-media'],
+    ['animations', 'Timer outline', 'timer pomodoro countdown animation garis', 'animation-timer-outline'],
+    ['animations', 'Files fly into the Shelf', 'drop file shelf animation gerak', 'animation-shelf-fly'],
+    ['animations', 'Tabs slide in from their side', 'module transition slide direction animasi', 'animation-tab-slide'],
+    ['animations', 'Shadow of the open Poni', 'window shadow bayangan', 'animation-shadow'],
+    ['animations', 'Celebrate a done day', 'task todo complete confetti konfeti', 'animation-celebrate'],
+    ['media', 'Music controls', 'media playback spotify musik', 'media-enabled'],
+    ['media', 'Progress bar in the closed Poni', 'song progress elapsed lagu pemutaran', 'media-progress'],
+    ['media', 'Color glow from album art', 'artwork cover color glow sampul cahaya', 'media-color-glow'],
     ['shelf', 'Shelf tab', 'shelf files folders show tab rak file', 'shelf-enabled'],
     ['shelf', 'Drop actions', 'drop file tiles zip extract copy seret', 'shelf-drop-enabled'],
     ['shelf', 'Shrink PDFs, images and videos', 'compress PDF photo video sharpest medium smallest kompres foto', 'shelf-quality'],
@@ -214,7 +227,7 @@
           window.poniFocusPlayback.previewSettings(timer);
         }
       } else {
-        const update = ['panel', 'todo', 'health', 'battery', 'live', 'shelf'].includes(source) ? { [source]: patch } : patch;
+        const update = ['panel', 'todo', 'health', 'battery', 'live', 'shelf', 'animations', 'hourly'].includes(source) ? { [source]: patch } : patch;
         settings = await window.__TAURI__.core.invoke('set_poni_settings', { patch: update });
         broadcast();
       }
@@ -259,7 +272,7 @@
 
   function values(source) {
     if (source === 'pomodoro') return pomo;
-    if (['panel', 'todo', 'health', 'battery', 'live', 'shelf'].includes(source)) return settings[source];
+    if (['panel', 'todo', 'health', 'battery', 'live', 'shelf', 'animations', 'hourly'].includes(source)) return settings[source];
     if (source === 'shortcuts') return settings.shortcuts || { toggle: 'Alt+N', snooze: '', minutes: 30 };
     if (source === 'startup') return { launch_at_login: launchAtLogin };
     return active === 'screentime' ? screenTime : settings;
@@ -373,6 +386,10 @@
       { ...pixels, max: 120, step: 2, description: 'At 0, Poni stays attached to the top edge.' });
     toggle(display, 'show-in-screenshots', 'Show Poni in screenshots & recordings',
       'Turn off to hide the notch from Windows screen capture.', 'show_in_screenshots', 'panel');
+    toggle(display, 'notch-bounce', 'Bounce on events', 'A small spring animation for new activity.', 'haptics');
+    select(display, 'notch-battery-saver', 'Battery saver',
+      'Pause decorative animations and update media less often while on battery or with Energy saver on.',
+      'battery_saving', [['off', 'Off'], ['auto', 'Automatic']]);
 
     const clock = group(content, 'Clock');
     select(clock, 'clock-format', 'Clock format', 'Follow the Windows region or choose a format.',
@@ -380,6 +397,7 @@
     toggle(clock, 'header-clock', 'Time at the top of the open Poni', 'On every tab.', 'header_clock');
     toggle(clock, 'clock-with-activities', 'Keep the time while music or a timer plays',
       'Also while Pomodoro and the stopwatch are running.', 'clock_with_activities');
+    hourlyChime(clock);
 
     const opening = group(content, 'Opening');
     toggle(opening, 'open-on-hover', 'Open on hover', 'Otherwise click to open.', 'open_on_hover');
@@ -434,6 +452,32 @@
       'Open the Mirror from Home to preview your camera.', 'mirror_enabled');
     select(controls, 'mirror-shape', 'Mirror shape', null, 'mirror_shape',
       [['rounded', 'Rounded'], ['circle', 'Circle']], !settings.mirror_enabled);
+  }
+
+  function hourlyChime(clock) {
+    select(clock, 'hour-chime', 'Hourly chime', 'The bell stays quiet in Do not disturb and over fullscreen apps.',
+      'mode', [['off', 'Off'], ['sound', 'Sound'], ['light', 'Light'], ['both', 'Sound and light']], false, 'hourly');
+    if (settings.hourly.mode === 'off') return;
+    toggle(clock, 'hour-chime-half', 'On the half hour too', 'One note at half past, two on the hour.', 'half', 'hourly');
+    toggle(clock, 'hour-chime-quiet', 'Quiet hours', 'Skip chimes within the chosen time range.', 'quiet', 'hourly');
+    for (const [key, title] of [['from', 'Quiet from'], ['to', 'Quiet until']]) {
+      const input = create('input', 'settings-text');
+      input.id = 'settings-hour-chime-' + key;
+      input.type = 'time';
+      const value = settings.hourly[key];
+      input.value = `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`;
+      input.disabled = !settings.hourly.quiet;
+      input.addEventListener('change', () => {
+        if (!input.value) return;
+        const [hours, minutes] = input.value.split(':').map(Number);
+        void change({ [key]: hours * 60 + minutes }, 'hour-chime-' + key, 'hourly');
+      });
+      row(clock, title, null, input);
+    }
+    if (['sound', 'both'].includes(settings.hourly.mode)) {
+      clock.append(button('Try the bell', () => void window.__TAURI__.core.invoke('preview_hourly_chime')
+        .catch(error => { banner.textContent = String(error); })));
+    }
   }
 
   function liveActivities(content) {
@@ -522,6 +566,28 @@
     if (settings.shelf.enabled && !settings.hidden_modules.includes('shelf')) {
       content.append(button('Open Shelf', () => void openLink('shelf')));
     }
+  }
+
+  function animations(content) {
+    const section = group(content);
+    toggle(section, 'animation-timer-outline', 'Timer outline', 'Trace the time left on the closed notch.',
+      'timer_outline', 'animations');
+    toggle(section, 'animation-shelf-fly', 'Files fly into the Shelf', 'Animate files as they reach the Shelf.',
+      'shelf_fly', 'animations');
+    toggle(section, 'animation-tab-slide', 'Tabs slide in from their side', null, 'tab_slide', 'animations');
+    select(section, 'animation-shadow', 'Shadow of the open Poni', null, 'shadow',
+      [['always', 'Always'], ['opening', 'While it opens'], ['off', 'Off']], false, 'animations');
+    toggle(section, 'animation-celebrate', 'Celebrate a done day', 'Show confetti when the last task due today is completed.',
+      'celebrate', 'animations');
+  }
+
+  function media(content) {
+    const section = group(content);
+    toggle(section, 'media-enabled', 'Music controls', 'Show media on Home and in the closed notch.', 'media_enabled');
+    toggle(section, 'media-progress', 'Progress bar in the closed Poni', 'A line shows how much of the song has played.',
+      'music_progress', undefined, !settings.media_enabled);
+    toggle(section, 'media-color-glow', 'Color glow from album art', 'Use a color from the artwork provided by Windows.',
+      'color_glow', undefined, !settings.media_enabled);
   }
 
   function battery(content) {
@@ -874,6 +940,8 @@
         if (active === 'general') general(controls);
         else if (active === 'modules') modules(controls);
         else if (active === 'live' && settings.live) liveActivities(controls);
+        else if (active === 'animations' && settings.animations) animations(controls);
+        else if (active === 'media') media(controls);
         else if (active === 'shelf' && settings.shelf) shelf(controls);
         else if (active === 'todo') todo(controls);
         else if (active === 'dayprogress' && daySchedule) dayProgress(controls);
@@ -905,6 +973,7 @@
         invoke('panel_displays').then(value => Array.isArray(value) ? value : []).catch(() => []),
       ]);
       settings.panel.display ||= 'primary';
+      settings.hourly ||= {mode:'off', half:false, quiet:true, from:1320, to:360};
       broadcast();
     } catch (error) {
       banner.textContent = String(error);

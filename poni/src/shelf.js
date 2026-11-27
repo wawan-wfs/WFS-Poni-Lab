@@ -391,7 +391,10 @@
       }
       if (!visible || (!usedTiles && hooks.isOpen() && !hooks.isShelf())) return;
       if (usedTiles || hooks.isOpen() || preferences.open_on_drag) hooks.open();
-      void run('shelf_add', {items: paths.map(path => ({kind: 'file', path}))});
+      const before = cards.length;
+      void run('shelf_add', {items: paths.map(path => ({kind: 'file', path}))}).then(items => {
+        if (Array.isArray(items) && items.length > before) window.poniAnimations?.file(position);
+      });
     }
   }
 
