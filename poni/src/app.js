@@ -391,8 +391,12 @@ window.__TAURI__.event.listen('poni-toggle', event => {
   keyboardOpen = shouldOpen;
   setOpen(shouldOpen);
 }).catch(error => { status.textContent = String(error); });
+window.__TAURI__.event.listen('poni-snoozed', () => {
+  clearTimeout(hoverTimer);
+  setOpen(false);
+}).catch(error => { status.textContent = String(error); });
 invoke('shortcut_status').then(available => {
-  if (!available) status.textContent = 'Alt+N is already in use.';
+  if (!available) status.textContent = 'Poni’s open shortcut is already in use.';
 }).catch(error => { status.textContent = String(error); });
 document.addEventListener('keydown', event => {
   if (open.hidden) return;

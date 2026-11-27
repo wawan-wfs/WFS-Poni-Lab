@@ -3,7 +3,7 @@
 use serde::{Deserialize, Serialize};
 use std::{fs, io::Write, path::PathBuf, sync::Mutex};
 use tauri::{Emitter, Manager, State};
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+use tauri_plugin_global_shortcut::ShortcutState;
 use tauri_plugin_notification::NotificationExt;
 use tempfile::NamedTempFile;
 use uuid::Uuid;
@@ -40,6 +40,7 @@ mod radio;
 mod screentime;
 mod settings;
 mod shelf;
+mod shortcuts;
 mod sound;
 mod startup;
 mod support;
@@ -358,8 +359,6 @@ struct WindowSequence {
     presentation: panel::Presentation,
 }
 
-struct ShortcutStatus(bool);
-
 #[cfg(windows)]
 struct NotchTray(tauri::menu::CheckMenuItem<tauri::Wry>);
 
@@ -591,11 +590,6 @@ fn set_world_clocks(
             data.world_clocks = places;
             Ok(())
         })
-}
-
-#[tauri::command]
-fn shortcut_status(status: State<'_, ShortcutStatus>) -> bool {
-    status.0
 }
 
 #[tauri::command]
@@ -1202,9 +1196,34 @@ fn shortcut_toggle(app: &tauri::AppHandle, force: bool) {
     let sequence = app.state::<Mutex<WindowSequence>>();
     let needs_reveal = sequence
         .lock()
-        .map(|state| state.presentation.visible == Some(false))
+        .map(|mut state| {
+            let hidden = state.presentation.snoozed() || state.presentation.visible == Some(false);
+            state.presentation.snooze_until = None;
+            hidden
+        })
         .unwrap_or(false);
     let _ = app.emit_to("main", "poni-toggle", force || needs_reveal);
+}
+
+fn toggle_snooze(app: &tauri::AppHandle) {
+    let store = app.state::<Mutex<Store>>();
+    let Ok(minutes) = store
+        .lock()
+        .map(|store| store.data.settings.shortcuts.minutes)
+    else {
+        return;
+    };
+    let sequence = app.state::<Mutex<WindowSequence>>();
+    let Ok(snoozed) = sequence
+        .lock()
+        .map(|mut state| state.presentation.toggle_snooze(minutes))
+    else {
+        return;
+    };
+    sync_panel(app);
+    if snoozed {
+        let _ = app.emit_to("main", "poni-snoozed", ());
+    }
 }
 
 #[cfg(windows)]
@@ -1223,14 +1242,16 @@ fn install_tray(app: &tauri::App, enabled: bool) -> tauri::Result<()> {
         None::<&str>,
     )?;
     let settings = MenuItem::with_id(app, "poni-settings", "Settings", true, None::<&str>)?;
+    let snooze = MenuItem::with_id(app, "poni-snooze", "Snooze / wake Poni", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "poni-quit", "Quit Poni", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&open, &visible, &settings, &quit])?;
+    let menu = Menu::with_items(app, &[&open, &visible, &snooze, &settings, &quit])?;
     let mut tray = TrayIconBuilder::with_id("poni")
         .tooltip("Poni")
         .menu(&menu)
         .show_menu_on_left_click(true)
         .on_menu_event(|app, event| match event.id().as_ref() {
             "poni-open" => shortcut_toggle(app, true),
+            "poni-snooze" => toggle_snooze(app),
             "poni-visible" => {
                 let store = app.state::<Mutex<Store>>();
                 let result = store.lock().ok().and_then(|mut store| {
@@ -1285,7 +1306,9 @@ fn initialize_panel(
         .settings
         .panel
         .clone();
+    let snooze_until = state.presentation.snooze_until;
     state.presentation = panel::Presentation::default();
+    state.presentation.snooze_until = snooze_until;
     apply_panel_preferences(&window, &mut state, &preferences)?;
     state.session = Some(session);
     state.last = 0;
@@ -1443,9 +1466,9 @@ fn main() {
         .plugin(tauri_plugin_notification::init())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
-                .with_handler(|app, _, event| {
+                .with_handler(|app, shortcut, event| {
                     if event.state == ShortcutState::Pressed {
-                        shortcut_toggle(app, false);
+                        shortcuts::pressed(app, shortcut);
                     }
                 })
                 .build(),
@@ -1453,6 +1476,7 @@ fn main() {
         .setup(|app| {
             let profile = app.path().app_data_dir()?;
             let store = Store::open(profile.join("data.json")).map_err(std::io::Error::other)?;
+            let shortcut_settings = store.data.settings.shortcuts.clone();
             let mut sequence = WindowSequence::default();
             #[cfg(windows)]
             let enabled = store.data.settings.panel.enabled;
@@ -1476,8 +1500,9 @@ fn main() {
                 last_cpu_sample: std::time::Instant::now(),
             }));
             app.manage(Mutex::new(sequence));
-            app.manage(ShortcutStatus(
-                app.global_shortcut().register("Alt+N").is_ok(),
+            app.manage(shortcuts::Registered::install(
+                app.handle(),
+                &shortcut_settings,
             ));
             #[cfg(windows)]
             install_tray(app, enabled)?;
@@ -1613,7 +1638,8 @@ fn main() {
             weather_forecast,
             set_weather_location,
             set_world_clocks,
-            shortcut_status,
+            shortcuts::shortcut_status,
+            shortcuts::set_poni_shortcuts,
             add_task,
             update_task,
             toggle_task,

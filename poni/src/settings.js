@@ -83,6 +83,9 @@
     ['general', 'Hover delay', 'open mouse milliseconds', 'hover-delay'],
     ['general', 'Close delay', 'dismiss mouse milliseconds', 'close-delay'],
     ['general', 'Switch tabs with ← / →', 'arrows keyboard shortcuts', 'module-shortcuts'],
+    ['general', 'Open / close Poni', 'global keyboard shortcut hotkey alt n pintasan', 'toggle-shortcut'],
+    ['general', 'Snooze Poni', 'global keyboard shortcut hotkey wake sembunyikan tunda', 'snooze-shortcut'],
+    ['general', 'Snooze duration', 'minutes pause hide tunda menit', 'snooze-minutes'],
     ['general', 'Layout direction', 'right left rtl ltr writing arah tata letak', 'layout-direction'],
     ['general', 'Launch at login', 'windows startup sign in otomatis mulai masuk', 'launch-at-login'],
     ['general', 'Show Poni (the notch)', 'hide disable tray tampil sembunyikan', 'notch-enabled'],
@@ -199,6 +202,8 @@
         screenTime = await window.__TAURI__.core.invoke('set_screentime_preferences', { patch });
       } else if (source === 'startup') {
         launchAtLogin = await window.__TAURI__.core.invoke('set_poni_startup', { enabled: patch.launch_at_login });
+      } else if (source === 'shortcuts') {
+        settings = await window.__TAURI__.core.invoke('set_poni_shortcuts', { patch });
       } else if (source === 'dayprogress') {
         const saved = await window.__TAURI__.core.invoke('set_day_schedule', patch);
         daySchedule = { wake_minute: saved.wake_minute, bed_minute: saved.bed_minute };
@@ -255,6 +260,7 @@
   function values(source) {
     if (source === 'pomodoro') return pomo;
     if (['panel', 'todo', 'health', 'battery', 'live', 'shelf'].includes(source)) return settings[source];
+    if (source === 'shortcuts') return settings.shortcuts || { toggle: 'Alt+N', snooze: '', minutes: 30 };
     if (source === 'startup') return { launch_at_login: launchAtLogin };
     return active === 'screentime' ? screenTime : settings;
   }
@@ -342,7 +348,7 @@
     toggle(display, 'notch-lock-position', 'Lock position',
       'Stop the notch from being dragged.', 'lock_position', 'panel');
     toggle(display, 'notch-fullscreen', 'Hide when an app is fullscreen',
-      'Use Alt+N or Open Poni in the tray to bring it back for a moment.', 'hide_in_fullscreen', 'panel');
+      'Use the open shortcut or Open Poni in the tray to bring it back for a moment.', 'hide_in_fullscreen', 'panel');
     toggle(display, 'notch-auto-hide', 'Auto-hide',
       'Move the mouse to the top edge to show Poni. Reminders still come down.', 'auto_hide', 'panel');
     toggle(display, 'notch-standby', 'Come down when you’re idle',
@@ -381,7 +387,24 @@
     delay(opening, 'close-delay', 'Close delay', 'close_delay', '1500', '50');
 
     const shortcuts = group(content, 'Keyboard shortcuts');
-    toggle(shortcuts, 'module-shortcuts', 'Switch tabs with ← / →', 'After opening Poni with Alt+N.',
+    for (const [id, key, label, hint] of [
+      ['toggle-shortcut', 'toggle', 'Open / close Poni', 'For example Alt+N or Ctrl+Shift+Space. Leave empty to turn it off.'],
+      ['snooze-shortcut', 'snooze', 'Snooze Poni', 'Press again to wake Poni. Leave empty to turn it off.'],
+    ]) {
+      const input = create('input', 'settings-text');
+      input.type = 'text';
+      input.id = 'settings-' + id;
+      input.maxLength = 64;
+      input.spellcheck = false;
+      input.value = values('shortcuts')[key];
+      input.addEventListener('keydown', event => { if (event.key === 'Enter') input.blur(); });
+      input.addEventListener('change', () => void change({ [key]: input.value }, id, 'shortcuts'));
+      row(shortcuts, label, hint, input);
+    }
+    range(shortcuts, 'snooze-minutes', 'Snooze duration', 'minutes', {
+      min: 5, max: 240, step: 5, unit: 'min', spokenUnit: 'minutes', source: 'shortcuts',
+    });
+    toggle(shortcuts, 'module-shortcuts', 'Switch tabs with ← / →', 'After opening Poni with its keyboard shortcut.',
       'module_shortcuts');
 
     const size = group(content, 'Size');

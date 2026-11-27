@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::time::{Duration, SystemTime};
 use tauri::{Monitor, PhysicalPosition, PhysicalSize, WebviewWindow};
 
 #[derive(Clone, Copy, Default, Deserialize, Serialize)]
@@ -109,8 +110,29 @@ pub(super) struct Presentation {
     pub(super) forced: bool,
     pub(super) visible: Option<bool>,
     pub(super) move_preview: Option<u16>,
+    pub(super) snooze_until: Option<SystemTime>,
     geometry: Option<Geometry>,
     edge_revealed: bool,
+}
+
+impl Presentation {
+    pub(super) fn snoozed(&self) -> bool {
+        self.snooze_until
+            .is_some_and(|until| until > SystemTime::now())
+    }
+
+    pub(super) fn toggle_snooze(&mut self, minutes: u16) -> bool {
+        let snoozed = !self.snoozed();
+        self.snooze_until =
+            snoozed.then(|| SystemTime::now() + Duration::from_secs(u64::from(minutes) * 60));
+        if snoozed {
+            self.open = false;
+            self.tall = false;
+            self.forced = false;
+            self.move_preview = None;
+        }
+        snoozed
+    }
 }
 
 #[derive(Serialize)]
@@ -281,7 +303,10 @@ impl Preferences {
     }
 
     fn layer(&self, state: &Presentation, fullscreen: bool, idle_ms: Option<u32>) -> Layer {
-        if !self.enabled || (self.hide_in_fullscreen && fullscreen && !state.forced) {
+        if !self.enabled
+            || state.snoozed()
+            || (self.hide_in_fullscreen && fullscreen && !state.forced)
+        {
             return Layer::Hidden;
         }
         if state.open || state.alert {
@@ -507,5 +532,22 @@ mod tests {
         assert_eq!(preferences.drag_position(700.0, 70.0, 2.0), 70);
         assert_eq!(preferences.drag_position(700.0, -400.0, 1.0), 0);
         assert_eq!(preferences.drag_position(700.0, 400.0, 1.0), 100);
+    }
+
+    #[test]
+    fn snooze_hides_the_notch_until_woken_or_expired() {
+        let preferences = Preferences::default();
+        let mut state = Presentation {
+            open: true,
+            forced: true,
+            ..Presentation::default()
+        };
+        assert!(state.toggle_snooze(30));
+        assert!(!state.open);
+        assert_eq!(preferences.layer(&state, false, Some(0)), Layer::Hidden);
+        assert!(!state.toggle_snooze(30));
+        assert_eq!(preferences.layer(&state, false, Some(0)), Layer::Normal);
+        state.snooze_until = Some(SystemTime::UNIX_EPOCH);
+        assert_eq!(preferences.layer(&state, false, Some(0)), Layer::Normal);
     }
 }

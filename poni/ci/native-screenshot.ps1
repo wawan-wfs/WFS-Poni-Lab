@@ -56,6 +56,20 @@ function Press-PoniShortcut {
     }
 }
 
+function Press-SnoozeFixtureShortcut {
+    [CursorPosition]::keybd_event(0x12, 0, 0, [UIntPtr]::Zero)
+    [CursorPosition]::keybd_event(0x10, 0, 0, [UIntPtr]::Zero)
+    try {
+        Start-Sleep -Milliseconds 100
+        [CursorPosition]::keybd_event(0x50, 0, 0, [UIntPtr]::Zero)
+        Start-Sleep -Milliseconds 100
+    } finally {
+        [CursorPosition]::keybd_event(0x50, 0, 2, [UIntPtr]::Zero)
+        [CursorPosition]::keybd_event(0x10, 0, 2, [UIntPtr]::Zero)
+        [CursorPosition]::keybd_event(0x12, 0, 2, [UIntPtr]::Zero)
+    }
+}
+
 $process = $null
 try {
     $ready = $false
@@ -283,6 +297,22 @@ try {
         @{ hidden_with_settings_available = $true; restored_from_settings = $shown
             handle_height = $parked.Bottom; height_after_hover = $revealed.Bottom } |
             ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'notch-visibility.json') -Encoding UTF8
+
+        Find-Setting 'snooze poni global keyboard shortcut'
+        [System.Windows.Forms.SendKeys]::SendWait('Alt{+}Shift{+}P{TAB}')
+        Start-Sleep -Seconds 2
+        Press-SnoozeFixtureShortcut
+        Start-Sleep -Seconds 2
+        if ([CursorPosition]::IsWindowVisible($mainHandle)) {
+            throw 'The newly configured Snooze shortcut did not hide the notch.'
+        }
+        Press-SnoozeFixtureShortcut
+        Start-Sleep -Seconds 2
+        if (![CursorPosition]::IsWindowVisible($mainHandle)) {
+            throw 'Pressing the Snooze shortcut again did not wake Poni.'
+        }
+        @{ bound_from_settings = $true; snoozed = $true; restored = $true } |
+            ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'snooze-shortcut.json') -Encoding UTF8
 
         Find-Setting 'gap from the top edge'
         [System.Windows.Forms.SendKeys]::SendWait('{HOME}')

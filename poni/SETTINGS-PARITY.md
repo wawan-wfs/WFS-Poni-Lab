@@ -70,6 +70,8 @@ General menambahkan delapan padanan standar. **Show Poni (the notch)** mengendal
 
 Enam padanan standar berikutnya menghubungkan sumber Music, ringkasan System, interval ringkasan, pratinjau judul saat lagu berubah, kontrol media saat hover, dan pilihan mempertahankan jam saat musik atau timer berjalan. Ringkasan System menampilkan CPU dan RAM selama enam detik. Sumber Music memakai sesi media Windows untuk judul dan posisi. Sampul album, visualizer, GPU, suhu, Wi-Fi, dan peristiwa Bluetooth masih perlu dikerjakan. Total terbaru **87 dari 201 kontrol standar (43,3%)** memiliki padanan setidaknya sebagian.
 
+Tiga kontrol pintasan kini mengatur tombol buka/tutup, tombol snooze, dan durasi snooze 5–240 menit. Perubahan mendaftarkan pintasan baru sebelum menyimpan dan mempertahankan pintasan sebelumnya bila pendaftaran gagal. Snooze menyembunyikan notch sampai waktunya habis atau pengguna membangunkannya lewat pintasan atau tray. Total terbaru **90 dari 201 kontrol standar (44,8%)** memiliki padanan setidaknya sebagian.
+
 | Jenis kontrol | Deklarasi | Masuk katalog build |
 | --- | ---: | ---: |
 | Sakelar | 115 | 115 |

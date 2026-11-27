@@ -19,6 +19,8 @@ General kini menghubungkan delapan kontrol tambahan ke perilaku notch. Build Rus
 
 Live Activities menampilkan lagu, posisi pemutaran, pratinjau pergantian lagu, kontrol media saat hover, serta ringkasan CPU dan RAM terjadwal. Jam dapat tetap terlihat bersama musik atau timer. Cakupan terbaru Settings **87/201 kontrol standar (43,3%)**.
 
+Pintasan buka/tutup dan snooze dapat disetel. Snooze membangunkan kembali notch saat waktunya berakhir atau saat pengguna memilih bangunkan. Settings kini mencakup **90/201 kontrol standar (44,8%)**.
+
 ## Modul yang sudah dimulai
 
 - **Todo:** tugas dapat memiliki daftar langkah, tenggat, jadwal berulang, dan aturan penyelesaian saat terlambat. Settings mengatur aturan bawaan, durasi snooze, dan retensi Trash. Tab Todo memisahkan Active, Done, dan Trash. Pengingat pada notch tertutup bisa diselesaikan atau ditunda tanpa membuka panel. Teks Indonesia dan Inggris dapat mengisi tenggat atau pengulangan secara lokal dan menawarkan pratinjau. Detail tugas bisa menautkan dan membuka catatan. Tindakan daya belum tersedia.

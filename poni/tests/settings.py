@@ -114,6 +114,12 @@ FIXTURE = """
       if (command === 'screentime_summary') return {
         available:true, enabled:readScreenTime().enabled, apps:[], hours:Array(24).fill(0), total:0, switches:0,
       };
+      if (command === 'set_poni_shortcuts') {
+        settings.shortcuts = {...(settings.shortcuts || {toggle:'Alt+N', snooze:'', minutes:30}), ...args.patch};
+        save(settings);
+        bus.postMessage({name:'poni-settings-changed',payload:settings});
+        return settings;
+      }
       if (command === 'set_poni_settings') {
         const { panel, todo, health, battery, live, shelf, ...patch } = args.patch;
         Object.assign(settings, patch);
@@ -268,6 +274,17 @@ def test_settings(page):
     page.locator('#closed').click()
     page.wait_for_function("!JSON.parse(sessionStorage.getItem('test-panel-state')).tucked")
     settings.locator('#settings-notch-hide-button').uncheck()
+    settings.locator('#settings-toggle-shortcut').fill('Ctrl+Shift+Space')
+    settings.locator('#settings-toggle-shortcut').press('Enter')
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    settings.locator('#settings-snooze-shortcut').fill('Alt+Shift+P')
+    settings.locator('#settings-snooze-shortcut').press('Enter')
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    settings.locator('#settings-snooze-minutes').fill('75')
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    assert page.evaluate("JSON.parse(localStorage.getItem('test-settings')).shortcuts") == {
+        'toggle': 'Ctrl+Shift+Space', 'snooze': 'Alt+Shift+P', 'minutes': 75,
+    }
 
     page.clock.set_fixed_time(datetime(2026, 11, 24, 12, tzinfo=timezone.utc))
     settings.locator('#settings-warm-night').check()

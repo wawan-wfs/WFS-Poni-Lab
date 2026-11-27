@@ -1,4 +1,4 @@
-use crate::{battery, health, panel, shelf, todo, Store};
+use crate::{battery, health, panel, shelf, shortcuts, todo, Store};
 use serde::{Deserialize, Serialize};
 use std::{collections::HashSet, sync::Mutex};
 use tauri::{AppHandle, Emitter, State};
@@ -146,6 +146,7 @@ pub(super) struct PoniSettings {
     pub(super) timer_remember: bool,
     pub(super) timer_then_break: bool,
     pub(super) panel: panel::Preferences,
+    pub(super) shortcuts: shortcuts::Preferences,
     pub(super) todo: todo::Preferences,
     pub(super) health: health::Preferences,
     battery: battery::Preferences,
@@ -179,6 +180,7 @@ impl Default for PoniSettings {
             timer_remember: true,
             timer_then_break: false,
             panel: panel::Preferences::default(),
+            shortcuts: shortcuts::Preferences::default(),
             todo: todo::Preferences::default(),
             health: health::Preferences::default(),
             battery: battery::Preferences::default(),
