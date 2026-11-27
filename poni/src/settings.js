@@ -84,7 +84,7 @@
     ['general', 'Hourly chime', 'hour clock seconds bell half hour sound bunyi jam', 'hour-chime'],
     ['general', 'Bounce on events', 'notch animation spring reminder pengingat gerak', 'notch-bounce'],
     ['general', 'Battery saver', 'low power energy reduce battery daya baterai', 'notch-battery-saver'],
-    ['general', 'Time at the top of the open Poni', 'header clock', 'header-clock'],
+    ['general', 'Time and date at the top of the open Poni', 'header clock', 'header-clock'],
     ['general', 'Open on hover', 'mouse click to open', 'open-on-hover'],
     ['general', 'Hover delay', 'open mouse milliseconds', 'hover-delay'],
     ['general', 'Close delay', 'dismiss mouse milliseconds', 'close-delay'],
@@ -353,7 +353,10 @@
     const time = display.time(now, settings.clock_format);
     const day = display.day(now);
     const sideText = kind => kind === 'time' ? time : kind === 'date' ? day : display.slots.find(([id]) => id === kind)?.[2];
-    container.append(create('div', 'settings-closed-label', 'What the closed Poni shows'));
+    const title = create('div', 'settings-closed-label', 'What the closed Poni shows');
+    title.append(create('small', null, 'Shown while nothing else is going on. Music, timers and alerts take over when they come.'));
+    container.append(title);
+    const stage = create('div', 'settings-closed-stage');
     const bar = create('div', 'settings-closed-preview');
     bar.dir = 'ltr';
     bar.style.setProperty('--preview-height', `${Math.max(26, settings.panel.height || 32)}px`);
@@ -376,20 +379,28 @@
       preview.setAttribute('aria-expanded', String(closedPart === part));
       bar.append(preview);
     }
-    container.append(bar);
+    stage.append(bar);
+    container.append(stage);
     if (!closedPart) {
       container.append(create('small', 'settings-closed-hint', 'Choose the left, middle, or right part.'));
       return;
     }
     const choice = create('div', 'settings-closed-choices');
     choice.setAttribute('role', 'group');
-    choice.setAttribute('aria-label', controls.find(([part]) => part === closedPart)[1] + ' choices');
+    const region = controls.find(([part]) => part === closedPart)[1];
+    choice.setAttribute('aria-label', region + ' choices');
+    container.append(create('div', 'settings-closed-region', region));
     const isMiddle = closedPart === 'middle';
     const key = isMiddle ? 'mode' : closedPart;
     const choices = isMiddle ? [['time', 'Time'], ['date', 'Day and time'], ['off', 'Nothing']] : display.slots;
+    const symbols = {time:'◷', date:'▦', off:'⊘', none:'⊘', weather:'☀', battery:'▰', event:'▦', todo:'✓',
+      cpu:'▦', ram:'▥', world:'◎', prayer:'☾', disk:'▤', wifi:'◔', net:'↕', download:'↓', upload:'↑'};
     for (const [value, label] of choices) {
       const id = `closed-${key}-${value}`;
-      const tile = button(label, () => void change({[key]: value}, id, 'closed_display'));
+      const tile = button('', () => void change({[key]: value}, id, 'closed_display'), 'settings-closed-tile');
+      const symbol = create('span', null, symbols[value]);
+      symbol.setAttribute('aria-hidden', 'true');
+      tile.append(symbol, create('span', null, label));
       tile.id = 'settings-' + id;
       tile.setAttribute('aria-pressed', String(config[key] === value));
       choice.append(tile);
@@ -408,8 +419,24 @@
     });
     container.append(choice);
     if (isMiddle) {
-      select(container, 'closed-size', 'Clock size', 'The clock grows with the height of the closed notch.', 'size',
-        [['small', 'Small'], ['normal', 'Normal'], ['large', 'Large'], ['xlarge', 'Extra large']], config.mode === 'off', 'closed_display');
+      const sizes = create('div', 'settings-clock-sizes');
+      sizes.setAttribute('role', 'group');
+      sizes.setAttribute('aria-label', 'Clock size');
+      for (const [size, label, short] of [['small', 'Small', 'S'], ['normal', 'Normal', 'M'], ['large', 'Large', 'L'], ['xlarge', 'Extra large', 'XL']]) {
+        const id = 'closed-size-' + size;
+        const option = button(short, () => void change({size}, id, 'closed_display'), 'settings-clock-size');
+        option.id = 'settings-' + id;
+        option.title = label;
+        option.setAttribute('aria-label', label);
+        option.setAttribute('aria-pressed', String(config.size === size));
+        option.disabled = config.mode === 'off';
+        sizes.append(option);
+      }
+      const scaleRow = create('div', 'settings-row');
+      const label = create('span', 'settings-label', 'Clock size');
+      label.append(create('small', null, 'The clock grows with the height of the closed notch.'));
+      scaleRow.append(label, sizes);
+      container.append(scaleRow);
       toggle(container, 'closed-bold', 'Bold', 'Emphasize the day and time.', 'bold', 'closed_display', config.mode === 'off');
     }
   }
@@ -488,13 +515,14 @@
       'Pause decorative animations and update media less often while on battery or with Energy saver on.',
       'battery_saving', [['off', 'Off'], ['auto', 'Automatic']]);
 
-    closedPreview(group(content, 'Closed Poni'));
+    const closed = group(content, 'Closed Poni');
+    closedPreview(closed);
+    toggle(closed, 'clock-with-activities', 'Keep the time while music or a timer plays',
+      'Also while Pomodoro and the stopwatch are running.', 'clock_with_activities');
     const clock = group(content, 'Clock');
     select(clock, 'clock-format', 'Clock format', 'Follow the Windows region or choose a format.',
       'clock_format', [['region', 'Windows region'], ['h12', '12-hour'], ['h24', '24-hour']]);
-    toggle(clock, 'header-clock', 'Time at the top of the open Poni', 'On every tab.', 'header_clock');
-    toggle(clock, 'clock-with-activities', 'Keep the time while music or a timer plays',
-      'Also while Pomodoro and the stopwatch are running.', 'clock_with_activities');
+    toggle(clock, 'header-clock', 'Time and date at the top of the open Poni', 'On every tab.', 'header_clock');
     hourlyChime(clock);
 
     const opening = group(content, 'Opening');
@@ -604,10 +632,10 @@
       'Shows a paired device when it connects, disconnects, or its battery runs low.', 'enabled', 'bluetooth');
     range(controls, 'bluetooth-low', 'Low battery alert at', 'low_threshold',
       { min: 5, max: 50, step: 5, unit: '%', spokenUnit: 'percent', source: 'bluetooth', disabled: !values('bluetooth').enabled });
-    const devices = group(content, 'Bluetooth devices');
     const list = create('ul', 'settings-device-list');
+    list.setAttribute('aria-label', 'Bluetooth devices');
     list.replaceChildren(create('li', null, 'Checking for paired devices…'));
-    devices.append(list);
+    controls.append(list);
     window.__TAURI__.core.invoke('bluetooth_devices').then(snapshot => {
       if (!list.isConnected) return;
       const entries = snapshot.devices?.map(device => {
@@ -618,7 +646,7 @@
         return item;
       }) || [];
       if (!entries.length) {
-        entries.push(create('li', null, snapshot.adapter_present ? 'No paired devices found.' : 'Bluetooth adapter unavailable.'));
+        entries.push(create('li', null, snapshot.supported ? 'No paired devices found.' : 'Bluetooth detection is unavailable here.'));
       }
       list.replaceChildren(...entries);
     }).catch(error => {
@@ -1026,6 +1054,12 @@
       ...indexedFields,
       ...Object.entries(names).map(([id, title]) => ['modules', title, 'show hide tab reorder', 'visible-' + id]),
     ];
+    const searchableLabel = text => text.toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+    const queryLabel = searchableLabel(query);
+    if (queryLabel) {
+      const priority = text => searchableLabel(text) === queryLabel ? 0 : 1;
+      matches.sort((left, right) => priority(left[1]) - priority(right[1]));
+    }
     const words = query.toLocaleLowerCase().split(/\s+/);
     const list = group(panel);
     const seen = new Set();

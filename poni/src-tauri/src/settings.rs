@@ -82,7 +82,7 @@ enum ClosedSlot {
     Prayer,
 }
 
-#[derive(Clone, Deserialize, Serialize)]
+#[derive(Clone, Default, Deserialize, Serialize)]
 #[serde(default)]
 struct ClosedDisplay {
     mode: ClosedClockMode,
@@ -92,15 +92,10 @@ struct ClosedDisplay {
     right: ClosedSlot,
 }
 
-impl Default for ClosedDisplay {
-    fn default() -> Self {
-        Self {
-            mode: ClosedClockMode::Time,
-            size: ClosedClockSize::Normal,
-            bold: false,
-            left: ClosedSlot::None,
-            right: ClosedSlot::Battery,
-        }
+fn legacy_closed_display() -> ClosedDisplay {
+    ClosedDisplay {
+        right: ClosedSlot::Battery,
+        ..Default::default()
     }
 }
 
@@ -288,6 +283,7 @@ impl Animations {
 #[serde(default)]
 pub(super) struct PoniSettings {
     pub(super) user_name: String,
+    #[serde(default = "legacy_closed_display")]
     closed_display: ClosedDisplay,
     clock_format: ClockFormat,
     clock_with_activities: bool,
@@ -675,6 +671,10 @@ mod tests {
     fn older_profiles_accept_independent_closed_display_and_bluetooth_changes() {
         let mut settings: PoniSettings = serde_json::from_str("{}").unwrap();
         assert!(settings.user_name.is_empty());
+        assert_eq!(
+            serde_json::to_value(PoniSettings::default()).unwrap()["closed_display"]["right"],
+            "none"
+        );
         settings
             .apply(
                 serde_json::from_str(

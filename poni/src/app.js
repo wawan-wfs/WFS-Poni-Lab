@@ -743,6 +743,9 @@ function updateClock() {
   for (const clock of document.querySelectorAll('.clock')) {
     if (clock.textContent !== time) clock.textContent = time;
   }
+  const date = document.getElementById('header-date');
+  const label = now.toLocaleDateString(undefined, {weekday:'short', day:'numeric', month:'short'});
+  if (date.textContent !== label) date.textContent = label;
   renderLiveActivities(now.getTime());
   if (otherClosedAlerts()) dismissMusicPeek();
   void sampleSystemPeek(now.getTime());

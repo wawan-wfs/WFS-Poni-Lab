@@ -1,7 +1,7 @@
 (() => {
   'use strict';
 
-  const defaults = { mode: 'time', size: 'normal', bold: false, left: 'none', right: 'battery' };
+  const defaults = { mode: 'time', size: 'normal', bold: false, left: 'none', right: 'none' };
   const sizes = { small: 0.85, normal: 1, large: 1.25, xlarge: 1.5 };
   const slots = [
     ['none', 'Nothing', ''], ['weather', 'Weather', '☀ 31°'], ['battery', 'Battery', '▰ 66%'],

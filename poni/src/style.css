@@ -74,6 +74,8 @@ nav { display: flex; align-items: center; gap: 4px; flex: 1; overflow: auto; scr
 .tab.active { color: #fff; background: #303034; }
 .tab.active span { display: inline; }
 header .clock { font-weight: 700; white-space: nowrap; font-size: 13px; }
+#header-clock { display: flex; align-items: baseline; gap: 5px; white-space: nowrap; }
+#header-date { color: #a7a7af; font-size: 10px; }
 .close { font-size: 20px; }
 main { flex: 1; min-height: 0; overflow: auto; }
 .home { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding-top: 14px; }

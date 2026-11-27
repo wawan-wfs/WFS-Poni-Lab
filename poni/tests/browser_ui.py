@@ -465,6 +465,7 @@ with sync_playwright() as pw:
     page.locator('#close').click()
     page.evaluate("""() => {
       preferences.live.enabled = false;
+      preferences.closed_display.right = 'battery';
       window.poniBattery.configure({icon:'ring', show_percentage:true, low_threshold:25});
       window.poniTestBattery({percent:26, plugged_in:false, charging:false, saver:false, seconds_remaining:3800});
     }""")

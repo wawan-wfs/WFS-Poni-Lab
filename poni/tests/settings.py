@@ -12,7 +12,7 @@ from playwright.sync_api import expect, sync_playwright
 FIXTURE = """
 (() => {
   const defaults = {
-    user_name:'', closed_display:{mode:'time',size:'normal',bold:false,left:'none',right:'battery'},
+    user_name:'', closed_display:{mode:'time',size:'normal',bold:false,left:'none',right:'none'},
     clock_format:'region', header_clock:true, open_on_hover:true, hover_delay:0, close_delay:450,
     media_enabled:true, music_progress:true, color_glow:true, haptics:true, battery_saving:'off',
     animations:{timer_outline:true, shelf_fly:true, tab_slide:true, shadow:'off', celebrate:true},
@@ -635,12 +635,15 @@ def test_closed_poni(page):
     popup, settings = open_settings(page)
     expect(page.locator('#closed')).to_be_visible()
     search = settings.get_by_role('searchbox', name='Search settings')
+    search.fill('show poni the notch')
+    search.press('Enter')
+    expect(settings.locator('#settings-notch-enabled')).to_be_focused()
     search.fill('clock size')
     search.press('Enter')
     expect(settings.locator('#settings-closed-middle')).to_be_focused()
     settings.locator('#settings-closed-mode-date').click()
     expect(page.locator('#closed-day')).to_be_visible()
-    settings.locator('#settings-closed-size').select_option('xlarge')
+    settings.locator('#settings-closed-size-xlarge').click()
     settings.locator('#settings-closed-bold').check()
     expect(page.locator('.closed-clock')).to_have_css('font-weight', '750')
     expect(page.locator('.closed-clock')).to_have_css('font-size', '18.25px')
