@@ -1,3 +1,4 @@
+import re
 from datetime import datetime, timezone
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -82,6 +83,11 @@ FIXTURE = """
       if (command === 'get_poni_settings') return settings;
       if (command === 'get_day_schedule') return readSchedule();
       if (command === 'get_battery') return null;
+      if (command === 'prayer_day') {
+        const names = ['Imsak', 'Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+        return {meta:{timezone:'UTC'}, timings:Object.fromEntries(names.map((name, index) => [name,
+          `${args.date}T${String(4 + index * 3).padStart(2, '0')}:00:00Z`]))};
+      }
       if (command === 'bluetooth_devices') return { supported:true, adapter_present:true,
         devices:JSON.parse(localStorage.getItem('test-bluetooth-devices') || '[]') };
       if (command === 'claim_poni_greeting') {
@@ -171,6 +177,7 @@ FIXTURE = """
         }
         return {
           ...schedule, settings, last_greeting:localStorage.getItem('test-greeting'), tasks: [], notes: [], world_clocks: [], calendar_events: [],
+          prayer_settings:JSON.parse(localStorage.getItem('test-prayer-settings') || 'null'),
           timer:{total_ms:1500000,remaining_ms:1500000,ends_at_ms:null},
           stopwatch:{elapsed_ms:0,started_at_ms:null,laps:[]},
         };
@@ -181,7 +188,8 @@ FIXTURE = """
       if (command === 'health_state') return {today:{water:2, breaks:1, mindful:1}, last_break_ms:null, streak:1};
       if (command === 'current_media') return JSON.parse(localStorage.getItem('test-current-media') || 'null');
       if (command === 'media_control') { localStorage.setItem('test-media-control', args.action); return; }
-      if (command === 'system_snapshot') return {cpu_percent:32.5, memory_used:3000, memory_total:8000};
+      if (command === 'system_snapshot') return {cpu_percent:32.5, memory_used:3000, memory_total:8000,
+        ...JSON.parse(localStorage.getItem('test-system-snapshot-extras') || '{}')};
       if (command === 'calendar_first_weekday') return 0;
     } },
   };
@@ -677,6 +685,22 @@ def test_closed_poni(page):
     settings.locator('#settings-bluetooth-enabled').uncheck()
     expect(threshold).to_be_disabled()
     expect(page.locator('#notch-live')).to_be_hidden()
+
+    page.evaluate("""() => {
+      localStorage.setItem('test-system-snapshot-extras', JSON.stringify({disk_percent:61.2,
+        wifi_percent:82, received_bits_per_second:24000000, sent_bits_per_second:640000}));
+      localStorage.setItem('test-prayer-settings', JSON.stringify({location:{name:'Jakarta'}, method:20, school:0}));
+    }""")
+    search.fill('left side')
+    search.press('Enter')
+    settings.locator('#settings-closed-left-disk').click()
+    expect(page.locator('#closed-slot-left')).to_have_text('Disk 61%', timeout=6500)
+    settings.locator('#settings-closed-right').click()
+    settings.locator('#settings-closed-right-net').click()
+    expect(page.locator('#closed-slot-right .closed-slot-value')).to_have_text('↓24 M ↑640 K', timeout=7500)
+    settings.locator('#settings-closed-left').click()
+    settings.locator('#settings-closed-left-prayer').click()
+    expect(page.locator('#closed-slot-left')).to_contain_text(re.compile(r'Fajr|Dhuhr|Asr|Maghrib|Isha'))
     popup.close()
 
 def main():
@@ -689,18 +713,17 @@ def main():
                 executable = which('chromium') or which('chromium-browser') or which('google-chrome')
                 options = {'executable_path': executable} if executable else {}
                 browser = playwright.chromium.launch(headless=True, args=['--no-sandbox'], **options)
-                context = browser.new_context(viewport={'width': 900, 'height': 600}, locale='en-US', timezone_id='UTC')
-                context.set_default_timeout(7000)
-                errors = []
-                context.on('page', lambda page: page.on('pageerror', lambda error: errors.append(str(error))))
-                context.add_init_script(FIXTURE)
-                page = context.new_page()
-                page.goto(f'http://127.0.0.1:{server.server_port}/index.html')
-                test_settings(page)
-                page.evaluate('localStorage.clear(); sessionStorage.clear()')
-                page.reload()
-                test_closed_poni(page)
-                assert not errors, errors
+                for scenario in [test_settings, test_closed_poni]:
+                    context = browser.new_context(viewport={'width': 900, 'height': 600}, locale='en-US', timezone_id='UTC')
+                    context.set_default_timeout(7000)
+                    errors = []
+                    context.on('page', lambda page: page.on('pageerror', lambda error: errors.append(str(error))))
+                    context.add_init_script(FIXTURE)
+                    page = context.new_page()
+                    page.goto(f'http://127.0.0.1:{server.server_port}/index.html')
+                    scenario(page)
+                    assert not errors, errors
+                    context.close()
                 browser.close()
         finally:
             server.shutdown()

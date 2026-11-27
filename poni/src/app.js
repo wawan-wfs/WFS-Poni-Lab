@@ -618,11 +618,13 @@ async function sampleSystemPeek(now) {
   lastSystemPeek = now;
   systemPeekPending = true;
   try {
-    const sample = await invoke('system_snapshot');
+    const sample = await invoke('system_snapshot', {extra: {storage:true, wifi:true}});
     if (!open.hidden || !preferences.live.system || otherClosedAlerts()) return;
     const cpu = sample.cpu_percent == null ? 'CPU —' : `CPU ${Math.round(sample.cpu_percent)}%`;
     const ram = sample.memory_total > 0 ? `RAM ${Math.round(100 * sample.memory_used / sample.memory_total)}%` : 'RAM —';
-    systemPeek = {tab:'system', title:cpu, time:ram, until:Date.now() + 6000};
+    const disk = Number.isFinite(sample.disk_percent) ? `Disk ${Math.round(sample.disk_percent)}%` : '';
+    const wifi = Number.isFinite(sample.wifi_percent) ? `Wi-Fi ${sample.wifi_percent}%` : '';
+    systemPeek = {tab:'system', title:cpu, time:[ram, disk, wifi].filter(Boolean).join(' · '), until:Date.now() + 6000};
     renderLiveActivities();
   } catch (_) {
     // Retry at the next configured interval.
@@ -785,16 +787,34 @@ function slotText(kind, now) {
     }
     case 'cpu': return Number.isFinite(idleSystemSample?.cpu_percent) ? `CPU ${Math.round(idleSystemSample.cpu_percent)}%` : '';
     case 'ram': return idleSystemSample?.memory_total > 0 ? `RAM ${Math.round(100 * idleSystemSample.memory_used / idleSystemSample.memory_total)}%` : '';
+    case 'disk': return Number.isFinite(idleSystemSample?.disk_percent) ? `Disk ${Math.round(idleSystemSample.disk_percent)}%` : '';
+    case 'wifi': return Number.isFinite(idleSystemSample?.wifi_percent) ? `Wi-Fi ${idleSystemSample.wifi_percent}%` : '';
+    case 'download': case 'upload': case 'net': {
+      const both = kind === 'net';
+      const received = closedDisplay.networkRate(idleSystemSample?.received_bits_per_second, both);
+      const sent = closedDisplay.networkRate(idleSystemSample?.sent_bits_per_second, both);
+      if (both) return [received && `↓${received}`, sent && `↑${sent}`].filter(Boolean).join('\n');
+      if (kind === 'download') return received ? `↓${received}` : '';
+      return sent ? `↑${sent}` : '';
+    }
+    case 'prayer': {
+      const next = window.poniPrayerSlot.next(now.getTime());
+      return next ? `${next.name} ${time(next.time, next.zone)}` : '';
+    }
     default: return '';
   }
 }
 
 async function sampleIdleSystem(now) {
-  if (!open.hidden || !preferences.panel.enabled || currentLive || idleSystemPending || now < nextIdleSystemSample ||
-      ![preferences.closed_display.left, preferences.closed_display.right].some(kind => kind === 'cpu' || kind === 'ram')) return;
+  if (!open.hidden || !preferences.panel.enabled || currentLive || idleSystemPending || now < nextIdleSystemSample) return;
+  const slots = new Set([preferences.closed_display.left, preferences.closed_display.right]);
+  const storage = slots.has('disk');
+  const wifi = slots.has('wifi');
+  const network = slots.has('net') || slots.has('download') || slots.has('upload');
+  if (!storage && !wifi && !network && !slots.has('cpu') && !slots.has('ram')) return;
   idleSystemPending = true;
   nextIdleSystemSample = now + (surface.classList.contains('power-saving') ? 10_000 : 5000);
-  try { idleSystemSample = await invoke('system_snapshot'); }
+  try { idleSystemSample = await invoke('system_snapshot', {extra: {storage, network, wifi}}); }
   catch (_) { idleSystemSample = null; }
   finally { idleSystemPending = false; }
 }
@@ -813,7 +833,7 @@ function renderClosedDisplay(now) {
   const widths = closedSlots.map((slot, index) => {
     const kind = index === 0 ? config.left : config.right;
     const value = slot.querySelector('.closed-slot-value');
-    const text = slotText(kind, now);
+    const text = currentLive || hasGreeting ? '' : slotText(kind, now);
     if (value.textContent !== text) value.textContent = text;
     slot.dataset.kind = kind;
     slot.hidden = !!currentLive || hasGreeting || (!text && !(kind === 'battery' && window.poniBattery.present));
@@ -829,7 +849,8 @@ function renderClosedDisplay(now) {
   const stableSide = side ? Math.max(side, parseInt(closed.style.getPropertyValue('--slot-width'), 10) || 0) : 0;
   if (side) closed.style.setProperty('--slot-width', `${stableSide}px`);
   const centerWidth = closedClock.hidden ? 0 : closedClock.scrollWidth;
-  const width = Math.min(560, Math.ceil(Math.max(panel.width, centerWidth + 24) + 2 * stableSide));
+  const summaryWidth = currentLive?.tab === 'system' ? liveTitle.scrollWidth + liveTime.scrollWidth + 52 : 0;
+  const width = Math.min(560, Math.ceil(Math.max(panel.width, centerWidth + 24, summaryWidth) + 2 * stableSide));
   surface.style.setProperty('--notch-width', `${width}px`);
   if (closedWidth !== width) {
     closedWidth = width;

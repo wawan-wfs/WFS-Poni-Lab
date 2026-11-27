@@ -24,6 +24,7 @@ button { color: inherit; cursor: pointer; }
 #closed-slot-left { left: 8px; }
 #closed-slot-right { right: 8px; }
 .closed-slot-value { white-space: nowrap; text-overflow: ellipsis; overflow: hidden; }
+.closed-slot[data-kind="net"] .closed-slot-value { white-space: pre; line-height: 11px; }
 .closed-slot[data-kind="battery"] .closed-slot-value, .closed-slot:not([data-kind="battery"]) .battery-indicator { display: none; }
 #closed-greeting { display: flex; align-items: baseline; gap: 5px; font-size: 12px; font-weight: 600; min-width: 0; white-space: nowrap; }
 #greeting-symbol { color: var(--greeting-color); }

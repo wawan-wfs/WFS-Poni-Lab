@@ -23,7 +23,7 @@ Pintasan buka/tutup dan snooze dapat disetel. Snooze membangunkan kembali notch 
 
 Settings kini mencakup **101/201 kontrol standar (50,2%)**. Animations mengendalikan garis Timer, masuknya file ke Shelf, perpindahan tab, bayangan, dan konfeti. Media menampilkan sampul dari sesi Windows, warna sampul, dan progres pemutaran. General mengatur bounce, hemat baterai, dan lonceng jam.
 
-**105/201 kontrol standar (52,2%)** kini punya padanan setidaknya sebagian. General menambahkan Step aside untuk penunjuk, kolom nama lokal, serta pratinjau untuk mengatur kiri, kanan, ukuran, dan mode jam notch tertutup. Bluetooth menambahkan sakelar perangkat, ambang baterai, daftar perangkat, serta sumber aktivitas notch.
+**105/201 kontrol standar (52,2%)** kini punya padanan setidaknya sebagian. General menambahkan Step aside untuk penunjuk, kolom nama lokal, serta pratinjau untuk mengatur kiri, kanan, ukuran, dan mode jam notch tertutup. Slot dapat menampilkan jadwal salat, penggunaan drive Windows, kekuatan sinyal Wi-Fi, dan lalu lintas jaringan ketika datanya tersedia. Bluetooth menambahkan sakelar perangkat, ambang baterai, daftar perangkat, serta sumber aktivitas notch.
 
 ## Modul yang sudah dimulai
 

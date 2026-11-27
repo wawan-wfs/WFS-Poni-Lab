@@ -74,6 +74,12 @@ enum ClosedSlot {
     Cpu,
     Ram,
     World,
+    Disk,
+    Wifi,
+    Net,
+    Download,
+    Upload,
+    Prayer,
 }
 
 #[derive(Clone, Deserialize, Serialize)]

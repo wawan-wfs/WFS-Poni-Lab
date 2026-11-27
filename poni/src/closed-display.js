@@ -7,8 +7,17 @@
     ['none', 'Nothing', ''], ['weather', 'Weather', '☀ 31°'], ['battery', 'Battery', '▰ 66%'],
     ['date', 'Date'], ['event', 'Next event', '▦ 14:30'], ['todo', 'Next task', '✓ 16:00'],
     ['time', 'Time'], ['cpu', 'CPU', 'CPU 23%'], ['ram', 'Memory (RAM)', 'RAM 54%'],
-    ['world', 'World clock', 'Tokyo 21:00'],
+    ['world', 'World clock', 'Tokyo 21:00'], ['prayer', 'Next prayer', 'Asr 15:12'],
+    ['disk', 'Disk', 'Disk 61%'], ['wifi', 'Wi-Fi signal', 'Wi-Fi 82%'],
+    ['net', 'Internet ↓↑', '↓24 M ↑640 K'], ['download', 'Download', '↓24 Mbps'], ['upload', 'Upload', '↑640 Kbps'],
   ];
+
+  function networkRate(bits, compact = false) {
+    if (!Number.isFinite(bits)) return '';
+    if (bits < 500) return '0';
+    if (bits < 999500) return `${Math.round(bits / 1000)}${compact ? ' K' : ' Kbps'}`;
+    return `${bits < 9950000 ? (bits / 1000000).toFixed(1) : Math.round(bits / 1000000)}${compact ? ' M' : ' Mbps'}`;
+  }
 
   function time(date, format, timeZone) {
     const options = {hour: 'numeric', minute: '2-digit', timeZone};
@@ -28,5 +37,5 @@
     return scale < 1 ? Math.max(9, Math.round(base * scale * 4) / 4) : base;
   }
 
-  window.poniClosedDisplay = {defaults, slots, time, day, font};
+  window.poniClosedDisplay = {defaults, slots, time, day, font, networkRate};
 })();

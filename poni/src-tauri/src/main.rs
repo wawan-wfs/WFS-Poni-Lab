@@ -45,6 +45,7 @@ mod shortcuts;
 mod sound;
 mod startup;
 mod support;
+mod system_metrics;
 mod teleprompter;
 mod todo;
 mod translate;
@@ -244,11 +245,22 @@ struct SystemSnapshot {
     cpu_percent: Option<f32>,
     memory_used: u64,
     memory_total: u64,
+    #[serde(flatten)]
+    extra: system_metrics::Extras,
+}
+
+#[derive(Default, Deserialize)]
+#[serde(default)]
+struct SystemExtraRequest {
+    storage: bool,
+    network: bool,
+    wifi: bool,
 }
 
 struct SystemMonitor {
     system: sysinfo::System,
     last_cpu_sample: std::time::Instant,
+    extra: system_metrics::Metrics,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -460,7 +472,10 @@ fn set_day_schedule(
 }
 
 #[tauri::command]
-fn system_snapshot(system: State<'_, Mutex<SystemMonitor>>) -> Result<SystemSnapshot, String> {
+fn system_snapshot(
+    system: State<'_, Mutex<SystemMonitor>>,
+    extra: Option<SystemExtraRequest>,
+) -> Result<SystemSnapshot, String> {
     let mut monitor = system
         .lock()
         .map_err(|_| "System information unavailable")?;
@@ -473,10 +488,15 @@ fn system_snapshot(system: State<'_, Mutex<SystemMonitor>>) -> Result<SystemSnap
         None
     };
     monitor.system.refresh_memory();
+    let request = extra.unwrap_or_default();
+    let extra = monitor
+        .extra
+        .sample(request.storage, request.network, request.wifi);
     Ok(SystemSnapshot {
         cpu_percent: cpu,
         memory_used: monitor.system.used_memory(),
         memory_total: monitor.system.total_memory(),
+        extra,
     })
 }
 
@@ -1528,6 +1548,7 @@ fn main() {
             app.manage(Mutex::new(SystemMonitor {
                 system,
                 last_cpu_sample: std::time::Instant::now(),
+                extra: system_metrics::Metrics::default(),
             }));
             app.manage(Mutex::new(sequence));
             app.manage(shortcuts::Registered::install(

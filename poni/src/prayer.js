@@ -26,9 +26,12 @@
   let searchRevision = 0;
   let pending = false;
   let cache = new Map();
+  let readingProfile = null;
+  let profileShown = false;
+  let nextSlotRefresh = 0;
 
   const element = id => page.querySelector('#prayer-' + id);
-  const setStatus = message => { element('status').textContent = message; };
+  const setStatus = message => { if (page) element('status').textContent = message; };
   const placeName = place => [...new Set([place.name, place.admin1, place.country].filter(Boolean))].join(', ');
 
   function dateKey(timestamp, timeZone) {
@@ -91,23 +94,27 @@
       days = result;
       lastDate = date;
       setStatus('');
-      element('retry').hidden = true;
+      if (page) element('retry').hidden = true;
       render();
     } catch (error) {
       if (version !== revision) return;
       setStatus(error instanceof Error ? error.message : String(error));
-      element('retry').hidden = false;
+      if (page) element('retry').hidden = false;
     } finally {
       if (version === revision) pending = false;
     }
   }
 
-  function render() {
-    if (!days.length) return;
-    const now = Date.now();
-    const next = days.flatMap((day, index) => prayers.map(name => ({
-      name, index, time: Date.parse(day.timings[name]),
+  function nextPrayer(now) {
+    return days.flatMap((day, index) => prayers.map(name => ({
+      name, index, time: Date.parse(day.timings[name]), zone,
     }))).find(item => item.time > now);
+  }
+
+  function render() {
+    if (!page || !days.length) return;
+    const now = Date.now();
+    const next = nextPrayer(now);
 
     const panel = element('summary');
     panel.hidden = false;
@@ -137,6 +144,27 @@
       ? [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60]
         .map(value => String(value).padStart(2, '0')).join(':')
       : '—';
+  }
+
+  function loadProfile() {
+    if (!readingProfile) {
+      readingProfile = invoke('get_data').then(data => {
+        hijriOffset = data.hijri_offset || 0;
+        settings ||= data.prayer_settings;
+      }).finally(() => { readingProfile = null; });
+    }
+    return readingProfile;
+  }
+
+  async function refreshForSlot(now) {
+    if (pending || now < nextSlotRefresh || (settings && zone && lastDate === dateKey(now, zone))) return;
+    nextSlotRefresh = now + 120_000;
+    try {
+      if (!settings) await loadProfile();
+      if (settings) await refresh();
+    } catch (_) {
+      // A slot without a saved or reachable schedule stays empty.
+    }
   }
 
   function tick() {
@@ -252,27 +280,26 @@
   async function show() {
     clearInterval(clock);
     clock = setInterval(tick, 1000);
-    if (settings) {
-      if (days.length) tick();
-      else await refresh();
-      return;
-    }
     try {
-      const data = await invoke('get_data');
-      hijriOffset = data.hijri_offset || 0;
-      if (!data.prayer_settings) {
+      if (!settings) await loadProfile();
+      if (!settings) {
         element('settings').hidden = false;
         return;
       }
-      settings = data.prayer_settings;
-      chooseCity(settings.location);
-      element('method').value = String(settings.method);
-      element('school').value = String(settings.school);
-      await refresh();
+      if (!profileShown) {
+        chooseCity(settings.location);
+        element('method').value = String(settings.method);
+        element('school').value = String(settings.school);
+        profileShown = true;
+      }
+      if (days.length) tick();
+      else await refresh();
     } catch (error) {
       setStatus(String(error));
     }
   }
+
+  window.poniPrayerSlot = { next(now) { void refreshForSlot(now); return nextPrayer(now); } };
 
   window.poniModules ||= {};
   window.poniModules.prayer = {mount, show, hide: () => clearInterval(clock)};
