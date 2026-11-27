@@ -1181,9 +1181,10 @@ fn sync_panel(app: &tauri::AppHandle) {
         return;
     };
     let sequence = app.state::<Mutex<WindowSequence>>();
-    if let Ok(mut state) = sequence.lock() {
-        let _ = apply_panel_preferences(&window, &mut state, &preferences);
-    }
+    let Ok(mut state) = sequence.lock() else {
+        return;
+    };
+    let _ = apply_panel_preferences(&window, &mut state, &preferences);
 }
 
 fn shortcut_toggle(app: &tauri::AppHandle, force: bool) {
