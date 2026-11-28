@@ -38,6 +38,7 @@ pub(super) enum SettingsPage {
     Sound,
     NightLight,
     Personalization,
+    Location,
 }
 
 #[tauri::command]
@@ -272,6 +273,7 @@ mod native {
             SettingsPage::Sound => "ms-settings:sound",
             SettingsPage::NightLight => "ms-settings:nightlight",
             SettingsPage::Personalization => "ms-settings:colors",
+            SettingsPage::Location => "ms-settings:privacy-location",
         };
         let verb: Vec<u16> = "open".encode_utf16().chain([0]).collect();
         let uri: Vec<u16> = uri.encode_utf16().chain([0]).collect();

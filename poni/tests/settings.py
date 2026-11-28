@@ -13,6 +13,7 @@ FIXTURE = """
 (() => {
   const defaults = {
     user_name:'', closed_display:{mode:'time',size:'normal',bold:false,left:'none',right:'none'},
+    weather_enabled:true, weather_unit:'metric',
     clock_format:'region', header_clock:true, open_on_hover:true, hover_delay:0, close_delay:450,
     media_enabled:true, music_progress:true, color_glow:true, haptics:true, battery_saving:'off',
     animations:{timer_outline:true, shelf_fly:true, tab_slide:true, shadow:'off', celebrate:true},
@@ -49,6 +50,8 @@ FIXTURE = """
     focus_minutes:25, short_minutes:5, long_minutes:15, cycle_length:4, auto_break:false, auto_focus:false,
     completion_sound:true, focus_sound:'off', focus_sound_volume:70, focus_sound_breaks:false,
   };
+  const weatherCity = {name:'Jakarta', admin1:'Jakarta', country:'Indonesia', latitude:-6.2, longitude:106.8};
+  const readWeather = () => JSON.parse(localStorage.getItem('test-weather-location') || 'null');
   const pomodoroState = settings => ({
     total_ms:settings.focus_minutes * 60000, remaining_ms:settings.focus_minutes * 60000,
     ends_at_ms:null, completed:[], cycle:0, phase:'focus', settings,
@@ -83,6 +86,27 @@ FIXTURE = """
       if (command === 'get_poni_settings') return settings;
       if (command === 'get_day_schedule') return readSchedule();
       if (command === 'get_battery') return null;
+      if (command === 'get_weather_location') return readWeather();
+      if (command === 'search_weather_city') return args.query.toLowerCase() === 'jakarta' ? [weatherCity] : [];
+      if (command === 'locate_weather') {
+        if (localStorage.getItem('test-location-denied')) throw new Error('Windows denied location access');
+        return {name:'Current location', latitude:-6.2, longitude:106.8};
+      }
+      if (command === 'open_control_settings') localStorage.setItem('test-control-settings', args.page);
+      if (command === 'set_weather_location') {
+        localStorage.setItem('test-weather-location', JSON.stringify(args.location));
+        bus.postMessage({name:'poni-weather-location-changed',payload:args.location});
+        return {weather_location:args.location};
+      }
+      if (command === 'weather_forecast') return {
+        current:{time:'2026-11-28T20:15',temperature_2m:30,relative_humidity_2m:70,weather_code:2,wind_speed_10m:10,
+          apparent_temperature:32,uv_index:0,surface_pressure:1011,is_day:0},
+        daily:{time:Array.from({length:7},(_,i)=>i < 3 ? `2026-11-${28+i}` : `2026-12-0${i-2}`),
+          temperature_2m_max:Array(7).fill(32),temperature_2m_min:Array(7).fill(24),weather_code:Array(7).fill(2),
+          sunrise:['2026-11-28T05:20'],sunset:['2026-11-28T18:05']},
+        hourly:{time:['19','20','21','22','23'].map(hour=>`2026-11-28T${hour}:00`).concat(['00','01','02'].map(hour=>`2026-11-29T${hour}:00`)),
+          temperature_2m:Array(8).fill(29),weather_code:Array(8).fill(2),precipitation_probability:Array(8).fill(25),is_day:Array(8).fill(0)},
+      };
       if (command === 'prayer_day') {
         const names = ['Imsak', 'Fajr', 'Sunrise', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
         return {meta:{timezone:'UTC'}, timings:Object.fromEntries(names.map((name, index) => [name,
@@ -178,6 +202,7 @@ FIXTURE = """
         return {
           ...schedule, settings, last_greeting:localStorage.getItem('test-greeting'), tasks: [], notes: [], world_clocks: [], calendar_events: [],
           prayer_settings:JSON.parse(localStorage.getItem('test-prayer-settings') || 'null'),
+          weather_location:readWeather(),
           timer:{total_ms:1500000,remaining_ms:1500000,ends_at_ms:null},
           stopwatch:{elapsed_ms:0,started_at_ms:null,laps:[]},
         };
@@ -706,6 +731,44 @@ def test_closed_poni(page):
     expect(page.locator('#closed-slot-left')).to_contain_text(re.compile(r'Fajr|Dhuhr|Asr|Maghrib|Isha'))
     popup.close()
 
+
+def test_weather_settings(page):
+    page.evaluate('window.testShortcut()')
+    popup, settings = open_settings(page)
+    settings.locator('[data-section="weather"]').click()
+    city = settings.get_by_role('searchbox', name='Search a city')
+    city.fill('Jakarta')
+    city.press('Enter')
+    settings.get_by_role('button', name='Jakarta, Jakarta, Indonesia').click()
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    page.evaluate('window.testShortcut()')
+    weather_tab = page.locator('[data-page="weather"]')
+    weather_tab.click()
+    expect(page.locator('#weather-current')).to_contain_text('30°C')
+    expect(page.locator('#weather-forecast')).to_have_attribute('data-sky', 'night')
+    expect(page.locator('#weather-hourly .weather-cell')).to_have_count(7)
+    expect(page.locator('#weather-hourly .weather-cell').first).to_contain_text('Now')
+    expect(page.locator('#weather-days .weather-cell')).to_have_count(7)
+
+    settings.locator('#settings-weather-unit').select_option('imperial')
+    expect(page.locator('#weather-current')).to_contain_text('86°F')
+    expect(page.locator('#weather-current')).to_contain_text('6 mph')
+    settings.locator('#settings-weather-enabled').uncheck()
+    expect(weather_tab).to_be_hidden()
+    settings.locator('#settings-weather-enabled').check()
+    expect(weather_tab).to_be_visible()
+
+    page.evaluate("localStorage.setItem('test-location-denied','true')")
+    locate = settings.get_by_role('button', name='Use my location')
+    locate.click()
+    settings.get_by_role('button', name='Open Windows Location settings').click()
+    assert page.evaluate("localStorage.getItem('test-control-settings')") == 'location'
+    page.evaluate("localStorage.removeItem('test-location-denied')")
+    locate.click()
+    expect(settings.get_by_role('status')).to_have_text('Saved')
+    page.wait_for_function("JSON.parse(localStorage.getItem('test-weather-location')).name === 'Current location'")
+    popup.close()
+
 def main():
     root = Path(__file__).resolve().parents[1]
     handler = partial(SimpleHTTPRequestHandler, directory=str(root / 'src'))
@@ -716,7 +779,7 @@ def main():
                 executable = which('chromium') or which('chromium-browser') or which('google-chrome')
                 options = {'executable_path': executable} if executable else {}
                 browser = playwright.chromium.launch(headless=True, args=['--no-sandbox'], **options)
-                for scenario in [test_settings, test_closed_poni]:
+                for scenario in [test_settings, test_closed_poni, test_weather_settings]:
                     context = browser.new_context(viewport={'width': 900, 'height': 600}, locale='en-US', timezone_id='UTC')
                     context.set_default_timeout(7000)
                     errors = []

@@ -50,6 +50,7 @@ mod teleprompter;
 mod todo;
 mod translate;
 mod warmth;
+mod weather_location;
 
 #[derive(Clone, Serialize, Deserialize)]
 struct Task {
@@ -213,6 +214,11 @@ struct ForecastCurrent {
     relative_humidity_2m: f64,
     weather_code: u32,
     wind_speed_10m: f64,
+    time: Option<String>,
+    apparent_temperature: Option<f64>,
+    surface_pressure: Option<f64>,
+    uv_index: Option<f64>,
+    is_day: Option<u8>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -221,12 +227,26 @@ struct ForecastDaily {
     temperature_2m_max: Vec<f64>,
     temperature_2m_min: Vec<f64>,
     weather_code: Vec<u32>,
+    #[serde(default)]
+    sunrise: Vec<Option<String>>,
+    #[serde(default)]
+    sunset: Vec<Option<String>>,
+}
+
+#[derive(Serialize, Deserialize)]
+struct ForecastHourly {
+    time: Vec<String>,
+    temperature_2m: Vec<Option<f64>>,
+    weather_code: Vec<Option<u32>>,
+    precipitation_probability: Vec<Option<u8>>,
+    is_day: Vec<Option<u8>>,
 }
 
 #[derive(Serialize, Deserialize)]
 struct Forecast {
     current: ForecastCurrent,
     daily: ForecastDaily,
+    hourly: Option<ForecastHourly>,
 }
 
 #[derive(Serialize)]
@@ -544,12 +564,13 @@ async fn weather_forecast(location: WeatherLocation) -> Result<Forecast, String>
             ("longitude", longitude.as_str()),
             (
                 "current",
-                "temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m",
+                "temperature_2m,relative_humidity_2m,weather_code,wind_speed_10m,apparent_temperature,surface_pressure,uv_index,is_day",
             ),
             (
                 "daily",
-                "temperature_2m_max,temperature_2m_min,weather_code",
+                "temperature_2m_max,temperature_2m_min,weather_code,sunrise,sunset",
             ),
+            ("hourly", "temperature_2m,weather_code,precipitation_probability,is_day"),
             ("timezone", "auto"),
             ("forecast_days", "7"),
         ])
@@ -561,6 +582,16 @@ async fn weather_forecast(location: WeatherLocation) -> Result<Forecast, String>
         .json::<Forecast>()
         .await
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_weather_location(store: State<'_, Mutex<Store>>) -> Result<Option<WeatherLocation>, String> {
+    Ok(store
+        .lock()
+        .map_err(|_| "Storage unavailable")?
+        .data
+        .weather_location
+        .clone())
 }
 
 #[tauri::command]
@@ -578,6 +609,7 @@ fn set_weather_location(
             Ok(())
         })?;
     let _ = app.emit_to("main", "poni-daylight-location-changed", ());
+    let _ = app.emit("poni-weather-location-changed", &result.weather_location);
     Ok(result)
 }
 
@@ -1693,6 +1725,8 @@ fn main() {
             system_snapshot,
             search_weather_city,
             weather_forecast,
+            get_weather_location,
+            weather_location::locate_weather,
             set_weather_location,
             set_world_clocks,
             shortcuts::shortcut_status,

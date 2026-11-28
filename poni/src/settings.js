@@ -26,8 +26,7 @@
       { id: 'media', title: 'Media', icon: '♫', color: 'red' },
       { id: 'calendar', title: 'Calendar', icon: '▤', color: 'red', link: 'calendar',
         hint: 'Calendar display, meeting reminders, and the first day of the week.' },
-      { id: 'weather', title: 'Weather', icon: '☀', color: 'cyan', link: 'weather',
-        hint: 'Search for your city and choose the forecast location.' },
+      { id: 'weather', title: 'Weather', icon: '☀', color: 'cyan' },
       { id: 'prayer', title: 'Prayer Times', icon: '◒', color: 'green', link: 'prayer',
         hint: 'Choose a city, calculation method and Asr school.' },
       { id: 'pomodoro', title: 'Pomodoro', icon: '◷', color: 'orange', link: 'pomodoro',
@@ -98,6 +97,10 @@
     ['general', 'Left side', 'idle slots time date weather battery calendar todo cpu ram world', 'closed-left'],
     ['general', 'Right side', 'idle slots time date weather battery calendar todo cpu ram world', 'closed-right'],
     ['general', 'Clock size', 'middle day and time jam ukuran bold tebal', 'closed-middle'],
+    ['weather', 'Show weather', 'forecast open meteo tampilkan cuaca', 'weather-enabled'],
+    ['weather', 'Location', 'weather city forecast lokasi kota', 'weather-city'],
+    ['weather', 'Use my location', 'weather position detect windows deteksi lokasi', 'weather-locate'],
+    ['weather', 'Units', 'weather celsius fahrenheit temperature wind cuaca satuan', 'weather-unit'],
     ['bluetooth', 'Bluetooth devices & battery', 'headset connected perangkat koneksi', 'bluetooth-enabled'],
     ['bluetooth', 'Low battery alert at', 'bluetooth percentage threshold persen baterai', 'bluetooth-low'],
     ['live', 'Bluetooth connect / disconnect / low battery', 'live activity bluetooth perangkat baterai', 'live-bluetooth'],
@@ -198,6 +201,8 @@
   let launchAtLogin = null;
   let daySchedule = null;
   let displays = [];
+  let weatherLocation = null;
+  let locatingWeather = false;
   let active = 'general';
   let busy = false;
   let loading = false;
@@ -229,6 +234,9 @@
         launchAtLogin = await window.__TAURI__.core.invoke('set_poni_startup', { enabled: patch.launch_at_login });
       } else if (source === 'shortcuts') {
         settings = await window.__TAURI__.core.invoke('set_poni_shortcuts', { patch });
+      } else if (source === 'weather-location') {
+        const saved = await window.__TAURI__.core.invoke('set_weather_location', patch);
+        weatherLocation = saved.weather_location;
       } else if (source === 'dayprogress') {
         const saved = await window.__TAURI__.core.invoke('set_day_schedule', patch);
         daySchedule = { wake_minute: saved.wake_minute, bed_minute: saved.bed_minute };
@@ -652,6 +660,73 @@
     }).catch(error => {
       if (list.isConnected) list.replaceChildren(create('li', null, String(error)));
     });
+  }
+
+  function weather(content) {
+    content.append(create('p', 'settings-lead', 'Forecast from Open-Meteo. Only the coordinates of your selected location are used for the forecast.'));
+    const controls = group(content);
+    toggle(controls, 'weather-enabled', 'Show weather', null, 'weather_enabled');
+    const results = create('div', 'settings-weather-results');
+    results.setAttribute('aria-live', 'polite');
+    const cityLabel = city => [city.name, city.admin1, city.country].filter(Boolean).join(', ');
+    const form = create('form', 'settings-weather-search');
+    const query = create('input', 'settings-text');
+    Object.assign(query, {id:'settings-weather-city', type:'search', required:true, minLength:2, maxLength:100, placeholder:'Search a city…'});
+    query.setAttribute('aria-label', 'Search a city');
+    const submit = create('button', 'settings-button', 'Search');
+    submit.type = 'submit';
+    form.append(query, submit);
+    let revision = 0;
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      const text = query.value.trim();
+      if (text.length < 2) return;
+      const request = ++revision;
+      const pending = create('p', null, 'Searching…');
+      results.replaceChildren(pending);
+      try {
+        const cities = await window.__TAURI__.core.invoke('search_weather_city', {query:text});
+        if (request !== revision) return;
+        results.replaceChildren(...cities.map(location => button(cityLabel(location), () =>
+          void change({location}, 'weather-city', 'weather-location'))));
+        if (!cities.length) results.append(create('p', null, 'No matches'));
+      } catch (error) {
+        if (request === revision) results.replaceChildren(create('p', null, String(error)));
+      }
+    });
+    const location = create('div', 'settings-row');
+    const label = create('label', 'settings-label');
+    label.htmlFor = query.id;
+    label.append(create('span', null, 'Location'), create('small', null, weatherLocation ? cityLabel(weatherLocation) : 'Choose a city'));
+    location.append(label, form);
+    controls.append(location);
+    const detect = button('Use my location', async () => {
+      if (locatingWeather) return;
+      locatingWeather = true;
+      detect.disabled = true;
+      try {
+        results.replaceChildren(create('p', null, 'Looking up your position…'));
+        const location = await window.__TAURI__.core.invoke('locate_weather');
+        await change({location}, 'weather-locate', 'weather-location');
+      } catch (error) {
+        results.replaceChildren(create('p', null, String(error)), button('Open Windows Location settings', async () => {
+          try { await window.__TAURI__.core.invoke('open_control_settings', {page:'location'}); }
+          catch (error) { banner.textContent = String(error); }
+        }));
+      } finally {
+        locatingWeather = false;
+        detect.disabled = false;
+        const current = document.getElementById(detect.id);
+        if (current) current.disabled = false;
+      }
+    });
+    detect.id = 'settings-weather-locate';
+    detect.disabled = locatingWeather;
+    const detection = create('div', 'settings-row');
+    detection.append(create('span', 'settings-label', 'Use the Windows Location service once.'), detect);
+    controls.append(detection);
+    select(controls, 'weather-unit', 'Units', null, 'weather_unit', [['metric', '°C, km/h'], ['imperial', '°F, mph']]);
+    content.append(results);
   }
 
   function shelf(content) {
@@ -1112,6 +1187,7 @@
         else if (active === 'calendar') calendar(controls);
         else if (active === 'screentime' && screenTime) screenTimeControls(controls);
         else if (active === 'bluetooth') bluetooth(controls);
+        else if (active === 'weather') weather(controls);
         else if (active === 'pomodoro' && pomo) pomodoroControls(controls);
         else feature(controls, current);
       }
@@ -1127,12 +1203,13 @@
     updateBusy();
     try {
       const invoke = window.__TAURI__.core.invoke;
-      [settings, screenTime, pomo, launchAtLogin, daySchedule, batteryStatus, displays] = await Promise.all([
+      [settings, screenTime, pomo, launchAtLogin, daySchedule, batteryStatus, displays, weatherLocation] = await Promise.all([
         invoke('get_poni_settings'), invoke('get_screentime_preferences'), invoke('get_pomodoro_settings'),
         invoke('get_poni_startup').catch(() => null),
         invoke('get_day_schedule').catch(() => null),
         invoke('get_battery').catch(() => null),
         invoke('panel_displays').then(value => Array.isArray(value) ? value : []).catch(() => []),
+        invoke('get_weather_location').catch(() => null),
       ]);
       settings.panel.display ||= 'primary';
       settings.hourly ||= {mode:'off', half:false, quiet:true, from:1320, to:360};
@@ -1195,6 +1272,10 @@
     window.__TAURI__.event.listen('poni-battery-changed', event => {
       batteryStatus = event.payload;
       paintBattery();
+    }).catch(error => { banner.textContent = String(error); });
+    window.__TAURI__.event.listen('poni-weather-location-changed', ({payload}) => {
+      weatherLocation = payload;
+      if (active === 'weather' && !busy && !loading) render(true);
     }).catch(error => { banner.textContent = String(error); });
     window.__TAURI__.event.listen('poni-screentime-changed', event => {
       screenTime = event.payload;

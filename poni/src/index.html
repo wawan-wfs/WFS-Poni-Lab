@@ -187,7 +187,11 @@
           <form id="weather-search" class="entry"><input id="weather-city" aria-label="City" minlength="2" maxlength="100" placeholder="Find a city" required><button type="submit">Search</button></form>
           <div id="weather-results" class="weather-results"></div>
           <p id="weather-status" role="status" aria-live="polite"></p>
-          <div id="weather-current"></div><div id="weather-days" class="weather-days"></div>
+          <div id="weather-forecast" class="weather-forecast" hidden>
+            <div id="weather-current" class="weather-current"></div>
+            <div id="weather-hourly" class="weather-strip" aria-label="Hourly forecast"></div>
+            <div id="weather-days" class="weather-strip" aria-label="Seven-day forecast"></div>
+          </div>
         </section>
         <section id="page-worldclock" class="page" hidden></section>
         <section id="page-system" class="page" hidden>

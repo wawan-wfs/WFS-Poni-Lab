@@ -87,6 +87,8 @@ Empat kontrol standar tambahan mencakup **Step aside for the mouse**, sakelar da
 | Daftar | 1 | 1 |
 | **Jumlah** | **202** | **201** |
 
+Weather kini memiliki sakelar tampil, pilihan satuan, pencarian kota, dan permintaan posisi Windows atas tindakan pengguna. Satuan yang dipilih juga berlaku di slot cuaca notch. Panel menampilkan suhu terasa, kelembapan, angin, UV, tekanan, waktu terbit dan terbenam, tujuh jam dan tujuh hari jika penyedia mengirim datanya. Kontrol ini berasal dari renderer kustom, sehingga hitungan kontrol standar tetap **105/201 (52,2%)**.
+
 ## Peta bagian dan fungsi kustom
 
 Jumlah pada tabel meliputi kontrol standar. Kolom terakhir merangkum aksi tambahan atau selisih baseline; teks informasi dicatat tanpa dianggap kontrol.

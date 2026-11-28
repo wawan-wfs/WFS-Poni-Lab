@@ -157,9 +157,23 @@ textarea { resize: vertical; min-height: 55px; }
 .weather-results { display:flex; gap:5px; overflow:auto; }
 .weather-results button { flex:none; border:0; border-radius:8px; background:#2b2b30; padding:6px 9px; }
 #weather-status { color:#aaa; font-size:12px; margin:4px 0; }
-#weather-current { font-size:14px; }
-.weather-days { display:flex; gap:8px; margin-top:8px; overflow:auto; }
-.weather-days span { flex:none; border-radius:8px; background:#202023; padding:6px; font-size:11px; }
+.weather-forecast { padding: 11px; border-radius: 14px; background: linear-gradient(160deg,#334155,#64748b); }
+.weather-forecast[data-sky="night"] { background: linear-gradient(160deg,#0b1026,#1b2450 55%,#2c2f5e); }
+.weather-forecast[data-sky="clear"] { background: linear-gradient(160deg,#1e6fd9,#3d8ef0 50%,#7cb8f7); }
+.weather-forecast[data-sky="cloudy"] { background: linear-gradient(160deg,#3a75c4,#6b9bd6 55%,#a4c3e8); }
+.weather-forecast[data-sky="fog"] { background: linear-gradient(160deg,#4b5563,#6b7280 55%,#9ca3af); }
+.weather-forecast[data-sky="thunderstorm"] { background: linear-gradient(160deg,#1f2937,#374151 50%,#4c1d95); }
+.weather-forecast[data-sky="snow"] { background: linear-gradient(160deg,#64748b,#94a3b8 55%,#cbd5e1); }
+.weather-current { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; }
+.weather-temperature { flex: none; font-size: 26px; }
+.weather-now-details { display: grid; gap: 2px; font-size: 12px; }
+.weather-now-details small { color: #f0f3fa; }
+.weather-chips { display: flex; flex-wrap: wrap; gap: 4px; font-size: 10px; margin-inline-start: auto; }
+.weather-chips span, .weather-cell { background: #0004; border-radius: 7px; padding: 3px 5px; white-space: nowrap; }
+.weather-strip { display: grid; grid-template-columns: repeat(7, minmax(52px, 1fr)); gap: 5px; margin-top: 7px; overflow: auto; }
+.weather-cell { display: grid; justify-items: center; gap: 1px; font-size: 10px; min-width: 0; }
+.weather-cell-icon { font-size: 14px; line-height: 16px; }
+.weather-cell small { min-height: 10px; color: #e0ecf9; }
 .worldclock-plan { display:flex; gap:8px; align-items:center; font-size:11px; color:#aaa; }
 .worldclock-plan input { padding:0; flex:1; }
 .worldclock-plan button, .worldclock-row button { border:0; border-radius:6px; background:#2b2b30; padding:4px 7px; }

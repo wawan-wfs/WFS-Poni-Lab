@@ -39,7 +39,11 @@ let bluetoothPeek = null;
 let idleSystemSample = null;
 let idleSystemPending = false;
 let nextIdleSystemSample = 0;
-let currentWeather = null;
+let weatherForecast = null;
+let forecastFor = '';
+let weatherLoadedAt = 0;
+let weatherPending = false;
+let weatherError = '';
 let closedWidth = 0;
 let greetingTimer;
 let nextGreetingCheck = Date.now() + 4000;
@@ -91,6 +95,7 @@ let preferences = {
   user_name: '', closed_display: closedDisplay.defaults,
   clock_format: 'region', clock_with_activities: true, header_clock: true, open_on_hover: true,
   media_enabled: true, music_progress: true, color_glow: true,
+  weather_enabled: true, weather_unit: 'metric',
   haptics: true, battery_saving: 'off',
   animations: { timer_outline:true, shelf_fly:true, tab_slide:true, shadow:'off', celebrate:true },
   hover_delay: 0, close_delay: 450, module_shortcuts: true,
@@ -148,6 +153,7 @@ function setOpen(value) {
   }
   if (value) void refreshMedia();
   if (value) void refreshSystem();
+  if (value && activePage === 'weather') refreshWeather();
 }
 function updatePanelSize(isOpen, focus = false) {
   const tall = isOpen && isTallPage(activePage);
@@ -205,11 +211,17 @@ function applyPreferences(value) {
   for (const id of order) {
     const tab = moduleTabs.get(id);
     if (tab) {
-      tab.hidden = hidden.has(id) || (id === 'shelf' && !preferences.shelf.enabled);
+      tab.hidden = hidden.has(id) || (id === 'shelf' && !preferences.shelf.enabled) ||
+        (id === 'weather' && !preferences.weather_enabled);
       navigation.append(tab);
     }
   }
   window.poniShelf?.configure(preferences.shelf, !moduleTabs.get('shelf').hidden);
+  if (previous.weather_enabled !== preferences.weather_enabled || previous.weather_unit !== preferences.weather_unit ||
+      previous.clock_format !== preferences.clock_format) {
+    renderWeather();
+    if (preferences.weather_enabled) refreshWeather();
+  }
   if (moduleTabs.get(activePage)?.hidden) {
     if (!selectModule(preferences.default_module)) navigation.querySelector('.tab:not([hidden])')?.click();
   }
@@ -266,6 +278,10 @@ window.poniBattery?.listen().catch(error => { status.textContent = String(error)
 window.poniFocusPlayback.listen().catch(error => { status.textContent = String(error); });
 window.__TAURI__.event.listen('poni-settings-changed', event => applyPreferences(event.payload))
   .catch(error => { status.textContent = String(error); });
+window.__TAURI__.event.listen('poni-weather-location-changed', ({payload}) => {
+  data.weather_location = payload;
+  refreshWeather();
+}).catch(error => { status.textContent = String(error); });
 window.__TAURI__.event.listen('poni-todo-changed', () => {
   queue = queue.then(async () => {
     const updates = await invoke('get_todo_state');
@@ -501,6 +517,7 @@ document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', (
     }
   }
   if (tab.dataset.page === 'system') void refreshSystem();
+  if (tab.dataset.page === 'weather') refreshWeather();
   if (tab.dataset.page === 'dayprogress') renderDayProgress();
   if (tab.dataset.page === 'calendar') renderMonthCalendar();
 }));
@@ -769,8 +786,8 @@ function slotText(kind, now) {
   switch (kind) {
     case 'time': return time(now);
     case 'date': return closedDisplay.day(now);
-    case 'weather': return Number.isFinite(currentWeather?.temperature_2m)
-      ? `${Math.round(currentWeather.temperature_2m)}°` : '';
+    case 'weather': return preferences.weather_enabled && Number.isFinite(weatherForecast?.current.temperature_2m)
+      ? `${weatherIcon(weatherForecast.current.weather_code, weatherForecast.current.is_day !== 0)} ${formatWeatherTemperature(weatherForecast.current.temperature_2m)}°` : '';
     case 'event': {
       const next = nextClosedCalendar(now.getTime(), now.getTime() + 43_200_000, true);
       return next ? `${next.event.title} ${time(next.start)}` : '';
@@ -1757,30 +1774,111 @@ function weatherDescription(code) {
   return 'Weather';
 }
 
-async function loadWeather(location) {
-  const request = ++weatherRequest;
-  currentWeather = null;
+function formatWeatherTemperature(celsius) {
+  return Number.isFinite(celsius) ? Math.round(preferences.weather_unit === 'imperial' ? celsius * 1.8 + 32 : celsius) : '—';
+}
+
+function weatherIcon(code, day = true) {
+  const condition = weatherDescription(code);
+  return {Clear:day ? '☀' : '☾', Cloudy:code === 2 && day ? '⛅' : '☁', Fog:'≋', Thunderstorm:'ϟ', Snow:'❄', Rain:'☂'}[condition] || '☁';
+}
+
+function cityClock(value) {
+  if (typeof value !== 'string') return '';
+  const date = new Date(`${value}Z`);
+  return Number.isFinite(date.getTime()) ? closedDisplay.time(date, preferences.clock_format, 'UTC') : '';
+}
+
+function weatherText(tag, value, className = '') {
+  const node = document.createElement(tag);
+  node.className = className;
+  node.textContent = value;
+  return node;
+}
+
+function renderWeather() {
   const weatherStatus = document.querySelector('#weather-status');
-  weatherStatus.textContent = 'Loading weather…';
-  document.querySelector('#weather-current').textContent = '';
-  document.querySelector('#weather-days').replaceChildren();
+  const box = document.querySelector('#weather-forecast');
+  const saved = data.weather_location;
+  box.hidden = !preferences.weather_enabled || !weatherForecast;
+  if (!preferences.weather_enabled) {
+    weatherStatus.textContent = 'Weather is off.';
+    return;
+  }
+  const name = saved ? [saved.name, saved.admin1, saved.country].filter(Boolean).join(', ') : 'Choose a city';
+  weatherStatus.textContent = weatherError || (weatherPending && !weatherForecast ? 'Loading weather…' : name);
+  if (!weatherForecast) return;
+  const {current, daily, hourly} = weatherForecast;
+  const day = current.is_day !== 0;
+  const condition = weatherDescription(current.weather_code);
+  box.dataset.sky = day ? condition.toLowerCase() : 'night';
+  const imperial = preferences.weather_unit === 'imperial';
+  const degree = value => `${formatWeatherTemperature(value)}°`;
+  const title = weatherText('strong', `${weatherIcon(current.weather_code, day)} ${degree(current.temperature_2m)}${imperial ? 'F' : 'C'}`, 'weather-temperature');
+  const details = weatherText('div', '', 'weather-now-details');
+  details.append(weatherText('strong', condition));
+  const range = `H ${degree(daily.temperature_2m_max[0])} · L ${degree(daily.temperature_2m_min[0])}`;
+  details.append(weatherText('small', Number.isFinite(current.apparent_temperature) ? `${range} · Feels ${degree(current.apparent_temperature)}` : range));
+  const speed = Math.round(current.wind_speed_10m * (imperial ? 0.621371 : 1));
+  const chips = weatherText('div', '', 'weather-chips');
+  const chipValues = [`Humidity ${Math.round(current.relative_humidity_2m)}%`, `Wind ${speed} ${imperial ? 'mph' : 'km/h'}`];
+  if (Number.isFinite(current.uv_index)) chipValues.push(`UV ${Math.round(current.uv_index)}`);
+  if (Number.isFinite(current.surface_pressure)) chipValues.push(`${Math.round(current.surface_pressure)} hPa`);
+  const sunrise = cityClock(daily.sunrise?.[0]);
+  const sunset = cityClock(daily.sunset?.[0]);
+  if (sunrise) chipValues.push(`↑ ${sunrise}`);
+  if (sunset) chipValues.push(`↓ ${sunset}`);
+  chips.append(...chipValues.map(value => weatherText('span', value)));
+  document.getElementById('weather-current').replaceChildren(title, details, chips);
+  const makeCell = (label, code, daylight, temperature, extra) => {
+    const cell = weatherText('div', '', 'weather-cell');
+    const icon = weatherText('span', weatherIcon(code, daylight), 'weather-cell-icon');
+    icon.title = Number.isFinite(code) ? weatherDescription(code) : '';
+    cell.append(weatherText('span', label), icon, weatherText('b', degree(temperature)), weatherText('small', extra));
+    return cell;
+  };
+  const hours = document.getElementById('weather-hourly');
+  const currentHour = current.time?.slice(0, 13) || '';
+  const firstHour = hourly?.time.findIndex(value => value.slice(0, 13) >= currentHour) ?? -1;
+  hours.hidden = firstHour < 0;
+  hours.replaceChildren(...(firstHour < 0 ? [] : hourly.time.slice(firstHour, firstHour + 7).map((value, index) => {
+    const i = firstHour + index;
+    const chance = hourly.precipitation_probability[i];
+    return makeCell(index === 0 ? 'Now' : cityClock(value), hourly.weather_code[i], hourly.is_day[i] !== 0,
+      hourly.temperature_2m[i], chance >= 20 ? `${chance}%` : '');
+  })));
+  const weekdays = new Intl.DateTimeFormat(undefined, {weekday:'short', timeZone:'UTC'});
+  document.getElementById('weather-days').replaceChildren(...daily.time.slice(0, 7).map((date, i) =>
+    makeCell(i ? weekdays.format(new Date(`${date}T12:00:00Z`)) : 'Today', daily.weather_code[i], true,
+      daily.temperature_2m_max[i], degree(daily.temperature_2m_min[i]))));
+}
+
+function refreshWeather() {
+  const location = data.weather_location;
+  if (!preferences.weather_enabled || !location) return;
+  const key = JSON.stringify([location.name, location.admin1, location.country, location.latitude, location.longitude]);
+  if (forecastFor === key && (weatherPending || Date.now() - weatherLoadedAt < (weatherError ? 60_000 : 1_800_000))) return;
+  void loadWeather(location, key);
+}
+
+async function loadWeather(location, key) {
+  const request = ++weatherRequest;
+  if (forecastFor !== key) weatherForecast = null;
+  forecastFor = key;
+  weatherPending = true;
+  weatherError = '';
+  renderWeather();
   try {
-    const forecast = await invoke('weather_forecast', { location });
-    if (request !== weatherRequest) return;
-    const current = forecast.current;
-    currentWeather = current;
-    weatherStatus.textContent = [location.name, location.admin1, location.country].filter(Boolean).join(', ');
-    document.querySelector('#weather-current').textContent = `${Math.round(current.temperature_2m)}°C · ${weatherDescription(current.weather_code)} · ${Math.round(current.relative_humidity_2m)}% · ${Math.round(current.wind_speed_10m)} km/h`;
-    const days = document.querySelector('#weather-days');
-    days.replaceChildren();
-    forecast.daily.time.slice(0, 7).forEach((date, index) => {
-      const item = document.createElement('span');
-      const day = new Intl.DateTimeFormat(undefined, { weekday: 'short' }).format(new Date(`${date}T12:00:00`));
-      item.textContent = `${day} ${Math.round(forecast.daily.temperature_2m_max[index])}° / ${Math.round(forecast.daily.temperature_2m_min[index])}°`;
-      days.append(item);
-    });
+    const forecast = await invoke('weather_forecast', {location});
+    if (request === weatherRequest) weatherForecast = forecast;
   } catch (error) {
-    if (request === weatherRequest) weatherStatus.textContent = `Weather unavailable: ${String(error)}`;
+    if (request === weatherRequest) weatherError = `Weather unavailable: ${String(error)}`;
+  } finally {
+    if (request === weatherRequest) {
+      weatherLoadedAt = Date.now();
+      weatherPending = false;
+      renderWeather();
+    }
   }
 }
 
@@ -1799,7 +1897,7 @@ document.querySelector('#weather-search').addEventListener('submit', async event
       const button = action([city.name, city.admin1, city.country].filter(Boolean).join(', '), async () => {
         if (await mutate('set_weather_location', { location: city })) {
           results.replaceChildren();
-          void loadWeather(city);
+          refreshWeather();
         }
       });
       results.append(button);
@@ -1814,8 +1912,14 @@ queue = invoke('get_data').then(saved => {
   applyPreferences(data.settings);
   chooseTimerMinutes(timerActive(data.timer) ? data.timer.total_ms / 60_000 : startingTimerMinutes());
   render();
-  if (data.weather_location) void loadWeather(data.weather_location);
+  renderWeather();
+  refreshWeather();
 }).catch(error => { status.textContent = String(error); });
+setInterval(() => {
+  if ((!open.hidden && activePage === 'weather') || [preferences.closed_display.left, preferences.closed_display.right].includes('weather')) {
+    refreshWeather();
+  }
+}, 60_000);
 window.poniIcsImport?.mount(document.getElementById('calendar-import'), importCalendarFile);
 window.poniShelf?.connect({
   isOpen: () => !open.hidden,

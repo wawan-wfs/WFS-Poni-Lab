@@ -43,6 +43,14 @@ enum ClockFormat {
 
 #[derive(Clone, Copy, Default, Deserialize, Serialize)]
 #[serde(rename_all = "lowercase")]
+enum WeatherUnit {
+    #[default]
+    Metric,
+    Imperial,
+}
+
+#[derive(Clone, Copy, Default, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
 enum ClosedClockMode {
     #[default]
     Time,
@@ -302,6 +310,8 @@ pub(super) struct PoniSettings {
     mirror_enabled: bool,
     mirror_shape: MirrorShape,
     pub(super) calendar_enabled: bool,
+    weather_enabled: bool,
+    weather_unit: WeatherUnit,
     pub(super) meeting_reminder_minutes: u16,
     pub(super) week_start: WeekStart,
     pub(super) timer_presets: Vec<u16>,
@@ -346,6 +356,8 @@ impl Default for PoniSettings {
             mirror_enabled: true,
             mirror_shape: MirrorShape::Rounded,
             calendar_enabled: true,
+            weather_enabled: true,
+            weather_unit: WeatherUnit::default(),
             meeting_reminder_minutes: 5,
             week_start: WeekStart::Windows,
             timer_presets: Vec::new(),
@@ -392,6 +404,8 @@ pub(super) struct SettingsPatch {
     mirror_enabled: Option<bool>,
     mirror_shape: Option<MirrorShape>,
     calendar_enabled: Option<bool>,
+    weather_enabled: Option<bool>,
+    weather_unit: Option<WeatherUnit>,
     meeting_reminder_minutes: Option<u16>,
     week_start: Option<WeekStart>,
     timer_presets: Option<Vec<u16>>,
@@ -467,6 +481,7 @@ impl PoniSettings {
     pub(super) fn visible(&self, id: &str) -> bool {
         known(id)
             && (id != "shelf" || self.shelf.enabled)
+            && (id != "weather" || self.weather_enabled)
             && self.hidden_modules.iter().all(|hidden| hidden != id)
     }
 
@@ -569,6 +584,8 @@ impl PoniSettings {
         self.mirror_enabled = patch.mirror_enabled.unwrap_or(self.mirror_enabled);
         self.mirror_shape = patch.mirror_shape.unwrap_or(self.mirror_shape);
         self.calendar_enabled = patch.calendar_enabled.unwrap_or(self.calendar_enabled);
+        self.weather_enabled = patch.weather_enabled.unwrap_or(self.weather_enabled);
+        self.weather_unit = patch.weather_unit.unwrap_or(self.weather_unit);
         self.meeting_reminder_minutes = patch
             .meeting_reminder_minutes
             .unwrap_or(self.meeting_reminder_minutes);

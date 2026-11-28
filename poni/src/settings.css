@@ -149,6 +149,10 @@
 .settings-device-list li { padding: 6px 0; }
 .settings-device-list li + li { border-top: 1px solid var(--settings-line); }
 .settings-device-list li small { display: block; padding-top: 2px; color: var(--settings-dim); }
+.settings-weather-search { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.settings-weather-search input { min-width: 0; }
+.settings-weather-results { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 8px; }
+.settings-weather-results p { margin: 0; color: var(--settings-dim); }
 
 .settings-group {
   background: var(--settings-panel);
