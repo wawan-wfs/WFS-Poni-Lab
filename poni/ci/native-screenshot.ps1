@@ -202,6 +202,24 @@ try {
     $pomodoroChecked = $false
     $geometryChecked = $false
     if ($bounds.Width -eq 1024 -and $bounds.Height -eq 768) {
+        $dataPaths = @($env:APPDATA, [Environment]::GetFolderPath('ApplicationData')) |
+            ForEach-Object { Join-Path $_ 'id.wfs.ponirebuild/data.json' } |
+            Select-Object -Unique
+
+        function Read-PoniProfile {
+            $path = $dataPaths | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+            if ($path) { Get-Content -Raw -LiteralPath $path | ConvertFrom-Json }
+        }
+
+        function Wait-PoniState([scriptblock]$ready) {
+            $deadline = [DateTime]::UtcNow.AddSeconds(8)
+            do {
+                if (& $ready) { return $true }
+                Start-Sleep -Milliseconds 200
+            } while ([DateTime]::UtcNow -lt $deadline)
+            return $false
+        }
+
         function Find-Setting([string]$text) {
             Click-Point ($settingsRect.Left + 102) ($settingsRect.Top + 98)
             Start-Sleep -Milliseconds 200
@@ -321,20 +339,25 @@ try {
         }
         Find-Setting 'step aside for the mouse'
         [System.Windows.Forms.SendKeys]::SendWait(' ')
+        if (!(Wait-PoniState { (Read-PoniProfile).settings.panel.step_aside -eq $false })) {
+            throw 'The Settings switch did not turn off Step aside before the shortcut test.'
+        }
         @{ handle_height = $stepped.Bottom; returned_height = $stepReturned.Bottom } |
             ConvertTo-Json | Set-Content -LiteralPath (Join-Path $outputDir 'notch-step-aside.json') -Encoding UTF8
 
-        Find-Setting 'snooze poni global keyboard shortcut'
-        [System.Windows.Forms.SendKeys]::SendWait('Alt{+}Shift{+}P{TAB}')
-        Start-Sleep -Seconds 2
+        Find-Setting 'snooze poni'
+        [System.Windows.Forms.SendKeys]::SendWait('^aAlt{+}Shift{+}P')
+        [System.Windows.Forms.SendKeys]::SendWait('{ENTER}')
+        if (!(Wait-PoniState { (Read-PoniProfile).settings.shortcuts.snooze -eq 'Alt+Shift+P' })) {
+            Save-Screen 'settings-snooze-save-failure.png'
+            throw 'The Snooze shortcut entered in Settings did not register and save.'
+        }
         Press-SnoozeFixtureShortcut
-        Start-Sleep -Seconds 2
-        if ([CursorPosition]::IsWindowVisible($mainHandle)) {
+        if (!(Wait-PoniState { ![CursorPosition]::IsWindowVisible($mainHandle) })) {
             throw 'The newly configured Snooze shortcut did not hide the notch.'
         }
         Press-SnoozeFixtureShortcut
-        Start-Sleep -Seconds 2
-        if (![CursorPosition]::IsWindowVisible($mainHandle)) {
+        if (!(Wait-PoniState { [CursorPosition]::IsWindowVisible($mainHandle) })) {
             throw 'Pressing the Snooze shortcut again did not wake Poni.'
         }
         @{ bound_from_settings = $true; snoozed = $true; restored = $true } |
@@ -374,9 +397,6 @@ try {
         Start-Sleep -Seconds 2
         Save-Screen 'settings-screentime.png'
 
-        $dataPaths = @($env:APPDATA, [Environment]::GetFolderPath('ApplicationData')) |
-            ForEach-Object { Join-Path $_ 'id.wfs.ponirebuild/data.json' } |
-            Select-Object -Unique
         $dataPath = $dataPaths | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
         if (!$dataPath) { throw 'Screen Time changes did not create the application profile.' }
         Find-Setting 'your name'
